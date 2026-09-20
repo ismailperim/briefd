@@ -16,7 +16,7 @@ expect from contributions.
 
 ## Development setup
 
-- Go ≥ 1.23
+- Go ≥ 1.26
 - [golangci-lint](https://golangci-lint.run) v2
 - `make` (GNU)
 

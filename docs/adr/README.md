@@ -20,4 +20,5 @@ Template:
 
 | ADR | Title | Status |
 |---|---|---|
-| [0001](0001-core-architecture.md) | Core architecture | accepted |
+| [0001](0001-core-architecture.md) | Core architecture | accepted (amended by 0002) |
+| [0002](0002-sqlite-driver-and-vector-search.md) | SQLite driver and vector search strategy | accepted |

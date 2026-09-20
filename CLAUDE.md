@@ -19,12 +19,13 @@ Cursor, Codex) over **MCP** and REST.
 These were decided after research. Do not "improve" them mid-task. If you believe one is
 wrong, stop and propose an ADR instead of changing code.
 
-1. **Language: Go** (>= 1.23). Single static binary. Official MCP Go SDK
+1. **Language: Go** (>= 1.26). Single static binary. Official MCP Go SDK
    (`modelcontextprotocol/go-sdk`, v1.x).
 2. **Storage: SQLite only** (WAL mode). One `.db` file holds documents, chunks,
    embeddings, usage events, bundle cache, sync state.
-3. **Search: hybrid** — SQLite **FTS5 (BM25)** + **sqlite-vec** (brute-force vector) fused
-   with **RRF, k=60**. No ANN libraries. BM25-only mode must remain available via config
+3. **Search: hybrid** — SQLite **FTS5 (BM25)** + **brute-force cosine over vectors stored
+   in SQLite** (in-memory scan in Go, see ADR-0002) fused with **RRF, k=60**. No ANN
+   libraries, no vector extensions. BM25-only mode must remain available via config
    (`embeddings.enabled=false`).
 4. **Embeddings: local ONNX by default** (`all-MiniLM-L6-v2`, 384-dim), pluggable
    adapters: `ollama`, `openai-compatible`. Adapter interface first, implementations
@@ -51,6 +52,7 @@ briefd/
 │   ├── config/          # YAML config + env overrides
 │   ├── gitsync/         # clone/pull, commit-hash diff, poll + webhook
 │   ├── ingest/          # markdown parsing, chunking, front-matter
+│   ├── indexer/         # walks a source, diffs against the store, upserts/deletes
 │   ├── store/           # SQLite: schema, migrations, queries (sqlc or hand-written)
 │   ├── search/          # fts5 query, vec query, rrf fusion
 │   ├── embed/           # Embedder interface + onnx/ollama/openai adapters
@@ -60,6 +62,7 @@ briefd/
 │   ├── metrics/         # in-process counters/histograms (Prometheus text exposition)
 │   └── tokenizer/       # token counting (tiktoken-compatible approximation)
 ├── eval/                # golden dataset + eval harness (see Testing)
+├── testdata/knowledge/  # sample knowledge repo (fictional payments domain) used by tests
 ├── docs/adr/            # ADRs — one file per decision, NNNN-title.md
 ├── deploy/              # docker-compose.yml, Dockerfile
 └── SPEC.md              # product/technical spec — read before any feature work
@@ -83,8 +86,9 @@ briefd/
   outside `main`.
 - No premature abstraction: interfaces only where a second implementation exists or is
   specced (Embedder is the canonical example).
-- CGO is acceptable (sqlite, fts5, sqlite-vec, ONNX runtime) but must be confined to
-  `store/` and `embed/onnx/`. Everything else stays pure Go.
+- SQLite is accessed through the cgo-free `ncruces/go-sqlite3` driver (ADR-0002). CGO is
+  acceptable only for the ONNX runtime and must be confined to `embed/onnx/`. Everything
+  else stays pure Go.
 - All SQL lives in `internal/store`. No SQL strings elsewhere.
 - Config precedence: flags > env (`BRIEFD_*`) > yaml > defaults.
 

@@ -92,7 +92,8 @@ manual inspection. Read-only; it never mutates state. Same bearer token as the A
 
 ### 3.3 CLI
 
-`briefd serve` · `briefd index --rebuild` · `briefd eval` · `briefd version`
+`briefd serve` · `briefd index [--source DIR] [--rebuild]` · `briefd search <query>` (CLI
+inspection of the index, same ranking as the API) · `briefd eval` · `briefd version`
 
 ## 4. Ingestion & indexing
 
@@ -109,7 +110,8 @@ manual inspection. Read-only; it never mutates state. Same bearer token as the A
 
 ## 5. Search & bundle compilation
 
-- **Hybrid retrieval:** FTS5 BM25 top-50 + sqlite-vec cosine top-50 → **RRF (k=60)**.
+- **Hybrid retrieval:** FTS5 BM25 top-50 + brute-force cosine top-50 (vectors stored in
+  SQLite, scanned in memory; ADR-0002) → **RRF (k=60)**.
 - **Budget packer (`compile_bundle`):** greedy fill in fused-rank order → dedupe
   near-identical chunks → order by scope priority (domain > conventions > project) then
   rank → stop before exceeding budget; if the top chunk alone exceeds budget, return its
@@ -122,13 +124,15 @@ manual inspection. Read-only; it never mutates state. Same bearer token as the A
 
 ```sql
 documents(id, path, scope, title, tags, front_matter, content_hash, updated_commit, indexed_at)
-chunks(id, doc_id, heading_path, content, tokens, content_hash, position)
-chunks_fts        -- FTS5 virtual table over chunks.content (+ heading_path, title)
-chunk_vectors     -- sqlite-vec virtual table: chunk_id, embedding float[384]
+chunks(rowid, id, doc_id, title, heading_path, content, tokens, content_hash, position)
+                  -- title is denormalized from documents so the FTS index can weight it
+chunks_fts        -- FTS5 external-content table over chunks(title, heading_path, content),
+                  -- kept in sync by triggers; tokenizer: porter unicode61 remove_diacritics 2
+chunk_vectors     -- chunk_id, model, dim, embedding BLOB (L2-normalized float32 LE)
 bundles(id, cache_key, task_hash, repo_commit, content, tokens, created_at, hits)
 usage_events(id, bundle_id, chunk_id, useful, client, created_at)
 proposals(id, branch, doc_path, description, status, created_at)
-sync_state(repo_url, last_commit, last_sync_at, last_error)
+sync_state(source, last_commit, last_sync_at, last_error)
 ```
 
 ## 7. Embeddings

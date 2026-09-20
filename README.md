@@ -19,12 +19,37 @@ bundles** to coding agents (Claude Code, Cursor, Codex) over
 
 ## Status
 
-Pre-alpha. The project is being built milestone by milestone; nothing is usable
-yet. See [`SPEC.md`](SPEC.md) for the product and technical specification.
+Pre-alpha, built milestone by milestone. Today you can index a directory of
+Markdown and search it from the CLI (BM25). The MCP server, hybrid retrieval,
+bundle compilation and git sync are in progress. See [`SPEC.md`](SPEC.md) for
+the full specification.
+
+## Try it
+
+```sh
+make build
+./bin/briefd index --source testdata/knowledge --db /tmp/briefd.db
+./bin/briefd search --db /tmp/briefd.db "retry policy"
+./bin/briefd search --db /tmp/briefd.db --scopes projects/ledger-service "projection drift"
+./bin/briefd search --db /tmp/briefd.db --json "refund approval threshold"
+```
+
+`testdata/knowledge/` is a small, fictional payments-domain knowledge repo that
+follows the expected layout:
+
+```
+knowledge-repo/
+├── domain/          # shared: terminology, business rules, ADRs
+├── conventions/     # shared: coding standards, infra patterns
+└── projects/<name>/ # visible only when scope projects/<name> is requested
+```
+
+Re-running `index` only re-parses files whose content changed and removes
+documents that disappeared. `--rebuild` drops the database first.
 
 ## Building from source
 
-Requires Go ≥ 1.23 and [golangci-lint](https://golangci-lint.run) v2.
+Requires Go ≥ 1.26 and [golangci-lint](https://golangci-lint.run) v2.
 
 ```sh
 make build   # → bin/briefd

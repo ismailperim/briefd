@@ -1,6 +1,6 @@
 # 0001 — Core architecture
 
-- Status: accepted
+- Status: accepted — decisions 1 and 3 amended by [0002](0002-sqlite-driver-and-vector-search.md)
 - Date: 2026-09-20
 
 ## Context
