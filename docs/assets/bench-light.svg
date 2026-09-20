@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="330" viewBox="0 0 900 330" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Helvetica, Arial, sans-serif" font-size="13" role="img" aria-label="Bar chart: knowledge tokens per task for four scenarios with answer coverage">
+<rect width="900" height="330" fill="#ffffff"/>
+<text x="24" y="32" font-size="17" font-weight="600" fill="#0b0b0b">Knowledge tokens per task — and whether the answer was actually in the context</text>
+<text x="24" y="54" fill="#57606a">47 realistic developer tasks over a 44-document knowledge repo (12,869 tokens in total).</text>
+<text x="24" y="72" fill="#57606a">Shorter bars cost less; the percentage says how often the section that answers the task was in the context.</text>
+<text x="298" y="111.0" text-anchor="end" fill="#0b0b0b">Everything in CLAUDE.md</text>
+<path d="M310,96 h296.0 a4,4 0 0 1 4,4 v14 a4,4 0 0 1 -4,4 h-296.0 z" fill="#2a78d6"/>
+<text x="620.0" y="111.0" fill="#0b0b0b" font-weight="600">12,869</text>
+<text x="674.0" y="111.0" fill="#57606a">tokens · answer present 100%</text>
+<text x="298" y="151.0" text-anchor="end" fill="#0b0b0b">Curated CLAUDE.md (conventions + glossary)</text>
+<path d="M310,136 h111.30033413629653 a4,4 0 0 1 4,4 v14 a4,4 0 0 1 -4,4 h-111.30033413629653 z" fill="#2a78d6"/>
+<text x="435.30033413629656" y="151.0" fill="#0b0b0b" font-weight="600">4,946</text>
+<text x="481.30033413629656" y="151.0" fill="#57606a">tokens · answer present 43%</text>
+<text x="298" y="191.0" text-anchor="end" fill="#0b0b0b">briefd compile_bundle, max_tokens 2000</text>
+<path d="M310,176 h37.751495842722825 a4,4 0 0 1 4,4 v14 a4,4 0 0 1 -4,4 h-37.751495842722825 z" fill="#0ca30c"/>
+<text x="361.7514958427228" y="191.0" fill="#0b0b0b" font-weight="600">1,791</text>
+<text x="407.7514958427228" y="191.0" fill="#57606a">tokens · answer present 98%</text>
+<text x="298" y="231.0" text-anchor="end" fill="#0b0b0b">briefd compile_bundle, max_tokens 1000</text>
+<path d="M310,216 h16.630973657626857 a4,4 0 0 1 4,4 v14 a4,4 0 0 1 -4,4 h-16.630973657626857 z" fill="#0ca30c"/>
+<text x="340.63097365762684" y="231.0" fill="#0b0b0b" font-weight="600">885</text>
+<text x="370.63097365762684" y="231.0" fill="#57606a">tokens · answer present 96%</text>
+<line x1="310" y1="90" x2="310" y2="244" stroke="#d0d7de" stroke-width="1"/>
+<rect x="310" y="264" width="12" height="12" rx="2" fill="#2a78d6"/><text x="328" y="274" fill="#57606a">static file, loaded into every session</text>
+<rect x="310" y="284" width="12" height="12" rx="2" fill="#0ca30c"/><text x="328" y="294" fill="#57606a">briefd, compiled per task (plus ~1.7k tokens of tool definitions, once per session)</text>
+</svg>

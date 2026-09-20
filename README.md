@@ -1,46 +1,90 @@
-# briefd
+<p align="center">
+  <img src="docs/assets/logo.svg" width="72" height="72" alt="briefd logo">
+</p>
 
-> **Your agents, briefed. Not flooded.**
+<h1 align="center">briefd</h1>
 
-Stop loading your team's knowledge into every prompt. Compile only what the task needs.
+<p align="center">
+  <strong>Your agents, briefed. Not flooded.</strong><br>
+  A self-hosted context compiler for AI coding teams: git-backed knowledge, served to coding agents<br>
+  as token-budgeted context bundles over MCP.
+</p>
 
-briefd is a self-hosted **context compiler** for AI coding teams. Keep your shared
-domain knowledge — terminology, business rules, ADRs, conventions — as Markdown in
-a git repository, and briefd serves task-relevant, **token-budgeted context
-bundles** to coding agents (Claude Code, Cursor, Codex) over
-[MCP](https://modelcontextprotocol.io) and REST.
+<p align="center">
+  <a href="https://github.com/ismailperim/briefd/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ismailperim/briefd/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/ismailperim/briefd/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ismailperim/briefd?include_prereleases&sort=semver"></a>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/ismailperim/briefd"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+  <a href="https://github.com/ismailperim/briefd/pkgs/container/briefd"><img alt="Container" src="https://img.shields.io/badge/ghcr.io-briefd-0f172a?logo=docker"></a>
+</p>
 
-- **Context on demand, not up front.** Agents query; briefd compiles only what the
-  task needs, within an explicit token budget.
-- **Git is the source of truth.** The index is a disposable cache. Agents propose
-  changes as branches/PRs — humans stay in the loop.
-- **One binary, one container, zero external services.** SQLite with FTS5 +
-  sqlite-vec, local ONNX embeddings, no telemetry.
+---
 
-## Status
+Teams that build many projects in one domain keep the same knowledge in their heads and in
+scattered `CLAUDE.md` / `AGENTS.md` files: terminology, business rules, architecture decisions,
+conventions. Loading all of it into every session burns thousands of tokens on every turn, and
+whatever doesn't fit gets left out.
 
-Alpha. briefd follows a knowledge git repository (or a directory), serves it
-to Claude Code and any MCP client over streamable HTTP with hybrid retrieval
-(BM25 + local embeddings, fused with RRF), compiles task-specific context
-bundles within a hard token budget, lets agents propose changes as reviewable
-branches/PRs, and exposes everything over REST with a status dashboard and
-Prometheus metrics. See [`SPEC.md`](SPEC.md) for the full specification.
+**briefd inverts the model: context on demand, not up front.** Your knowledge lives as Markdown
+in a git repository. briefd indexes it and answers one question from your coding agent —
+*"what do I need to know for this task?"* — with a compiled, deduplicated bundle that never
+exceeds the token budget you set.
+
+## Why
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/bench-dark.svg">
+  <img alt="Bar chart: knowledge tokens per task. Everything in CLAUDE.md 12,869 tokens, answer present 100%. Curated CLAUDE.md 4,946 tokens, 43%. briefd compile_bundle at 2000 max tokens: 1,791 tokens, 98%. At 1000: 885 tokens, 96%." src="docs/assets/bench-light.svg">
+</picture>
+
+On the sample knowledge repo in this repository (44 documents, 47 realistic developer tasks),
+`compile_bundle` spends **86% fewer tokens per task than pasting everything into `CLAUDE.md`**
+while still containing the section that answers the task **98% of the time**. The realistic
+middle ground — a hand-curated `CLAUDE.md` with just conventions and the glossary — costs
+2.8× more than a bundle and has the answer less than half the time.
+
+Reproduce it with `make bench`; the method is in [`internal/eval/bench.go`](internal/eval/bench.go).
+
+## How it works
+
+```
+ knowledge repo (git)          briefd (one binary, one SQLite file)              your agents
+┌───────────────────┐   sync   ┌───────────────────────────────────────┐   MCP    ┌─────────────┐
+│ domain/           │ ───────▶ │ chunk → BM25 + local embeddings       │ ◀──────▶ │ Claude Code │
+│ conventions/      │  pull /  │ hybrid retrieval (RRF) → budget packer │  REST    │ Cursor      │
+│ projects/<name>/  │  webhook │ bundle cache · metrics · dashboard     │ ◀──────▶ │ Codex, …    │
+└───────────────────┘          └───────────────────────────────────────┘          └─────────────┘
+        ▲                                                                              │
+        └────────────── propose_update → branch briefd/proposal-<id> → PR ◀────────────┘
+```
+
+- **Git is the source of truth.** The index is a disposable cache rebuilt from a clone.
+- **Agents never write to the index.** `propose_update` opens a reviewable branch/PR; what
+  briefd serves changes only when a human merges.
+- **Hybrid retrieval, no external services.** SQLite FTS5 (BM25) + `all-MiniLM-L6-v2`
+  embeddings computed by a pure-Go encoder, fused with reciprocal rank fusion. No Postgres, no
+  vector database, no ONNX runtime, no CGO.
+- **Hard token budgets.** Every API that returns context takes `max_tokens` and never exceeds it.
 
 ## Quickstart
 
 ```sh
-make build
+# 1. build (Go >= 1.26) or grab a binary from the releases page
+git clone https://github.com/ismailperim/briefd && cd briefd && make build
+
+# 2. serve the sample knowledge repo (downloads the 87 MB embedding model once)
 ./bin/briefd serve --source testdata/knowledge --db /tmp/briefd.db --token dev-token
-```
 
-Then connect Claude Code to it:
-
-```sh
+# 3. connect Claude Code
 claude mcp add --transport http briefd http://localhost:7788/mcp \
   --header "Authorization: Bearer dev-token"
 ```
 
-or add it to your project's `.mcp.json`:
+Open <http://localhost:7788/> for the dashboard, then ask Claude Code something the sample
+corpus knows — *"what's our retry policy for acquirer calls?"* or *"ters ibraz nedir?"* — and
+watch `search_context` / `compile_bundle` show up in the request log.
+
+Any MCP client that speaks streamable HTTP works. For a project-level `.mcp.json`:
 
 ```json
 {
@@ -54,136 +98,138 @@ or add it to your project's `.mcp.json`:
 }
 ```
 
-Ask Claude Code something like *"what is our retry policy for acquirer calls?"*
-and it will call `search_context`; check `/mcp` inside Claude Code to see the
-connection status and the three tools:
+## Tools
 
-| Tool | Purpose |
+| Tool | What it does |
 |---|---|
-| `compile_bundle(task_description, max_tokens?, scopes?)` | one deduplicated, scope-ordered context block within the budget; deterministic and cached |
-| `search_context(query, max_tokens?, scopes?, top_k?)` | ranked sections that fit the budget |
-| `get_document(doc_path, scopes?)` | one document in full |
-| `list_scopes()` | scopes with document/section counts |
-| `propose_update(doc_path, change_description, new_content)` | creates branch `briefd/proposal-<id>` (+ PR when configured); never touches the index |
-| `report_usage(bundle_id, useful_chunk_ids)` | optional feedback, stored for future ranking |
+| `compile_bundle(task_description, max_tokens?, scopes?)` | One deduplicated context block within the budget, ordered domain → conventions → project, with a source line per section and a `bundle_id`. Deterministic and cached. |
+| `search_context(query, max_tokens?, scopes?, top_k?)` | Ranked sections that fit the budget, for inspection. |
+| `get_document(doc_path, scopes?)` | One document in full. |
+| `list_scopes()` | Scopes with document/section counts. |
+| `propose_update(doc_path, change_description, new_content)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. |
+| `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback, stored for future ranking. |
 
-On first start briefd downloads the embedding model (`all-MiniLM-L6-v2`,
-~87 MB) into your user cache and embeds the corpus in the background — BM25
-answers immediately, hybrid ranking kicks in as vectors land. Run
-`briefd model pull` to pre-fetch the model, point `embeddings.model_dir` at a
-directory containing `model.safetensors` + `vocab.txt` for offline installs,
-or use `--embeddings none` for BM25-only. Ollama and OpenAI-compatible
-services are supported as alternative embedding providers.
+The same operations are available over REST (`/api/search`, `POST /api/bundle`, `/api/docs/{path}`,
+`/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/health`, `/api/stats`) behind the
+same bearer token.
 
-Edits to files under `--source` are picked up within `sync.interval`
-(default 60 s). Configuration lives in `briefd.yaml`
-(see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)) or `BRIEFD_*`
-environment variables.
+## Your knowledge repo
 
-### Serving a git repository
-
-```sh
-export BRIEFD_GIT_TOKEN=ghp_...          # only for private HTTPS remotes
-./bin/briefd serve --source https://github.com/your-org/knowledge.git --token dev-token
-```
-
-briefd clones into `<db dir>/knowledge-repo`, then fetches and hard-resets to
-the remote branch every `sync.interval` (default 60 s) — or immediately when
-your forge calls `POST /webhook/git` with a GitHub-style HMAC signature
-(`sync.webhook_secret`). Agents can call `propose_update`; briefd commits the
-new content to `briefd/proposal-<id>` on top of the current head, pushes it,
-and with `forge.type: github` + `forge.token` opens a pull request. The served
-knowledge only changes when a human merges. Pointing `--source` at your own
-local clone works too: proposals then become local branches.
-
-### Docker
-
-```sh
-cd deploy
-BRIEFD_SOURCE=https://github.com/your-org/knowledge.git BRIEFD_API_TOKEN=dev-token docker compose up
-```
-
-The image is distroless and pure Go (~34 MB); the database, git checkout and
-embedding model live in the `briefd-data` volume. Mount a directory and set
-`BRIEFD_SOURCE=/knowledge` to serve local files instead. Every setting is a
-`BRIEFD_*` variable (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)).
-
-### Dashboard and metrics
-
-Open <http://localhost:7788/> for a read-only status page: requests, tokens
-served, latency percentiles per tool, index size per scope, sync state, the
-last 100 requests, and a search box for manual inspection. It asks for the
-bearer token once and keeps it in your browser.
-
-`GET /metrics` exposes the same counters in Prometheus text format
-(`briefd_requests_total`, `briefd_tokens_served_total`,
-`briefd_request_duration_seconds`, `briefd_index_chunks`, `briefd_sync_runs_total`, …).
-It is unauthenticated by default; set `metrics.require_auth: true` to change that.
-`GET /api/stats` returns a JSON snapshot for your own tooling.
-
-### REST
-
-```sh
-curl -H "Authorization: Bearer dev-token" \
-  "localhost:7788/api/search?q=refund+approval&max_tokens=500&scopes=domain"
-curl -H "Authorization: Bearer dev-token" -H "Content-Type: application/json" \
-  -d '{"task":"add partial refunds to the portal","max_tokens":800}' localhost:7788/api/bundle
-curl -H "Authorization: Bearer dev-token" localhost:7788/api/scopes
-curl -H "Authorization: Bearer dev-token" localhost:7788/api/docs/domain/glossary.md
-curl localhost:7788/api/health
-```
-
-### CLI
-
-```sh
-./bin/briefd index --source testdata/knowledge --db /tmp/briefd.db
-./bin/briefd search --db /tmp/briefd.db "retry policy"
-./bin/briefd search --db /tmp/briefd.db --scopes projects/ledger-service "projection drift"
-./bin/briefd search --db /tmp/briefd.db --json --max-tokens 500 "refund approval threshold"
-./bin/briefd search --db /tmp/briefd.db --mode bm25 "money back after seven months"   # compare retrievers
-```
-
-### Retrieval quality
-
-`make eval` indexes `testdata/knowledge/` and scores the golden queries in
-`eval/golden/queries.yaml` (Recall@5, Recall@10, MRR per retrieval mode and
-query type). CI fails if hybrid drops below `eval/thresholds.yaml`. Any change
-to chunking, embeddings or fusion must report before/after numbers.
-
-`testdata/knowledge/` is a small, fictional payments-domain knowledge repo that
-follows the expected layout:
+briefd expects a git repository (or directory) of Markdown with three kinds of folders:
 
 ```
 knowledge-repo/
 ├── domain/          # shared: terminology, business rules, ADRs
 ├── conventions/     # shared: coding standards, infra patterns
-└── projects/<name>/ # visible only when scope projects/<name> is requested
+└── projects/
+    ├── ledger-service/   # visible only when scope "projects/ledger-service" is requested
+    └── merchant-portal/
 ```
 
-Re-running `index` only re-parses files whose content changed and removes
-documents that disappeared. `--rebuild` drops the database first.
+Documents are split on `##`/`###` headings into sections of roughly 200–800 tokens with stable
+ids, so a section can be quoted on its own. Optional front matter adds metadata:
 
-## Installing
+```yaml
+---
+title: Retry policy            # defaults to the first H1
+tags: [payments, resilience]
+refs: ["services/payment/**"]  # code paths this doc governs
+---
+```
 
-Download a binary for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 or
-windows/amd64 from the [releases page](https://github.com/ismailperim/briefd/releases),
-or pull `ghcr.io/ismailperim/briefd`. No runtime dependencies: no git binary,
-no libc, no ONNX runtime.
+[`testdata/knowledge/`](testdata/knowledge/) is a complete example (a fictional payments
+platform) and doubles as the evaluation corpus.
 
-## Building from source
-
-Requires Go ≥ 1.26 and [golangci-lint](https://golangci-lint.run) v2.
+## Running it for real
 
 ```sh
-make build   # → bin/briefd
-make test
-make lint
+export BRIEFD_GIT_TOKEN=ghp_...     # only for private HTTPS remotes
+./bin/briefd serve --source https://github.com/your-org/knowledge.git --token "$(openssl rand -hex 16)"
 ```
+
+briefd clones the repository, follows the branch with fetch + hard reset every `sync.interval`
+(default 60 s), or immediately when your forge calls `POST /webhook/git` with a GitHub-style
+HMAC signature. Only changed files are re-parsed and re-embedded.
+
+**Docker**
+
+```sh
+cd deploy
+BRIEFD_SOURCE=https://github.com/your-org/knowledge.git BRIEFD_API_TOKEN=... docker compose up
+```
+
+The image is distroless and pure Go (~34 MB, linux/amd64 + arm64). Database, checkout and model
+live in the `briefd-data` volume. Mount a directory and set `BRIEFD_SOURCE=/knowledge` to serve
+local files instead.
+
+**Configuration** — `briefd.yaml` (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml))
+or `BRIEFD_*` environment variables; flags override both. The ones you will actually touch:
+
+| Setting | Env | Default | Notes |
+|---|---|---|---|
+| `source` | `BRIEFD_SOURCE` | — | git URL or directory |
+| `api_token` | `BRIEFD_API_TOKEN` | *(none)* | empty = unauthenticated (only on trusted networks) |
+| `listen` | `BRIEFD_LISTEN` | `:7788` | |
+| `sync.interval` | `BRIEFD_SYNC_INTERVAL` | `60s` | `0` disables polling |
+| `sync.webhook_secret` | `BRIEFD_SYNC_WEBHOOK_SECRET` | — | enables `POST /webhook/git` |
+| `git.token` | `BRIEFD_GIT_TOKEN` | — | HTTPS remotes; `git.ssh_key` for SSH |
+| `forge.type`, `forge.token` | `BRIEFD_FORGE_*` | — | `github` opens PRs for proposals |
+| `embeddings.provider` | `BRIEFD_EMBEDDINGS_PROVIDER` | `local` | `ollama`, `openai`, or `none` for BM25-only |
+| `search.default_max_tokens` | `BRIEFD_DEFAULT_MAX_TOKENS` | `2000` | |
+
+`briefd model pull` pre-fetches the embedding model for offline or image-build use.
+
+## Dashboard and metrics
+
+<img src="docs/assets/dashboard.png" alt="briefd dashboard: request tiles with sparklines, per-tool latency table, index by scope" width="100%">
+
+`GET /` is a read-only status page embedded in the binary: requests and tokens served, p50/p95
+latency per tool, budget pressure, bundle cache hit rate, index size per scope, sync state, the
+last 100 requests, and a search box for manual inspection. `GET /metrics` exposes the same
+counters in Prometheus text format; `GET /api/stats` as JSON.
+
+## Retrieval quality
+
+Retrieval is measured, not assumed. `make eval` scores 47 golden queries (keyword, paraphrase,
+typo and Turkish/mixed-language) over the sample corpus and CI fails if hybrid retrieval drops
+below [`eval/thresholds.yaml`](eval/thresholds.yaml):
+
+| Mode | Recall@5 | Recall@10 | MRR |
+|---|---:|---:|---:|
+| BM25 only | 0.681 | 0.755 | 0.591 |
+| Vector only | 0.809 | 0.904 | 0.700 |
+| **Hybrid (default)** | **0.809** | **0.936** | **0.709** |
+
+Every change to chunking, embeddings or fusion ships with before/after numbers
+([ADR-0004](docs/adr/0004-hybrid-fusion-tuning.md) is an example).
+
+## CLI
+
+```sh
+briefd serve      # MCP + REST + dashboard
+briefd index      # index a directory into the database (--rebuild to start over)
+briefd search     # query like search_context does (--mode bm25|vector|hybrid, --json)
+briefd model pull # download the embedding model
+briefd eval       # retrieval quality against the golden set
+briefd bench      # tokens per task: static CLAUDE.md vs compile_bundle
+```
+
+## Status and roadmap
+
+v0.1 is feature-complete; expect rough edges before 1.0. Planned next:
+
+- usage-driven relevance tuning from `report_usage`
+- staleness scoring via `refs` globs (knowledge that lags the code it governs)
+- contradiction detection for proposals
+- a multilingual embedding option and glossary-alias query expansion
+- multiple knowledge repositories per instance
+
+The full specification is in [`SPEC.md`](SPEC.md); decisions are recorded in [`docs/adr/`](docs/adr/).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture decisions are recorded in
-[`docs/adr/`](docs/adr/).
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development setup, testing rules and conventions. Security issues: [SECURITY.md](SECURITY.md).
 
 ## License
 
