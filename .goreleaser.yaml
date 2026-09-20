@@ -65,3 +65,5 @@ release:
     name: briefd
   draft: false
   prerelease: auto
+  extra_files:
+    - glob: docs/assets/briefd-explainer.mp4

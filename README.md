@@ -20,6 +20,11 @@
 
 ---
 
+<p align="center">
+  <a href="docs/assets/briefd-explainer.mp4"><img src="docs/assets/diagram-comparison.png" alt="Watch the 90-second explainer: CLAUDE.md today vs briefd" width="100%"></a><br>
+  <a href="docs/assets/briefd-explainer.mp4">▶ Watch the 90-second explainer</a> · <a href="docs/ARCHITECTURE.md">How it works</a> · <a href="#quickstart">Quickstart</a>
+</p>
+
 Teams that build many projects in one domain keep the same knowledge in their heads and in
 scattered `CLAUDE.md` / `AGENTS.md` files: terminology, business rules, architecture decisions,
 conventions. Loading all of it into every session burns thousands of tokens on every turn, and

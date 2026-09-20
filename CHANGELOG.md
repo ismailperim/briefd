@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-09-20
+
+First release: everything below.
+
 ### Added
 
 - `eval/session/run.py`: real Claude Code session benchmark (CLAUDE.md vs
@@ -71,3 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sample knowledge repository under `testdata/knowledge/`.
 - Project skeleton: Go module, `briefd version` command, Makefile, lint config,
   CI, ADR-0001 (core architecture) and ADR-0002 (SQLite driver, vector search).
+
+[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ismailperim/briefd/releases/tag/v0.1.0
