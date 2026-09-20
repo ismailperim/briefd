@@ -240,6 +240,18 @@
     </div>
   </div>
 
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-proposals">
+      <div class="head"><h2 id="h-proposals">Proposals</h2><span class="hint">forge pull request status</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Status</th><th class="num">Count</th></tr></thead>
+          <tbody id="proposals"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
   <div class="grid split">
     <section class="panel" aria-labelledby="h-byname">
       <div class="head"><h2 id="h-byname">By tool / route</h2><span class="hint">click a column to sort</span></div>
@@ -434,6 +446,12 @@
       $('t-sync-sub').textContent = 'no source configured';
     }
     $('source').textContent = x.source ? `${x.source}${x.last_commit ? ' @ ' + x.last_commit.slice(0, 10) : ''}` : '';
+
+    const proposals = s.proposals;
+    $('proposals').innerHTML = proposals ? [
+      ['Open', proposals.open], ['Merged', proposals.merged], ['Closed', proposals.closed],
+    ].map(([status, count]) => `<tr><td>${status}</td><td class="num">${num(count)}</td></tr>`).join('')
+      : '<tr><td colspan="2" class="dim">Counts unavailable</td></tr>';
 
     renderByName(s.by_name);
 

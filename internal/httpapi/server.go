@@ -128,6 +128,11 @@ func (a *api) stats(w http.ResponseWriter, r *http.Request) {
 		snap.Extra["last_sync_at"] = nullableTime(sync.LastSyncAt)
 		snap.Extra["last_error"] = sync.LastError
 	}
+	if counts, err := a.deps.Store.CountProposals(r.Context()); err == nil {
+		snap.Proposals = &metrics.ProposalStats{
+			Open: counts.Open, Merged: counts.Merged, Closed: counts.Closed,
+		}
+	}
 	if fp, err := a.deps.Store.GetIndexFingerprint(r.Context()); err == nil {
 		snap.Extra["index_fingerprint"] = fp
 	}

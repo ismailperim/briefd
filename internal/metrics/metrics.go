@@ -292,8 +292,16 @@ type Snapshot struct {
 	ByName        []NameStats    `json:"by_name"`
 	Index         []ScopeCount   `json:"index"`
 	Sync          SyncStats      `json:"sync"`
+	Proposals     *ProposalStats `json:"proposals,omitempty"`
 	Recent        []Request      `json:"recent"`
 	Extra         map[string]any `json:"extra,omitempty"`
+}
+
+// ProposalStats reports stored proposals grouped by forge status.
+type ProposalStats struct {
+	Open   int `json:"open"`
+	Merged int `json:"merged"`
+	Closed int `json:"closed"`
 }
 
 // Totals aggregates every surface.

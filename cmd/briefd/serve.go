@@ -123,7 +123,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	} else {
 		logger.Warn("embeddings disabled; search is BM25-only")
 	}
-	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize, repo: repo, root: root}
+	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize, repo: repo, root: root, proposals: proposals}
 
 	if cfg.Source != "" {
 		// Documents are indexed before we listen so BM25 works immediately;
@@ -214,15 +214,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 // syncer runs the indexer (documents, then embeddings) and keeps metrics
 // and the in-memory vector index current. Runs are serialized.
 type syncer struct {
-	st       *store.Store
-	reg      *metrics.Registry
-	logger   *slog.Logger
-	searcher *search.Searcher
-	embedder embed.Embedder
-	batch    int
-	repo     *gitsync.Repo // nil for a plain directory
-	root     string        // directory that is indexed
-	mu       sync.Mutex
+	st        *store.Store
+	reg       *metrics.Registry
+	logger    *slog.Logger
+	searcher  *search.Searcher
+	embedder  embed.Embedder
+	batch     int
+	repo      *gitsync.Repo // nil for a plain directory
+	proposals *proposal.Service
+	root      string // directory that is indexed
+	mu        sync.Mutex
 }
 
 // run pulls the git source (if any) and indexes the checkout. With
@@ -266,6 +267,9 @@ func (s *syncer) run(ctx context.Context, embeddings bool) error {
 		if err := s.searcher.Reload(ctx); err != nil {
 			return err
 		}
+	}
+	if err := s.proposals.SyncStatuses(ctx); err != nil {
+		s.logger.Warn("proposal status sync failed", "err", err)
 	}
 	s.refreshGauges(ctx)
 	return nil

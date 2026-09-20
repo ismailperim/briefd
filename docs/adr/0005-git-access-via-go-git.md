@@ -33,5 +33,6 @@ binary, or use `go-git` (pure Go, Apache-2.0).
   recommended path inside containers.
 - `sync_state.last_commit` carries the real commit hash for git sources;
   the index fingerprint (ADR/M4) covers both git and plain directories.
-- Proposal status (`open` → `merged`/`closed`) is not tracked back from the
-  forge in v0.1; it is recorded as `open` and left for v0.2.
+- Proposal status (`open` → `merged`/`closed`) is refreshed from GitHub during
+  source sync when a forge is configured. A status lookup error leaves the proposal
+  open and does not fail document indexing.

@@ -378,12 +378,51 @@ func TestMetricsStatsAndDashboard(t *testing.T) {
 	}
 	body, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "<title>briefd</title>") {
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "<title>briefd</title>") || !strings.Contains(string(body), "Proposals") {
 		t.Errorf("dashboard status %d", resp.StatusCode)
 	}
 	resp, _ = http.Get(srv.URL + "/api/stats")
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("/api/stats without token: %d", resp.StatusCode)
+	}
+}
+
+func TestProposalCountsInStats(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "stats.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	for _, p := range []store.Proposal{
+		{ID: "open", Branch: "briefd/proposal-open"},
+		{ID: "merged", Branch: "briefd/proposal-merged"},
+		{ID: "closed", Branch: "briefd/proposal-closed"},
+	} {
+		if err := st.PutProposal(context.Background(), p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.UpdateProposalStatus(context.Background(), "merged", "merged"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpdateProposalStatus(context.Background(), "closed", "closed"); err != nil {
+		t.Fatal(err)
+	}
+	h := httpapi.New(httpapi.Deps{Store: st, APIToken: testToken, Metrics: metrics.New("test")})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	client := &http.Client{Transport: bearerTransport{token: testToken, base: http.DefaultTransport}}
+	resp, err := client.Get(srv.URL + "/api/stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var snap metrics.Snapshot
+	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap.Proposals == nil || *snap.Proposals != (metrics.ProposalStats{Open: 1, Merged: 1, Closed: 1}) {
+		t.Fatalf("proposal counts = %+v", snap.Proposals)
 	}
 }

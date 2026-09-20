@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Proposal statuses refresh from GitHub during sync and appear in the stats API and
+  dashboard.
 - `PORT` environment variable (when `BRIEFD_LISTEN` is unset) and `GET /healthz`
   alias, for PaaS and directory runners.
 
