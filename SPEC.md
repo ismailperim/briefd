@@ -77,9 +77,11 @@ refs: ["services/payment/**"]  # code paths this doc governs (staleness input, v
 
 `GET /api/search`, `POST /api/bundle` (`{task, max_tokens?, scopes?}`), `POST /api/usage`
 (`{bundle_id, useful_chunk_ids?, client?}`), `GET /api/docs/{path}`, `GET /api/scopes`,
-`POST /api/proposals`, `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
-cache hit rate, token-served counters). Auth: single bearer token (`BRIEFD_API_TOKEN`);
-MCP uses the same.
+`POST /api/proposals` (`{doc_path, change_description, new_content, client?}`),
+`GET /api/proposals`, `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
+cache hit rate, token-served counters). `POST /webhook/git` (GitHub-style
+`X-Hub-Signature-256` HMAC over the body with `sync.webhook_secret`) triggers a sync.
+Auth: single bearer token (`BRIEFD_API_TOKEN`); MCP uses the same.
 
 `GET /metrics` — Prometheus text format, no auth by default (configurable):
 request counts and latency histograms per tool/endpoint, tokens served, cache hits/misses,
@@ -100,9 +102,11 @@ inspection of the index, same ranking as the API) · `briefd model pull` · `bri
 
 ## 4. Ingestion & indexing
 
-1. **Startup:** clone (or open) knowledge repo → compare HEAD with `sync_state.last_commit`
-   → incremental reindex of changed/deleted files only. Empty DB ⇒ full build. The DB is
-   disposable; `--rebuild` recreates it from git alone.
+1. **Startup:** clone (or open) the knowledge repo (`source` may be a git URL or a
+   directory; a directory that is a git checkout is read in place) → incremental reindex
+   by content hash of changed/deleted files only. Empty DB ⇒ full build. The DB is
+   disposable; `--rebuild` recreates it from git alone. Sync is fetch + hard reset to the
+   remote branch (ADR-0005).
 2. **Runtime freshness:** polling every `sync.interval` (default 60s) and/or
    `POST /webhook/git` (HMAC-verified). Both supported; polling is the default because
    homelab setups often can't receive webhooks.
@@ -145,7 +149,7 @@ chunk_vectors     -- chunk_id, model, dim, embedding BLOB (L2-normalized float32
 bundles(id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens,
         sections, truncated, created_at, hits)
 usage_events(id, bundle_id, chunk_id, useful, client, created_at)
-proposals(id, branch, doc_path, description, status, created_at)
+proposals(id, branch, doc_path, description, commit_hash, pr_url, status, client, created_at)
 sync_state(source, last_commit, last_sync_at, last_error, index_fingerprint)
 ```
 

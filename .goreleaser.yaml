@@ -1,0 +1,67 @@
+# goreleaser v2 — https://goreleaser.com
+version: 2
+
+project_name: briefd
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: briefd
+    main: ./cmd/briefd
+    binary: briefd
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - deploy/briefd.example.yaml
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Documentation
+      regexp: '^docs'
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^chore'
+      - '^test'
+      - '^ci'
+
+release:
+  github:
+    owner: ismailperim
+    name: briefd
+  draft: false
+  prerelease: auto

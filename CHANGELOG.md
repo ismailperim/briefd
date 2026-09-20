@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Git sources: `source` may be a git URL; briefd clones with go-git (no git
+  binary needed), polls with fetch + hard reset, and accepts GitHub-style
+  signed pushes on `POST /webhook/git`. A local git checkout is read in place.
+- `propose_update` (MCP) and `POST /api/proposals`: commits the proposed
+  content to `briefd/proposal-<id>` on top of the current head, pushes it and
+  opens a GitHub pull request when `forge` is configured; `GET /api/proposals`
+  lists them. Paths outside `domain/`, `conventions/`, `projects/<name>/` are
+  rejected.
+- Deployment: distroless container image (`deploy/Dockerfile`, ~34 MB,
+  multi-arch), `deploy/docker-compose.yml`, goreleaser binaries for
+  linux/darwin/windows, release workflow publishing to GitHub Releases and
+  ghcr.io.
 - `compile_bundle` (MCP) and `POST /api/bundle` (REST): compiles a task into one
   context block — near-duplicate sections dropped, greedy packing within the
   budget with 5% headroom, domain → conventions → project ordering, source

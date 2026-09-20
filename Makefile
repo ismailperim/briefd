@@ -8,7 +8,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-.PHONY: all build test lint fmt tidy eval clean help
+.PHONY: all build test lint fmt tidy eval docker clean help
 
 all: build test lint ## Build, test and lint
 
@@ -26,6 +26,9 @@ fmt: ## Format sources with the configured formatters
 
 eval: build ## Run the retrieval quality eval against the golden set (downloads the model once)
 	./$(BIN_DIR)/$(BINARY) eval --config /dev/null
+
+docker: ## Build the container image locally
+	docker build -f deploy/Dockerfile --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) -t briefd:$(VERSION) -t briefd:local .
 
 tidy: ## Tidy go.mod/go.sum and fail if anything changed
 	go mod tidy

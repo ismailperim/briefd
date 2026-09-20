@@ -24,3 +24,4 @@ Template:
 | [0002](0002-sqlite-driver-and-vector-search.md) | SQLite driver and vector search strategy | accepted |
 | [0003](0003-embeddings-pure-go-minilm.md) | Default embeddings: all-MiniLM-L6-v2 in pure Go | accepted |
 | [0004](0004-hybrid-fusion-tuning.md) | Hybrid fusion: AND-first BM25 and weighted RRF | accepted |
+| [0005](0005-git-access-via-go-git.md) | Git access via go-git; proposals as in-memory commits | accepted |

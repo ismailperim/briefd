@@ -19,11 +19,12 @@ bundles** to coding agents (Claude Code, Cursor, Codex) over
 
 ## Status
 
-Pre-alpha, built milestone by milestone. Today briefd indexes a directory of
-Markdown, serves it to Claude Code (or any MCP client) over streamable HTTP
-with hybrid retrieval (BM25 + local embeddings, fused with RRF) and a hard
-token budget, and exposes the same over REST. Bundle compilation and git sync
-are in progress. See [`SPEC.md`](SPEC.md) for the full specification.
+Alpha. briefd follows a knowledge git repository (or a directory), serves it
+to Claude Code and any MCP client over streamable HTTP with hybrid retrieval
+(BM25 + local embeddings, fused with RRF), compiles task-specific context
+bundles within a hard token budget, lets agents propose changes as reviewable
+branches/PRs, and exposes everything over REST with a status dashboard and
+Prometheus metrics. See [`SPEC.md`](SPEC.md) for the full specification.
 
 ## Quickstart
 
@@ -63,6 +64,7 @@ connection status and the three tools:
 | `search_context(query, max_tokens?, scopes?, top_k?)` | ranked sections that fit the budget |
 | `get_document(doc_path, scopes?)` | one document in full |
 | `list_scopes()` | scopes with document/section counts |
+| `propose_update(doc_path, change_description, new_content)` | creates branch `briefd/proposal-<id>` (+ PR when configured); never touches the index |
 | `report_usage(bundle_id, useful_chunk_ids)` | optional feedback, stored for future ranking |
 
 On first start briefd downloads the embedding model (`all-MiniLM-L6-v2`,
@@ -77,6 +79,34 @@ Edits to files under `--source` are picked up within `sync.interval`
 (default 60 s). Configuration lives in `briefd.yaml`
 (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)) or `BRIEFD_*`
 environment variables.
+
+### Serving a git repository
+
+```sh
+export BRIEFD_GIT_TOKEN=ghp_...          # only for private HTTPS remotes
+./bin/briefd serve --source https://github.com/your-org/knowledge.git --token dev-token
+```
+
+briefd clones into `<db dir>/knowledge-repo`, then fetches and hard-resets to
+the remote branch every `sync.interval` (default 60 s) — or immediately when
+your forge calls `POST /webhook/git` with a GitHub-style HMAC signature
+(`sync.webhook_secret`). Agents can call `propose_update`; briefd commits the
+new content to `briefd/proposal-<id>` on top of the current head, pushes it,
+and with `forge.type: github` + `forge.token` opens a pull request. The served
+knowledge only changes when a human merges. Pointing `--source` at your own
+local clone works too: proposals then become local branches.
+
+### Docker
+
+```sh
+cd deploy
+BRIEFD_SOURCE=https://github.com/your-org/knowledge.git BRIEFD_API_TOKEN=dev-token docker compose up
+```
+
+The image is distroless and pure Go (~34 MB); the database, git checkout and
+embedding model live in the `briefd-data` volume. Mount a directory and set
+`BRIEFD_SOURCE=/knowledge` to serve local files instead. Every setting is a
+`BRIEFD_*` variable (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)).
 
 ### Dashboard and metrics
 
@@ -132,6 +162,13 @@ knowledge-repo/
 
 Re-running `index` only re-parses files whose content changed and removes
 documents that disappeared. `--rebuild` drops the database first.
+
+## Installing
+
+Download a binary for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 or
+windows/amd64 from the [releases page](https://github.com/ismailperim/briefd/releases),
+or pull `ghcr.io/ismailperim/briefd`. No runtime dependencies: no git binary,
+no libc, no ONNX runtime.
 
 ## Building from source
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/ismailperim/briefd/internal/embed"
+	"github.com/ismailperim/briefd/internal/gitsync"
 )
 
 // Config is the fully resolved configuration.
@@ -21,8 +23,9 @@ type Config struct {
 	Listen string `yaml:"listen"`
 	// DB is the SQLite database path.
 	DB string `yaml:"db"`
-	// Source is the knowledge repository: a local directory today, a git
-	// URL once gitsync lands (M5).
+	// Source is the knowledge repository: a local directory, or a git URL
+	// (https://…, git@host:org/repo.git, ssh://…) that briefd clones and
+	// keeps in sync.
 	Source string `yaml:"source"`
 	// APIToken protects /mcp and /api. Empty disables authentication.
 	APIToken string  `yaml:"api_token"`
@@ -32,6 +35,28 @@ type Config struct {
 	Metrics  Metrics `yaml:"metrics"`
 	// Embeddings selects the vector adapter (SPEC §7, ADR-0003).
 	Embeddings embed.Config `yaml:"embeddings"`
+	// Git configures cloning/authentication when Source is a git URL, and
+	// the identity used for proposal commits.
+	Git Git `yaml:"git"`
+	// Forge enables pull requests for proposals.
+	Forge gitsync.ForgeConfig `yaml:"forge"`
+}
+
+// Git holds git-source settings.
+type Git struct {
+	// Branch to follow; "" = the remote's default branch.
+	Branch string `yaml:"branch"`
+	// Dir is where the repository is cloned; default <db dir>/knowledge-repo.
+	Dir string `yaml:"dir"`
+	// Token for HTTPS remotes (BRIEFD_GIT_TOKEN).
+	Token string `yaml:"token"`
+	// Username for HTTPS basic auth (default "briefd").
+	Username string `yaml:"username"`
+	// SSHKey is a private key path for SSH remotes; "" uses ssh-agent.
+	SSHKey string `yaml:"ssh_key"`
+	// AuthorName/AuthorEmail sign proposal commits.
+	AuthorName  string `yaml:"author_name"`
+	AuthorEmail string `yaml:"author_email"`
 }
 
 // Metrics controls the Prometheus endpoint.
@@ -45,6 +70,8 @@ type Metrics struct {
 type Sync struct {
 	// Interval between scans; 0 disables periodic sync (index once at start).
 	Interval time.Duration `yaml:"interval"`
+	// WebhookSecret enables POST /webhook/git (HMAC-SHA256, GitHub style).
+	WebhookSecret string `yaml:"webhook_secret"`
 }
 
 // Search holds retrieval defaults.
@@ -70,7 +97,16 @@ func Default() Config {
 			MaxTopK:          50,
 		},
 		Embeddings: embed.Default(),
+		Git:        Git{AuthorName: "briefd", AuthorEmail: "briefd@localhost"},
 	}
+}
+
+// GitDir returns the checkout directory for a git source.
+func (c *Config) GitDir() string {
+	if c.Git.Dir != "" {
+		return c.Git.Dir
+	}
+	return filepath.Join(filepath.Dir(c.DB), "knowledge-repo")
 }
 
 // DefaultFile is the config file looked up when none is given.
@@ -130,6 +166,18 @@ func (c *Config) applyEnv() error {
 		}
 		c.Search.DefaultMaxTokens = n
 	}
+	str("SYNC_WEBHOOK_SECRET", &c.Sync.WebhookSecret)
+	str("GIT_BRANCH", &c.Git.Branch)
+	str("GIT_DIR", &c.Git.Dir)
+	str("GIT_TOKEN", &c.Git.Token)
+	str("GIT_USERNAME", &c.Git.Username)
+	str("GIT_SSH_KEY", &c.Git.SSHKey)
+	str("GIT_AUTHOR_NAME", &c.Git.AuthorName)
+	str("GIT_AUTHOR_EMAIL", &c.Git.AuthorEmail)
+	str("FORGE_TYPE", &c.Forge.Type)
+	str("FORGE_TOKEN", &c.Forge.Token)
+	str("FORGE_REPO", &c.Forge.Repo)
+	str("FORGE_API_URL", &c.Forge.APIURL)
 	str("EMBEDDINGS_PROVIDER", &c.Embeddings.Provider)
 	str("EMBEDDINGS_MODEL", &c.Embeddings.Model)
 	str("EMBEDDINGS_MODEL_DIR", &c.Embeddings.ModelDir)

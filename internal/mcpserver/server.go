@@ -16,6 +16,7 @@ import (
 
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/metrics"
+	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 	"github.com/ismailperim/briefd/internal/tokenizer"
@@ -26,6 +27,9 @@ type Deps struct {
 	Store    *store.Store
 	Searcher *search.Searcher
 	Compiler *bundle.Compiler
+	// Proposals creates git branches for propose_update; nil or unavailable
+	// makes the tool return a clear error.
+	Proposals *proposal.Service
 	// Metrics receives one record per tool call; nil disables instrumentation.
 	Metrics *metrics.Registry
 	Version string
@@ -63,6 +67,12 @@ func New(d Deps) *mcp.Server {
 	}, t.reportUsage)
 
 	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "propose_update",
+		Description: "Propose a change to a knowledge document. Creates a git branch briefd/proposal-<id> with the new content (and a pull request when configured) for humans to review; it never changes what briefd serves until merged. Provide the complete new file content.",
+		Annotations: &mcp.ToolAnnotations{IdempotentHint: false},
+	}, t.proposeUpdate)
+
+	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_document",
 		Description: "Fetch one knowledge document in full by its repository path (as returned in search results as doc_path).",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
@@ -93,7 +103,8 @@ affected by team rules, call compile_bundle with a short description of the task
 budgeted context block, or search_context to inspect ranked sections. Pass
 scopes=["domain","conventions","projects/<name>"] to include a project's own notes. Call
 get_document when you need a full document, and report_usage with the bundle_id and the
-chunk_ids that helped once you are done.`
+chunk_ids that helped once you are done. If you find knowledge that is wrong or missing,
+propose_update creates a reviewable branch/PR — you never edit the knowledge directly.`
 
 type tools struct {
 	deps Deps
@@ -254,10 +265,7 @@ func (t *tools) reportUsage(ctx context.Context, req *mcp.CallToolRequest, in Re
 	if err != nil {
 		return nil, out, err
 	}
-	client := ""
-	if req != nil && req.Session != nil && req.Session.InitializeParams() != nil && req.Session.InitializeParams().ClientInfo != nil {
-		client = req.Session.InitializeParams().ClientInfo.Name
-	}
+	client := clientName(req)
 	useful := make(map[string]bool, len(in.UsefulChunkIDs))
 	for _, id := range in.UsefulChunkIDs {
 		useful[id] = true
@@ -271,6 +279,54 @@ func (t *tools) reportUsage(ctx context.Context, req *mcp.CallToolRequest, in Re
 	}
 	out = ReportUsageOutput{Recorded: len(events)}
 	return textResult(fmt.Sprintf("Recorded feedback for %d section(s) of bundle %s. Thank you.", len(events), b.ID)), out, nil
+}
+
+// ProposeUpdateInput is the propose_update tool input.
+type ProposeUpdateInput struct {
+	DocPath           string `json:"doc_path" jsonschema:"Repository-relative path of the document to change or create, e.g. domain/rules/refunds.md"`
+	ChangeDescription string `json:"change_description" jsonschema:"Why this change is needed, for the reviewer (becomes the commit/PR description)"`
+	NewContent        string `json:"new_content" jsonschema:"The complete new content of the file (Markdown, including front matter if any)"`
+}
+
+// ProposeUpdateOutput describes the created branch.
+type ProposeUpdateOutput struct {
+	ProposalID string `json:"proposal_id"`
+	Branch     string `json:"branch"`
+	Commit     string `json:"commit"`
+	Pushed     bool   `json:"pushed"`
+	PRURL      string `json:"pr_url,omitempty"`
+}
+
+func (t *tools) proposeUpdate(ctx context.Context, req *mcp.CallToolRequest, in ProposeUpdateInput) (_ *mcp.CallToolResult, out ProposeUpdateOutput, err error) {
+	start := time.Now()
+	defer func() { t.record(start, metrics.Request{Name: "propose_update", Query: in.DocPath}, err) }()
+	if t.deps.Proposals == nil || !t.deps.Proposals.Available() {
+		return nil, out, proposal.ErrUnavailable
+	}
+	res, err := t.deps.Proposals.Create(ctx, proposal.Request{
+		DocPath: in.DocPath, Description: in.ChangeDescription, Content: in.NewContent, Client: clientName(req),
+	})
+	if err != nil {
+		return nil, out, err
+	}
+	out = ProposeUpdateOutput{ProposalID: res.ID, Branch: res.Branch, Commit: res.Commit, Pushed: res.Pushed, PRURL: res.PRURL}
+	msg := fmt.Sprintf("Proposal %s created on branch %s (commit %s).", res.ID, res.Branch, res.Commit[:10])
+	switch {
+	case res.PRURL != "":
+		msg += " Pull request: " + res.PRURL
+	case res.Pushed:
+		msg += " The branch was pushed; open a pull request from it for review."
+	default:
+		msg += " The branch exists only in briefd's local checkout (no remote configured)."
+	}
+	return textResult(msg), out, nil
+}
+
+func clientName(req *mcp.CallToolRequest) string {
+	if req != nil && req.Session != nil && req.Session.InitializeParams() != nil && req.Session.InitializeParams().ClientInfo != nil {
+		return req.Session.InitializeParams().ClientInfo.Name
+	}
+	return ""
 }
 
 // GetDocumentInput is the get_document tool input.

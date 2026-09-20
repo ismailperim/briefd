@@ -4,10 +4,14 @@
 package httpapi
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -16,6 +20,7 @@ import (
 
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/metrics"
+	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -28,6 +33,12 @@ type Deps struct {
 	Store    *store.Store
 	Searcher *search.Searcher
 	Compiler *bundle.Compiler
+	// Proposals backs POST /api/proposals (may be nil / unavailable).
+	Proposals *proposal.Service
+	// WebhookSecret enables POST /webhook/git; OnWebhook is called after a
+	// verified delivery to trigger a sync.
+	WebhookSecret string
+	OnWebhook     func()
 	// MCP is the streamable-HTTP MCP handler, mounted at /mcp.
 	MCP http.Handler
 	// APIToken protects /mcp and /api/*; empty disables authentication.
@@ -69,6 +80,11 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/search", auth(http.HandlerFunc(a.search)))
 	mux.Handle("POST /api/bundle", auth(http.HandlerFunc(a.bundle)))
 	mux.Handle("POST /api/usage", auth(http.HandlerFunc(a.usage)))
+	mux.Handle("POST /api/proposals", auth(http.HandlerFunc(a.proposals)))
+	mux.Handle("GET /api/proposals", auth(http.HandlerFunc(a.listProposals)))
+	if d.WebhookSecret != "" {
+		mux.HandleFunc("POST /webhook/git", a.webhook)
+	}
 	mux.Handle("GET /api/scopes", auth(http.HandlerFunc(a.scopes)))
 	mux.Handle("GET /api/docs/{path...}", auth(http.HandlerFunc(a.document)))
 
@@ -254,6 +270,77 @@ func (a *api) usage(w http.ResponseWriter, r *http.Request) {
 	}
 	a.record(start, metrics.Request{Name: "api_usage", Query: req.BundleID, Chunks: len(events)}, false)
 	writeJSON(w, http.StatusOK, map[string]int{"recorded": len(events)})
+}
+
+type proposalRequest struct {
+	DocPath     string `json:"doc_path"`
+	Description string `json:"change_description"`
+	Content     string `json:"new_content"`
+	Client      string `json:"client"`
+}
+
+func (a *api) proposals(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	var req proposalRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&req); err != nil {
+		a.record(start, metrics.Request{Name: "api_proposals"}, true)
+		writeError(w, http.StatusBadRequest, "invalid_json", "body must be JSON: {doc_path, change_description, new_content, client?}")
+		return
+	}
+	if a.deps.Proposals == nil || !a.deps.Proposals.Available() {
+		a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, true)
+		writeError(w, http.StatusConflict, "proposals_unavailable", proposal.ErrUnavailable.Error())
+		return
+	}
+	res, err := a.deps.Proposals.Create(r.Context(), proposal.Request{
+		DocPath: req.DocPath, Description: req.Description, Content: req.Content, Client: req.Client,
+	})
+	if err != nil {
+		a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, true)
+		a.deps.Logger.Error("proposal failed", "err", err)
+		writeError(w, http.StatusBadRequest, "proposal_failed", err.Error())
+		return
+	}
+	a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, false)
+	writeJSON(w, http.StatusCreated, res)
+}
+
+func (a *api) listProposals(w http.ResponseWriter, r *http.Request) {
+	list, err := a.deps.Store.ListProposals(r.Context(), 100)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list_failed", "listing proposals failed")
+		return
+	}
+	if list == nil {
+		list = []store.Proposal{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"proposals": list})
+}
+
+// webhook accepts GitHub-style push deliveries: the body's HMAC-SHA256 with
+// the shared secret must match X-Hub-Signature-256.
+func (a *api) webhook(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "could not read body")
+		return
+	}
+	sig, ok := strings.CutPrefix(r.Header.Get("X-Hub-Signature-256"), "sha256=")
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "missing_signature", "X-Hub-Signature-256 header required")
+		return
+	}
+	mac := hmac.New(sha256.New, []byte(a.deps.WebhookSecret))
+	mac.Write(body)
+	want := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(sig), []byte(want)) {
+		writeError(w, http.StatusUnauthorized, "bad_signature", "signature mismatch")
+		return
+	}
+	if a.deps.OnWebhook != nil {
+		go a.deps.OnWebhook()
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sync scheduled"})
 }
 
 func (a *api) scopes(w http.ResponseWriter, r *http.Request) {

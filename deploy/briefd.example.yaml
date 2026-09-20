@@ -8,7 +8,8 @@ listen: ":7788"            # BRIEFD_LISTEN
 # SQLite database. It is a disposable cache of the knowledge source.
 db: "briefd.db"            # BRIEFD_DB
 
-# Knowledge repository directory (git URL support arrives in M5).
+# Knowledge repository: a local directory, or a git URL that briefd clones
+# and keeps in sync (https://github.com/org/knowledge.git, git@host:org/repo.git).
 source: "./knowledge"      # BRIEFD_SOURCE
 
 # Bearer token required on /mcp and /api. Empty disables authentication —
@@ -19,6 +20,22 @@ log_level: info            # BRIEFD_LOG_LEVEL: debug | info | warn | error
 
 sync:
   interval: 60s            # BRIEFD_SYNC_INTERVAL; 0 = index once at startup
+  webhook_secret: ""       # BRIEFD_SYNC_WEBHOOK_SECRET; enables POST /webhook/git (GitHub-style HMAC-SHA256)
+
+git:                       # used when source is a git URL, and for proposal commits
+  branch: ""               # BRIEFD_GIT_BRANCH; "" = remote default branch
+  dir: ""                  # BRIEFD_GIT_DIR; default: <db dir>/knowledge-repo
+  token: ""                # BRIEFD_GIT_TOKEN for https remotes (PAT with contents:read/write)
+  username: ""             # BRIEFD_GIT_USERNAME; default "briefd"
+  ssh_key: ""              # BRIEFD_GIT_SSH_KEY; private key path for ssh remotes ("" = ssh-agent)
+  author_name: briefd      # BRIEFD_GIT_AUTHOR_NAME
+  author_email: briefd@localhost   # BRIEFD_GIT_AUTHOR_EMAIL
+
+forge:                     # optional: open a pull request for each proposal
+  type: ""                 # BRIEFD_FORGE_TYPE: github
+  token: ""                # BRIEFD_FORGE_TOKEN with pull_requests:write
+  repo: ""                 # BRIEFD_FORGE_REPO owner/name; derived from source when empty
+  api_url: ""              # BRIEFD_FORGE_API_URL for GitHub Enterprise
 
 search:
   default_scopes: [domain, conventions]   # BRIEFD_DEFAULT_SCOPES (comma-separated)

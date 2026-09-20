@@ -1,0 +1,39 @@
+# docker compose -f deploy/docker-compose.yml up
+#
+# Required environment (put them in deploy/.env or export them):
+#   BRIEFD_SOURCE     git URL of your knowledge repo (or a mounted directory)
+#   BRIEFD_API_TOKEN  bearer token clients must send
+#   BRIEFD_GIT_TOKEN  token for private HTTPS remotes (optional)
+services:
+  briefd:
+    image: ghcr.io/ismailperim/briefd:latest
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "7788:7788"
+    environment:
+      BRIEFD_SOURCE: ${BRIEFD_SOURCE:?set BRIEFD_SOURCE to your knowledge repo URL or /knowledge}
+      BRIEFD_API_TOKEN: ${BRIEFD_API_TOKEN:?set BRIEFD_API_TOKEN}
+      BRIEFD_GIT_TOKEN: ${BRIEFD_GIT_TOKEN:-}
+      BRIEFD_GIT_BRANCH: ${BRIEFD_GIT_BRANCH:-}
+      BRIEFD_SYNC_INTERVAL: ${BRIEFD_SYNC_INTERVAL:-60s}
+      BRIEFD_SYNC_WEBHOOK_SECRET: ${BRIEFD_SYNC_WEBHOOK_SECRET:-}
+      BRIEFD_FORGE_TYPE: ${BRIEFD_FORGE_TYPE:-}
+      BRIEFD_FORGE_TOKEN: ${BRIEFD_FORGE_TOKEN:-}
+      BRIEFD_LOG_LEVEL: ${BRIEFD_LOG_LEVEL:-info}
+    volumes:
+      # Database, git checkout and the embedding model live here.
+      - briefd-data:/data
+      # To serve a local directory instead of a git URL, mount it and set
+      # BRIEFD_SOURCE=/knowledge:
+      # - ./knowledge:/knowledge:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/briefd", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  briefd-data: {}

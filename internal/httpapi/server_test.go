@@ -94,7 +94,7 @@ func TestMCPToolsOverHTTP(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names = append(names, tool.Name)
 	}
-	if got := strings.Join(names, ","); got != "compile_bundle,get_document,list_scopes,report_usage,search_context" {
+	if got := strings.Join(names, ","); got != "compile_bundle,get_document,list_scopes,propose_update,report_usage,search_context" {
 		t.Errorf("tools = %s", got)
 	}
 

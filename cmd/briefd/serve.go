@@ -14,10 +14,12 @@ import (
 
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/embed"
+	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/mcpserver"
 	"github.com/ismailperim/briefd/internal/metrics"
+	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -28,7 +30,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	var common commonFlags
 	common.register(fs)
 	listen := fs.String("listen", "", "listen address (default :7788)")
-	source := fs.String("source", "", "knowledge directory to index and watch")
+	source := fs.String("source", "", "knowledge directory or git URL to index and keep in sync")
 	token := fs.String("token", "", "bearer token for /mcp and /api (default: none, authentication disabled)")
 	syncInterval := fs.Duration("sync-interval", -1, "how often to re-scan the source; 0 disables (default 60s)")
 	fs.Usage = func() {
@@ -68,6 +70,42 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	defer st.Close()
 	reg := metrics.New(version)
 
+	// Resolve the source: a git URL is cloned and followed; a directory that
+	// is itself a git checkout is read in place (proposals become local
+	// branches); a plain directory is just indexed.
+	var repo *gitsync.Repo
+	switch {
+	case cfg.Source == "":
+	case gitsync.IsGitURL(cfg.Source):
+		repo, err = gitsync.Open(ctx, gitsync.Config{
+			URL: cfg.Source, Branch: cfg.Git.Branch, Dir: cfg.GitDir(), Token: cfg.Git.Token, Username: cfg.Git.Username,
+			SSHKeyPath: cfg.Git.SSHKey, AuthorName: cfg.Git.AuthorName, AuthorEmail: cfg.Git.AuthorEmail,
+		}, logger)
+		if err != nil {
+			return err
+		}
+	default:
+		if r, err := gitsync.OpenLocal(cfg.Source, gitsync.Config{
+			Token: cfg.Git.Token, Username: cfg.Git.Username, SSHKeyPath: cfg.Git.SSHKey,
+			AuthorName: cfg.Git.AuthorName, AuthorEmail: cfg.Git.AuthorEmail,
+		}, logger); err == nil {
+			repo = r
+			logger.Info("source is a local git checkout; proposals will be committed to local branches", "branch", r.Branch())
+		}
+	}
+	root := cfg.Source
+	if repo != nil {
+		root = repo.Dir()
+	}
+
+	var forge *gitsync.Forge
+	if repo != nil {
+		if forge, err = gitsync.NewForge(cfg.Forge, repo.URL()); err != nil {
+			return err
+		}
+	}
+	proposals := &proposal.Service{Repo: repo, Forge: forge, Store: st, Logger: logger}
+
 	searcher := search.New(st, search.Options{
 		DefaultScopes:    cfg.Search.DefaultScopes,
 		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
@@ -85,12 +123,12 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	} else {
 		logger.Warn("embeddings disabled; search is BM25-only")
 	}
-	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize}
+	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize, repo: repo, root: root}
 
 	if cfg.Source != "" {
 		// Documents are indexed before we listen so BM25 works immediately;
 		// embeddings can take minutes and run in the background.
-		if err := syncer.run(ctx, cfg.Source, false); err != nil {
+		if err := syncer.run(ctx, false); err != nil {
 			return fmt.Errorf("initial index: %w", err)
 		}
 	} else {
@@ -111,11 +149,18 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
 		OnCache:          reg.RecordCache,
 	})
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Metrics: reg, Version: version, Logger: mcpLogger})
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Proposals: proposals, Metrics: reg, Version: version, Logger: mcpLogger})
 	handler := httpapi.New(httpapi.Deps{
-		Store:              st,
-		Searcher:           searcher,
-		Compiler:           compiler,
+		Store:         st,
+		Searcher:      searcher,
+		Compiler:      compiler,
+		Proposals:     proposals,
+		WebhookSecret: cfg.Sync.WebhookSecret,
+		OnWebhook: func() {
+			if err := syncer.run(ctx, true); err != nil && ctx.Err() == nil {
+				logger.Error("webhook sync failed", "err", err)
+			}
+		},
 		MCP:                mcpserver.Handler(mcpSrv, mcpLogger),
 		APIToken:           cfg.APIToken,
 		Metrics:            reg,
@@ -134,7 +179,8 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w (pick another address with --listen, e.g. --listen :7789)", cfg.Listen, err)
 	}
-	logger.Info("briefd listening", "addr", ln.Addr().String(), "mcp", "/mcp", "api", "/api", "db", cfg.DB, "source", cfg.Source)
+	logger.Info("briefd listening", "addr", ln.Addr().String(), "mcp", "/mcp", "api", "/api", "db", cfg.DB, "source", cfg.Source,
+		"git", repo != nil, "proposals", proposals.Available(), "webhook", cfg.Sync.WebhookSecret != "")
 	fmt.Fprintf(stdout, "briefd %s listening on http://%s  (dashboard: /  MCP: /mcp  metrics: /metrics)\n", version, displayAddr(ln.Addr()))
 
 	errc := make(chan error, 1)
@@ -142,12 +188,12 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 
 	if cfg.Source != "" {
 		go func() {
-			if err := syncer.run(ctx, cfg.Source, true); err != nil && ctx.Err() == nil {
+			if err := syncer.run(ctx, true); err != nil && ctx.Err() == nil {
 				logger.Error("background embedding failed", "err", err)
 			}
 		}()
 		if cfg.Sync.Interval > 0 {
-			go syncer.loop(ctx, cfg.Source, cfg.Sync.Interval)
+			go syncer.loop(ctx, cfg.Sync.Interval)
 		}
 	}
 
@@ -174,15 +220,27 @@ type syncer struct {
 	searcher *search.Searcher
 	embedder embed.Embedder
 	batch    int
+	repo     *gitsync.Repo // nil for a plain directory
+	root     string        // directory that is indexed
 	mu       sync.Mutex
 }
 
-// run indexes root. With embeddings=true it also computes missing vectors,
-// reloading the vector index as batches land.
-func (s *syncer) run(ctx context.Context, root string, embeddings bool) error {
+// run pulls the git source (if any) and indexes the checkout. With
+// embeddings=true it also computes missing vectors, reloading the vector
+// index as batches land.
+func (s *syncer) run(ctx context.Context, embeddings bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	opts := indexer.Options{Root: root, Logger: s.logger}
+	commit := ""
+	if s.repo != nil {
+		head, _, err := s.repo.Sync(ctx)
+		if err != nil {
+			s.reg.RecordSync(err)
+			return err
+		}
+		commit = head
+	}
+	opts := indexer.Options{Root: s.root, Commit: commit, Logger: s.logger}
 	if embeddings && s.embedder != nil {
 		opts.Embedder = s.embedder
 		opts.BatchSize = s.batch
@@ -229,9 +287,9 @@ func (s *syncer) refreshGauges(ctx context.Context) {
 	}
 }
 
-// loop re-scans a local source directory on a fixed interval. It is
-// replaced by git polling in M5.
-func (s *syncer) loop(ctx context.Context, root string, every time.Duration) {
+// loop re-syncs the source on a fixed interval (git fetch + incremental
+// reindex, or a re-scan for plain directories).
+func (s *syncer) loop(ctx context.Context, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -239,7 +297,7 @@ func (s *syncer) loop(ctx context.Context, root string, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if err := s.run(ctx, root, true); err != nil && ctx.Err() == nil {
+			if err := s.run(ctx, true); err != nil && ctx.Err() == nil {
 				s.logger.Error("sync failed", "err", err)
 			}
 		}
