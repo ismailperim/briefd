@@ -5,263 +5,528 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>briefd</title>
 <meta name="description" content="briefd status dashboard: requests, tokens served, index contents and sync state.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23276ef1'/><path d='M4 4h5a2.5 2.5 0 0 1 0 5H4zM4 8h5.5a2.5 2.5 0 0 1 0 5H4z' fill='none' stroke='white' stroke-width='1.6'/></svg>">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2322c55e'/><path d='M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z' fill='none' stroke='%230f172a' stroke-width='1.7'/></svg>">
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6ea; --text: #17202a; --muted: #66707c;
-    --accent: #276ef1; --ok: #1f8a4c; --warn: #b7791f; --err: #c53030; --chip: #eef2f7;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f8fafc; --line: #d9dee6; --line-strong: #c3cad5;
+    --text: #0f172a; --text-2: #334155; --muted: #5b6676;
+    --accent: #15803d; --accent-2: #16a34a; --accent-soft: #dcfce7; --on-accent: #ffffff;
+    --info: #1d4ed8; --warn: #a16207; --warn-soft: #fef3c7; --err: #b91c1c; --err-soft: #fee2e2; --ok: #15803d; --ok-soft: #dcfce7;
+    --chip: #eef2f6; --ring: #1d4ed8;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 12px rgba(15, 23, 42, .04);
+    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+    --r: 10px; --r-sm: 6px;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b95a3;
-      --accent: #6ea0ff; --ok: #4cc27a; --warn: #e0a94a; --err: #f07070; --chip: #222833;
+      --bg: #0b1220; --panel: #111a2c; --panel-2: #0f172a; --line: #223049; --line-strong: #334155;
+      --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8;
+      --accent: #22c55e; --accent-2: #4ade80; --accent-soft: #14532d; --on-accent: #052e16;
+      --info: #93c5fd; --warn: #fbbf24; --warn-soft: #3b2f0b; --err: #f87171; --err-soft: #450a0a; --ok: #4ade80; --ok-soft: #052e16;
+      --chip: #1b2537; --ring: #93c5fd;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b95a3;
-    --accent: #6ea0ff; --ok: #4cc27a; --warn: #e0a94a; --err: #f07070; --chip: #222833;
+    --bg: #0b1220; --panel: #111a2c; --panel-2: #0f172a; --line: #223049; --line-strong: #334155;
+    --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8;
+    --accent: #22c55e; --accent-2: #4ade80; --accent-soft: #14532d; --on-accent: #052e16;
+    --info: #93c5fd; --warn: #fbbf24; --warn-soft: #3b2f0b; --err: #f87171; --err-soft: #450a0a; --ok: #4ade80; --ok-soft: #052e16;
+    --chip: #1b2537; --ring: #93c5fd;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
   }
+
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
-  a { color: var(--accent); text-decoration: none; }
-  main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
-  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; margin-bottom: 18px; }
-  header h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
-  header h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; font-family: var(--mono); }
-  .meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 14px; margin-left: auto; align-items: center; }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-size: 12px; font-family: var(--mono); }
-  .pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.err { color: var(--err); }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
-  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-  .tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .tile .value { font-family: var(--mono); font-size: 24px; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .tile .sub { color: var(--muted); font-size: 12px; margin-top: 2px; font-family: var(--mono); }
-  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
-  @media (min-width: 900px) { .grid.two { grid-template-columns: 3fr 2fr; } }
-  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
-  section.panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; }
-  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td.mono { font-family: var(--mono); font-size: 12px; }
-  tr:last-child td { border-bottom: none; }
-  .wrap { overflow-x: auto; }
-  .muted { color: var(--muted); }
-  .q { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .empty { color: var(--muted); padding: 10px 0; font-size: 13px; }
-  form.search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-  input, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; }
-  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  input[name=q] { flex: 1 1 260px; }
-  input[name=scopes] { flex: 0 1 220px; }
-  input[name=max_tokens] { flex: 0 0 110px; }
-  button { background: var(--accent); color: #fff; border-color: transparent; cursor: pointer; padding: 7px 14px; }
-  button.secondary { background: var(--chip); color: var(--text); }
-  .result { border-top: 1px solid var(--line); padding: 8px 0; }
-  .result:first-child { border-top: none; }
-  .result summary { cursor: pointer; display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
-  .result summary::-webkit-details-marker { display: none; }
-  .result .h { font-weight: 600; }
-  .result .p { color: var(--muted); font-family: var(--mono); font-size: 12px; }
-  .result pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; background: var(--bg); border-radius: 7px; padding: 10px; margin: 8px 0 0; }
-  #auth { display: none; margin-bottom: 14px; }
-  #auth.show { display: block; }
-  #auth form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  #auth input { flex: 1 1 260px; font-family: var(--mono); }
-  .footer { color: var(--muted); font-size: 12px; margin-top: 18px; display: flex; gap: 14px; flex-wrap: wrap; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--sans); }
+  a { color: var(--info); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: .92em; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-sm); }
+  button, input, select { font: inherit; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: var(--s4) var(--s4) var(--s6); }
+
+  /* Header */
+  header { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-bottom: var(--s4); }
+  .brand { display: flex; align-items: center; gap: var(--s2); }
+  .brand svg { width: 28px; height: 28px; flex: none; }
+  .brand h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .brand .ver { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-left: var(--s1); }
+  .status { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-left: auto; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; min-height: 26px; border-radius: 999px; background: var(--chip); color: var(--text-2); font-size: 12.5px; font-family: var(--mono); white-space: nowrap; }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .pill.ok { color: var(--ok); } .pill.ok .dot { background: var(--ok); }
+  .pill.warn { color: var(--warn); } .pill.warn .dot { background: var(--warn); }
+  .pill.err { color: var(--err); } .pill.err .dot { background: var(--err); }
+  .pill.ok .dot.live { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+  .iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--panel); color: var(--text-2); cursor: pointer; transition: background .15s, border-color .15s; }
+  .iconbtn:hover { background: var(--chip); border-color: var(--line-strong); }
+  .iconbtn svg { width: 18px; height: 18px; }
+
+  /* Panels */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); min-width: 0; }
+  .panel > .head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4) 0; }
+  .panel h2 { font-size: 12.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .panel > .head .hint { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+  @media (max-width: 719px) { .panel > .head .hint { display: none; } }
+  .panel > .body { padding: var(--s3) var(--s4) var(--s4); }
+  .panel > .body.flush { padding: var(--s2) 0 0; }
+
+  /* Auth / notices */
+  .notice { display: none; margin-bottom: var(--s4); border-left: 3px solid var(--warn); }
+  .notice.show { display: block; }
+  .notice form { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: end; }
+  .notice .field { flex: 1 1 260px; }
+  .notice .msg { color: var(--err); font-size: 13px; min-height: 1.2em; margin-top: var(--s2); }
+  label { display: block; font-size: 12.5px; color: var(--text-2); margin-bottom: 4px; font-weight: 500; }
+  input[type=text], input[type=password], input[type=number], input[type=search] {
+    width: 100%; min-height: 40px; padding: 8px 10px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line-strong); border-radius: var(--r-sm); transition: border-color .15s;
+  }
+  input:hover { border-color: var(--muted); }
+  input::placeholder { color: var(--muted); opacity: .9; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 16px; border-radius: var(--r-sm); border: 1px solid transparent; background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; transition: filter .15s, background .15s; white-space: nowrap; }
+  .btn:hover { filter: brightness(1.06); }
+  .btn.ghost { background: transparent; border-color: var(--line-strong); color: var(--text-2); font-weight: 500; }
+  .btn.ghost:hover { background: var(--chip); }
+
+  /* Tiles */
+  .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); margin-bottom: var(--s3); }
+  @media (min-width: 720px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 1100px) { .tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  .tile { padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: 2px; min-height: 104px; }
+  .tile .label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .tile .label svg { width: 14px; height: 14px; }
+  .tile .value { font-family: var(--mono); font-size: 26px; line-height: 1.15; font-weight: 500; font-variant-numeric: tabular-nums; margin-top: 4px; letter-spacing: -0.01em; }
+  .tile .value small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .tile .sub { font-size: 12.5px; color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; margin-top: auto; }
+  .tile .sub .up { color: var(--ok); }
+  .tile svg.spark { width: 100%; height: 28px; margin-top: 6px; overflow: visible; }
+  .spark .line { fill: none; stroke: var(--accent-2); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  .spark .area { fill: var(--accent-2); opacity: .12; }
+  .spark .flat { stroke: var(--line-strong); }
+
+  /* Grids */
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); margin-bottom: var(--s3); }
+  @media (min-width: 960px) { .grid.split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+
+  /* Tables */
+  .wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .03em; white-space: nowrap; position: sticky; top: 0; background: var(--panel); }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th.sorted::after { content: " ▾"; font-size: 10px; }
+  th.sorted.asc::after { content: " ▴"; }
+  tbody tr:hover td { background: var(--panel-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.dim { color: var(--muted); }
+  td.err-n { color: var(--err); font-weight: 600; }
+  .q { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tr.clickable { cursor: pointer; }
+  .bar { position: relative; height: 6px; background: var(--chip); border-radius: 999px; overflow: hidden; min-width: 80px; }
+  .bar > i { position: absolute; inset: 0 auto 0 0; background: var(--accent-2); border-radius: 999px; transition: width .3s ease; }
+  .scope-cell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-family: var(--mono); }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.err { background: var(--err-soft); color: var(--err); }
+  .badge svg { width: 12px; height: 12px; }
+
+  /* Empty states */
+  .empty { padding: var(--s4); color: var(--muted); font-size: 13.5px; }
+  .empty strong { color: var(--text-2); font-weight: 600; }
+  .empty pre { margin: var(--s2) 0 0; padding: var(--s3); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+
+  /* Search */
+  form.search { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); align-items: end; }
+  @media (min-width: 720px) { form.search { grid-template-columns: minmax(0, 1fr) 220px 120px auto; } }
+  .results { margin-top: var(--s3); }
+  .budget { display: flex; align-items: center; gap: var(--s2); font-size: 12.5px; color: var(--muted); font-family: var(--mono); margin-bottom: var(--s2); }
+  .budget .bar { flex: 1; }
+  details.result { border-top: 1px solid var(--line); }
+  details.result:first-of-type { border-top: none; }
+  details.result summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: var(--s2); align-items: center; padding: 10px 4px; }
+  details.result summary::-webkit-details-marker { display: none; }
+  details.result summary:hover { background: var(--panel-2); }
+  details.result summary .n { font-family: var(--mono); color: var(--muted); font-size: 12px; text-align: right; }
+  details.result summary .h { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details.result summary .p { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details.result summary .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  details.result pre { margin: 0 4px 10px 32px; padding: var(--s3); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
+
+  footer { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); color: var(--muted); font-size: 12.5px; margin-top: var(--s5); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>briefd <span id="version">—</span></h1>
-    <div class="meta">
-      <span id="uptime">uptime —</span>
-      <span id="sync" class="pill">sync —</span>
-      <span id="conn" class="pill">connecting…</span>
+    <div class="brand">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="var(--accent)"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="var(--on-accent)" stroke-width="1.7"/></svg>
+      <h1>briefd <span class="ver" id="version"></span></h1>
+    </div>
+    <div class="status" role="status" aria-live="polite">
+      <span class="pill" id="uptime" title="Process uptime">up —</span>
+      <span class="pill" id="sync" title="Source synchronisation"><span class="dot"></span><span>sync —</span></span>
+      <span class="pill" id="conn"><span class="dot"></span><span>connecting…</span></span>
+      <button class="iconbtn" id="theme" type="button" aria-label="Toggle light/dark theme" title="Toggle theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+      </button>
     </div>
   </header>
 
-  <section id="auth" class="panel">
-    <form id="authForm">
-      <span>This server requires a bearer token to read stats and search.</span>
-      <input name="token" type="password" placeholder="BRIEFD_API_TOKEN" autocomplete="off">
-      <button type="submit">Connect</button>
-    </form>
+  <section class="panel notice" id="auth" aria-labelledby="auth-h">
+    <div class="body">
+      <form id="authForm">
+        <div class="field">
+          <label for="tokenInput" id="auth-h">Bearer token — this server requires <code>BRIEFD_API_TOKEN</code> to read stats and search</label>
+          <input id="tokenInput" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="paste the token">
+        </div>
+        <button class="btn" type="submit">Connect</button>
+      </form>
+      <div class="msg" id="authMsg" aria-live="polite"></div>
+    </div>
   </section>
 
-  <div class="tiles">
-    <div class="tile"><div class="label">Requests</div><div class="value" id="t-req">—</div><div class="sub" id="t-err">—</div></div>
-    <div class="tile"><div class="label">Tokens served</div><div class="value" id="t-tok">—</div><div class="sub" id="t-tokavg">—</div></div>
-    <div class="tile"><div class="label">Sections served</div><div class="value" id="t-chk">—</div><div class="sub" id="t-omit">—</div></div>
-    <div class="tile"><div class="label">Latency p95</div><div class="value" id="t-p95">—</div><div class="sub" id="t-p50">—</div></div>
-    <div class="tile"><div class="label">Index</div><div class="value" id="t-docs">—</div><div class="sub" id="t-idx">—</div></div>
+  <div class="tiles" id="tiles">
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Requests</div>
+      <div class="value" id="t-req">—</div>
+      <svg class="spark" id="s-req" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="sub" id="t-req-sub">—</div>
+    </div>
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>Tokens served</div>
+      <div class="value" id="t-tok">—</div>
+      <svg class="spark" id="s-tok" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="sub" id="t-tok-sub">—</div>
+    </div>
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/></svg>Sections served</div>
+      <div class="value" id="t-chk">—</div>
+      <div class="sub" id="t-chk-sub">—</div>
+    </div>
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Latency p95</div>
+      <div class="value" id="t-p95">—</div>
+      <svg class="spark" id="s-p95" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="sub" id="t-p95-sub">—</div>
+    </div>
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>Index</div>
+      <div class="value" id="t-docs">—</div>
+      <div class="sub" id="t-docs-sub">—</div>
+    </div>
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>Sync</div>
+      <div class="value" id="t-sync">—</div>
+      <div class="sub" id="t-sync-sub">—</div>
+    </div>
   </div>
 
-  <div class="grid two">
-    <section class="panel">
-      <h2>By tool / route</h2>
-      <div class="wrap"><table>
-        <thead><tr><th>Name</th><th>Surface</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Tokens</th><th class="num">Sections</th><th class="num">Omitted</th><th class="num">avg</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
-        <tbody id="byName"><tr><td colspan="10" class="empty">No requests yet. Connect an MCP client and call <code>search_context</code>.</td></tr></tbody>
-      </table></div>
+  <div class="grid split">
+    <section class="panel" aria-labelledby="h-byname">
+      <div class="head"><h2 id="h-byname">By tool / route</h2><span class="hint">click a column to sort</span></div>
+      <div class="body flush wrap">
+        <table id="byNameTable">
+          <thead><tr>
+            <th class="sortable" data-k="name">Name</th>
+            <th class="sortable num" data-k="requests">Requests</th>
+            <th class="sortable num" data-k="errors">Errors</th>
+            <th class="sortable num" data-k="tokens">Tokens</th>
+            <th class="sortable num" data-k="chunks">Sections</th>
+            <th class="sortable num" data-k="omitted" title="Ranked sections dropped because they did not fit the budget">Omitted</th>
+            <th class="sortable num" data-k="p50_ms">p50</th>
+            <th class="sortable num" data-k="p95_ms">p95</th>
+          </tr></thead>
+          <tbody id="byName"></tbody>
+        </table>
+      </div>
     </section>
-    <section class="panel">
-      <h2>Index by scope</h2>
-      <div class="wrap"><table>
-        <thead><tr><th>Scope</th><th class="num">Docs</th><th class="num">Sections</th><th class="num">Tokens</th></tr></thead>
-        <tbody id="scopes"><tr><td colspan="4" class="empty">Index is empty.</td></tr></tbody>
-      </table></div>
-      <p class="muted" id="source" style="margin:10px 0 0;font-size:12px"></p>
+    <section class="panel" aria-labelledby="h-index">
+      <div class="head"><h2 id="h-index">Index by scope</h2><span class="hint" id="source"></span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Scope</th><th class="num">Docs</th><th class="num">Sections</th><th class="num">Tokens</th></tr></thead>
+          <tbody id="scopes"></tbody>
+        </table>
+      </div>
     </section>
   </div>
 
   <div class="grid">
-    <section class="panel">
-      <h2>Try a search</h2>
-      <form class="search" id="searchForm">
-        <input name="q" placeholder="what is our retry policy for acquirer calls?" required>
-        <input name="scopes" placeholder="scopes (domain,conventions)">
-        <input name="max_tokens" type="number" min="1" placeholder="max_tokens" value="2000">
-        <button type="submit">Search</button>
-      </form>
-      <div id="results"></div>
+    <section class="panel" aria-labelledby="h-search">
+      <div class="head"><h2 id="h-search">Try a search</h2><span class="hint">same ranking and budget as <code>search_context</code></span></div>
+      <div class="body">
+        <form class="search" id="searchForm">
+          <div><label for="q">Query</label><input id="q" name="q" type="search" placeholder="what is our retry policy for acquirer calls?" required autocomplete="off"></div>
+          <div><label for="scopesIn">Scopes</label><input id="scopesIn" name="scopes" type="text" placeholder="domain, conventions"></div>
+          <div><label for="maxTok">Max tokens</label><input id="maxTok" name="max_tokens" type="number" min="1" step="100" value="2000"></div>
+          <button class="btn" type="submit">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search
+          </button>
+        </form>
+        <div class="results" id="results" aria-live="polite"></div>
+      </div>
     </section>
   </div>
 
   <div class="grid">
-    <section class="panel">
-      <h2>Recent requests</h2>
-      <div class="wrap"><table>
-        <thead><tr><th>Time</th><th>Surface</th><th>Name</th><th>Query</th><th>Scopes</th><th class="num">Sections</th><th class="num">Tokens</th><th class="num">ms</th><th>Status</th></tr></thead>
-        <tbody id="recent"><tr><td colspan="9" class="empty">Nothing yet.</td></tr></tbody>
-      </table></div>
+    <section class="panel" aria-labelledby="h-recent">
+      <div class="head"><h2 id="h-recent">Recent requests</h2><span class="hint">click a row to re-run it above</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>When</th><th>Surface</th><th>Name</th><th>Query</th><th>Scopes</th><th class="num">Sections</th><th class="num">Tokens</th><th class="num">Time</th><th>Status</th></tr></thead>
+          <tbody id="recent"></tbody>
+        </table>
+      </div>
     </section>
   </div>
 
-  <div class="footer">
+  <footer>
     <a href="/metrics">/metrics</a>
     <a href="/api/health">/api/health</a>
-    <span>MCP endpoint: <code>/mcp</code></span>
+    <span>MCP endpoint <code>/mcp</code></span>
     <span id="refreshed"></span>
-  </div>
+  </footer>
 </main>
 
 <script>
 (() => {
+  'use strict';
   const $ = (id) => document.getElementById(id);
-  const TOKEN_KEY = 'briefd_token';
+  const TOKEN_KEY = 'briefd_token', THEME_KEY = 'briefd_theme';
+  const POLL_MS = 3000, HISTORY = 60; // 60 polls ≈ 3 minutes of sparkline
   let token = '';
   try { token = localStorage.getItem(TOKEN_KEY) || ''; } catch (_) {}
 
-  const headers = () => token ? { 'Authorization': 'Bearer ' + token } : {};
+  // ---- theme -------------------------------------------------------------
+  try { const t = localStorage.getItem(THEME_KEY); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+  { const t = new URLSearchParams(location.search).get('theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; }
+  $('theme').addEventListener('click', () => {
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const cur = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+  });
+
+  // ---- formatting --------------------------------------------------------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const num = (n) => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e4 ? (n/1e3).toFixed(1)+'k' : String(Math.round(n));
-  const ms = (v) => v == null ? '—' : v < 1 ? v.toFixed(2)+' ms' : v < 100 ? v.toFixed(1)+' ms' : Math.round(v)+' ms';
+  const nf = new Intl.NumberFormat();
+  const num = (n) => n == null ? '—' : Math.abs(n) >= 1e6 ? (n/1e6).toFixed(1)+'M' : Math.abs(n) >= 1e4 ? (n/1e3).toFixed(1)+'k' : nf.format(Math.round(n));
+  const ms = (v) => v == null ? '—' : v < 1 ? v.toFixed(2)+' ms' : v < 100 ? v.toFixed(1)+' ms' : v < 10000 ? nf.format(Math.round(v))+' ms' : (v/1000).toFixed(1)+' s';
   const ago = (iso) => {
     if (!iso) return 'never';
     const s = Math.max(0, (Date.now() - new Date(iso).getTime())/1000);
-    return s < 60 ? Math.round(s)+'s ago' : s < 3600 ? Math.round(s/60)+'m ago' : s < 86400 ? (s/3600).toFixed(1)+'h ago' : (s/86400).toFixed(1)+'d ago';
+    return s < 5 ? 'just now' : s < 60 ? Math.round(s)+'s ago' : s < 3600 ? Math.round(s/60)+'m ago' : s < 86400 ? (s/3600).toFixed(1)+'h ago' : (s/86400).toFixed(1)+'d ago';
   };
-  const dur = (s) => { const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m ${Math.floor(s%60)}s`; };
+  const dur = (s) => { const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m ${Math.floor(s%60)}s` : `${Math.floor(s)}s`; };
   const clock = (iso) => new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const full = (iso) => new Date(iso).toLocaleString();
 
-  function setConn(state, text) {
-    const el = $('conn'); el.className = 'pill ' + state; el.textContent = text;
+  // ---- sparklines (inline SVG, no library) -------------------------------
+  function spark(el, values) {
+    const w = 120, h = 28, pad = 2;
+    if (!values.length) { el.innerHTML = ''; return; }
+    const max = Math.max(...values), min = 0;
+    const step = values.length > 1 ? (w - pad*2) / (values.length - 1) : 0;
+    const flat = values.every((v) => v === values[0]);
+    if (flat) { // no variation yet: a quiet midline, no area
+      el.innerHTML = `<path class="line flat" d="M${pad},${h/2} L${w - pad},${h/2}"/>`;
+      return;
+    }
+    const y = (v) => h - pad - ((v - min) / (max - min)) * (h - pad*2);
+    const pts = values.map((v, i) => `${(pad + i*step).toFixed(1)},${y(v).toFixed(1)}`);
+    el.innerHTML = `<path class="area" d="M${pts[0]} L${pts.join(' L')} L${(pad + (values.length-1)*step).toFixed(1)},${h} L${pad},${h} Z"/>`
+      + `<path class="line" d="M${pts.join(' L')}"/>`;
   }
+  const hist = [];        // [{t, requests, tokens, p95}]
+  function pushHistory(s) {
+    const search = s.by_name.find((b) => b.name === 'search_context');
+    hist.push({ t: Date.now(), requests: s.totals.requests, tokens: s.totals.tokens_served, p95: search ? search.p95_ms : 0 });
+    if (hist.length > HISTORY) hist.shift();
+  }
+  const deltas = (k) => hist.slice(1).map((h, i) => Math.max(0, h[k] - hist[i][k]));
+  const lastMinute = (k) => { const cutoff = Date.now() - 60000; let sum = 0; for (let i = 1; i < hist.length; i++) if (hist[i].t >= cutoff) sum += Math.max(0, hist[i][k] - hist[i-1][k]); return sum; };
 
-  async function api(path) {
-    const r = await fetch(path, { headers: headers(), cache: 'no-store' });
-    if (r.status === 401) { $('auth').classList.add('show'); setConn('warn', 'token required'); throw new Error('unauthorized'); }
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    $('auth').classList.remove('show');
-    return r.json();
+  // ---- rendering ---------------------------------------------------------
+  const icon = {
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>',
+    err: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  };
+  const onboarding = `<div class="empty"><strong>No requests yet.</strong> Connect a client and ask it something your knowledge base covers:
+<pre>claude mcp add --transport http briefd ${esc(location.origin)}/mcp \\
+  --header "Authorization: Bearer &lt;BRIEFD_API_TOKEN&gt;"</pre>Or use the search box below — it goes through the same ranking and budget.</div>`;
+
+  let sortKey = 'requests', sortAsc = false, lastSnap = null;
+  function setPill(id, state, text, title) {
+    const el = $(id); el.className = 'pill ' + state; el.lastElementChild.textContent = text; if (title !== undefined) el.title = title;
   }
 
   function render(s) {
+    lastSnap = s;
     $('version').textContent = s.version;
     $('uptime').textContent = 'up ' + dur(s.uptime_seconds);
+    $('uptime').title = 'started ' + full(s.started_at);
     const t = s.totals;
-    $('t-req').textContent = num(t.requests);
-    $('t-err').textContent = t.errors ? `${t.errors} error${t.errors === 1 ? '' : 's'}` : 'no errors';
+
+    $('t-req').innerHTML = `${num(t.requests)}${t.errors ? `<small class="mono" style="color:var(--err)">${num(t.errors)} err</small>` : ''}`;
+    const rpm = lastMinute('requests');
+    $('t-req-sub').innerHTML = rpm ? `<span class="up">+${num(rpm)}</span> in the last minute` : (t.requests ? 'quiet for the last minute' : 'none yet');
+    spark($('s-req'), deltas('requests'));
+
     $('t-tok').textContent = num(t.tokens_served);
-    $('t-tokavg').textContent = t.requests ? `~${num(t.tokens_served / Math.max(1, t.requests))} per request` : '—';
+    $('t-tok-sub').textContent = t.requests ? `≈ ${num(t.tokens_served / t.requests)} per request` : '—';
+    spark($('s-tok'), deltas('tokens'));
+
     $('t-chk').textContent = num(t.chunks_served);
-    $('t-omit').textContent = `${num(t.chunks_omitted)} omitted by budget`;
-    const search = s.by_name.find((b) => b.name === 'search_context') || s.by_name[0];
+    const pressure = t.chunks_served + t.chunks_omitted ? Math.round(100 * t.chunks_omitted / (t.chunks_served + t.chunks_omitted)) : 0;
+    $('t-chk-sub').textContent = t.chunks_omitted ? `${num(t.chunks_omitted)} omitted by budget (${pressure}%)` : 'nothing omitted by budget';
+
+    const search = s.by_name.find((b) => b.name === 'search_context');
     $('t-p95').textContent = search ? ms(search.p95_ms) : '—';
-    $('t-p50').textContent = search ? `p50 ${ms(search.p50_ms)} · ${search.name}` : 'no samples';
-    $('t-docs').textContent = `${t.documents} docs`;
-    $('t-idx').textContent = `${num(t.chunks)} sections · ~${num(t.index_tokens)} tokens`;
+    $('t-p95-sub').textContent = search ? `p50 ${ms(search.p50_ms)} · search_context` : 'no search_context calls yet';
+    spark($('s-p95'), hist.map((h) => h.p95));
 
-    const sync = s.sync; const x = s.extra || {};
-    const syncEl = $('sync');
-    if (sync.last_error) { syncEl.className = 'pill err'; syncEl.textContent = 'sync failing: ' + sync.last_error; }
-    else if (sync.last_ok) { syncEl.className = 'pill ok'; syncEl.textContent = 'synced ' + ago(sync.last_ok); }
-    else { syncEl.className = 'pill'; syncEl.textContent = 'no sync yet'; }
-    $('source').textContent = x.source ? `source: ${x.source}${x.last_commit ? ' @ ' + x.last_commit.slice(0, 10) : ''} · ${sync.runs} run${sync.runs === 1 ? '' : 's'}` : '';
+    $('t-docs').innerHTML = `${num(t.documents)}<small>docs</small>`;
+    $('t-docs-sub').textContent = `${num(t.chunks)} sections · ≈${num(t.index_tokens)} tokens`;
 
-    $('byName').innerHTML = s.by_name.length ? s.by_name.map((b) => `<tr>
-      <td class="mono">${esc(b.name)}</td><td class="muted">${esc(b.surface)}</td>
-      <td class="num">${num(b.requests)}</td><td class="num${b.errors ? '' : ' muted'}">${num(b.errors)}</td>
-      <td class="num">${num(b.tokens)}</td><td class="num">${num(b.chunks)}</td><td class="num muted">${num(b.omitted)}</td>
-      <td class="num">${ms(b.avg_ms)}</td><td class="num">${ms(b.p50_ms)}</td><td class="num">${ms(b.p95_ms)}</td></tr>`).join('')
-      : '<tr><td colspan="10" class="empty">No requests yet. Connect an MCP client and call <code>search_context</code>.</td></tr>';
+    const sync = s.sync, x = s.extra || {};
+    if (sync.last_error) {
+      setPill('sync', 'err', 'sync failing', sync.last_error);
+      $('t-sync').innerHTML = `<span style="color:var(--err)">failing</span>`;
+      $('t-sync-sub').textContent = sync.last_error;
+    } else if (sync.last_ok) {
+      setPill('sync', 'ok', 'synced ' + ago(sync.last_ok), full(sync.last_ok));
+      $('t-sync').textContent = ago(sync.last_ok);
+      $('t-sync-sub').textContent = `${sync.runs} run${sync.runs === 1 ? '' : 's'}${sync.failures ? `, ${sync.failures} failed` : ''}`;
+    } else {
+      setPill('sync', '', 'no sync yet', '');
+      $('t-sync').textContent = '—';
+      $('t-sync-sub').textContent = 'no source configured';
+    }
+    $('source').textContent = x.source ? `${x.source}${x.last_commit ? ' @ ' + x.last_commit.slice(0, 10) : ''}` : '';
 
-    $('scopes').innerHTML = s.index.length ? s.index.map((i) => `<tr><td class="mono">${esc(i.scope)}</td>
-      <td class="num">${i.documents}</td><td class="num">${i.chunks}</td><td class="num">${num(i.tokens)}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty">Index is empty.</td></tr>';
+    renderByName(s.by_name);
 
-    $('recent').innerHTML = s.recent.length ? s.recent.map((r) => `<tr>
-      <td class="mono muted">${clock(r.at)}</td><td class="muted">${esc(r.surface)}</td><td class="mono">${esc(r.name)}</td>
-      <td class="q" title="${esc(r.query)}">${esc(r.query)}</td><td class="mono muted">${esc((r.scopes || []).join(', '))}</td>
-      <td class="num">${r.chunks}</td><td class="num">${num(r.tokens)}</td><td class="num">${ms(r.ms)}</td>
-      <td>${r.error ? '<span class="pill err">error</span>' : '<span class="pill ok">ok</span>'}</td></tr>`).join('')
-      : '<tr><td colspan="9" class="empty">Nothing yet.</td></tr>';
+    const totalChunks = Math.max(1, t.chunks);
+    $('scopes').innerHTML = s.index.length ? s.index.map((i) => `<tr>
+      <td><div class="scope-cell"><span class="mono">${esc(i.scope)}</span><div class="bar" aria-hidden="true"><i style="width:${(100 * i.chunks / totalChunks).toFixed(1)}%"></i></div></div></td>
+      <td class="num">${num(i.documents)}</td><td class="num">${num(i.chunks)}</td><td class="num">${num(i.tokens)}</td></tr>`).join('')
+      : `<tr><td colspan="4"><div class="empty"><strong>The index is empty.</strong> Point <code>--source</code> at a directory with <code>domain/</code>, <code>conventions/</code> or <code>projects/&lt;name&gt;/</code> folders.</div></td></tr>`;
+
+    $('recent').innerHTML = s.recent.length ? s.recent.map((r) => `<tr class="clickable" data-q="${esc(r.query)}" data-scopes="${esc((r.scopes || []).join(','))}" tabindex="0">
+      <td class="mono dim" title="${esc(full(r.at))}">${clock(r.at)}</td><td class="dim">${esc(r.surface)}</td><td class="mono">${esc(r.name)}</td>
+      <td class="q" title="${esc(r.query)}">${esc(r.query)}</td><td class="mono dim">${esc((r.scopes || []).join(', '))}</td>
+      <td class="num">${num(r.chunks)}</td><td class="num">${num(r.tokens)}</td><td class="num">${ms(r.ms)}</td>
+      <td>${r.error ? `<span class="badge err">${icon.err}error</span>` : `<span class="badge ok">${icon.ok}ok</span>`}</td></tr>`).join('')
+      : `<tr><td colspan="9">${onboarding}</td></tr>`;
 
     $('refreshed').textContent = 'refreshed ' + clock(new Date().toISOString());
   }
 
-  let timer = null;
+  function renderByName(rows) {
+    if (!rows.length) { $('byName').innerHTML = `<tr><td colspan="8">${onboarding}</td></tr>`; return; }
+    const sorted = [...rows].sort((a, b) => {
+      const av = a[sortKey], bv = b[sortKey];
+      const c = typeof av === 'string' ? av.localeCompare(bv) : (av - bv);
+      return sortAsc ? c : -c;
+    });
+    $('byName').innerHTML = sorted.map((b) => `<tr>
+      <td><span class="mono">${esc(b.name)}</span> <span class="dim" style="font-size:12px;color:var(--muted)">${esc(b.surface)}</span></td>
+      <td class="num">${num(b.requests)}</td><td class="num ${b.errors ? 'err-n' : 'dim'}">${num(b.errors)}</td>
+      <td class="num">${num(b.tokens)}</td><td class="num">${num(b.chunks)}</td><td class="num dim">${num(b.omitted)}</td>
+      <td class="num">${ms(b.p50_ms)}</td><td class="num">${ms(b.p95_ms)}</td></tr>`).join('');
+    document.querySelectorAll('#byNameTable th.sortable').forEach((th) => {
+      th.classList.toggle('sorted', th.dataset.k === sortKey);
+      th.classList.toggle('asc', th.dataset.k === sortKey && sortAsc);
+      th.setAttribute('aria-sort', th.dataset.k === sortKey ? (sortAsc ? 'ascending' : 'descending') : 'none');
+    });
+  }
+  document.querySelectorAll('#byNameTable th.sortable').forEach((th) => th.addEventListener('click', () => {
+    if (sortKey === th.dataset.k) sortAsc = !sortAsc; else { sortKey = th.dataset.k; sortAsc = th.dataset.k === 'name'; }
+    if (lastSnap) renderByName(lastSnap.by_name);
+  }));
+
+  // ---- data --------------------------------------------------------------
+  const headers = () => token ? { 'Authorization': 'Bearer ' + token } : {};
+  async function api(path) {
+    const r = await fetch(path, { headers: headers(), cache: 'no-store' });
+    if (r.status === 401) {
+      $('auth').classList.add('show');
+      $('authMsg').textContent = token ? 'That token was rejected. Check BRIEFD_API_TOKEN on the server.' : '';
+      setPill('conn', 'warn', 'token required');
+      throw new Error('unauthorized');
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    $('auth').classList.remove('show');
+    return r.json();
+  }
   async function refresh() {
-    try { render(await api('/api/stats')); setConn('ok', 'live'); }
-    catch (e) { if (e.message !== 'unauthorized') setConn('err', 'offline'); }
+    try {
+      const s = await api('/api/stats');
+      pushHistory(s); render(s);
+      setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
+    } catch (e) {
+      if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }
+    }
   }
-  function schedule() {
-    clearInterval(timer);
-    timer = setInterval(() => { if (!document.hidden) refresh(); }, 3000);
-  }
+  setInterval(() => { if (!document.hidden) refresh(); }, POLL_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 
   $('authForm').addEventListener('submit', (ev) => {
     ev.preventDefault();
-    token = new FormData(ev.target).get('token').trim();
+    token = $('tokenInput').value.trim();
     try { localStorage.setItem(TOKEN_KEY, token); } catch (_) {}
     refresh();
   });
 
-  $('searchForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const fd = new FormData(ev.target);
-    const p = new URLSearchParams({ q: fd.get('q') });
-    if (fd.get('scopes')) p.set('scopes', fd.get('scopes'));
-    if (fd.get('max_tokens')) p.set('max_tokens', fd.get('max_tokens'));
+  // ---- search ------------------------------------------------------------
+  async function runSearch(q, scopes, maxTokens) {
+    const p = new URLSearchParams({ q });
+    if (scopes) p.set('scopes', scopes);
+    if (maxTokens) p.set('max_tokens', maxTokens);
     const out = $('results');
     out.innerHTML = '<div class="empty">Searching…</div>';
     try {
       const res = await api('/api/search?' + p.toString());
-      out.innerHTML = (res.chunks.length ? res.chunks.map((c, i) => `<details class="result"${i === 0 ? ' open' : ''}>
-        <summary><span class="h">${esc(c.heading)}</span><span class="p">${esc(c.doc_path)} · ${c.tokens} tok · score ${c.score.toFixed(2)}</span></summary>
-        <pre>${esc(c.content)}</pre></details>`).join('') : '<div class="empty">No matching sections.</div>')
-        + `<div class="muted" style="font-size:12px;margin-top:8px">${res.chunks.length} section(s), ${res.total_tokens} tokens (budget ${res.budget}), ${res.omitted} omitted · scopes ${esc(res.scopes.join(', '))}</div>`;
+      const used = res.budget ? Math.min(100, Math.round(100 * res.total_tokens / res.budget)) : 0;
+      const header = `<div class="budget"><span>${res.chunks.length} section${res.chunks.length === 1 ? '' : 's'}</span><div class="bar" title="${res.total_tokens} of ${res.budget} tokens" aria-hidden="true"><i style="width:${used}%"></i></div><span>${num(res.total_tokens)} / ${num(res.budget)} tokens${res.omitted ? ` · ${res.omitted} omitted` : ''}</span><span>· ${esc(res.scopes.join(', '))}</span></div>`;
+      const top = res.chunks[0]?.score || 1;
+      out.innerHTML = header + (res.chunks.length ? res.chunks.map((c, i) => `<details class="result"${i === 0 ? ' open' : ''}>
+        <summary><span class="n">${i + 1}</span><span><div class="h">${esc(c.heading)}</div><div class="p">${esc(c.doc_path)}</div></span><span class="meta">${c.tokens} tok · ${(100 * c.score / top).toFixed(0)}%</span></summary>
+        <pre>${esc(c.content)}</pre></details>`).join('')
+        : `<div class="empty"><strong>No matching sections</strong> in ${esc(res.scopes.join(', '))}. Try other words, or widen the scopes.</div>`);
       refresh();
-    } catch (e) { out.innerHTML = `<div class="empty">Search failed: ${esc(e.message)}</div>`; }
+    } catch (e) { out.innerHTML = `<div class="empty" role="alert">Search failed: ${esc(e.message)}</div>`; }
+  }
+  $('searchForm').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    runSearch($('q').value.trim(), $('scopesIn').value.trim(), $('maxTok').value);
   });
+  const rerun = (tr) => {
+    if (!tr || !tr.dataset.q) return;
+    $('q').value = tr.dataset.q; $('scopesIn').value = tr.dataset.scopes;
+    $('q').focus({ preventScroll: true });
+    $('searchForm').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    runSearch(tr.dataset.q, tr.dataset.scopes, $('maxTok').value);
+  };
+  $('recent').addEventListener('click', (ev) => rerun(ev.target.closest('tr.clickable')));
+  $('recent').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') rerun(ev.target.closest('tr.clickable')); });
 
-  refresh(); schedule();
+  refresh();
 })();
 </script>
 </body>

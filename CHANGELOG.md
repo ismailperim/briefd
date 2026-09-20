@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dashboard: sparklines for requests/tokens/latency, requests-per-minute,
+  budget-pressure ratio, sortable per-tool table, index share bars, click a
+  recent request to re-run it, onboarding snippet when idle, theme toggle
+  (`?theme=dark|light`), keyboard focus states, reduced-motion support.
 - Observability: in-process metrics with a Prometheus `/metrics` endpoint,
   `/api/stats` JSON snapshot (per-tool counts, p50/p95 latency, tokens served,
   index size per scope, sync state, recent requests) and an embedded read-only
