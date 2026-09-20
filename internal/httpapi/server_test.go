@@ -12,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/mcpserver"
@@ -36,10 +37,12 @@ func newTestServer(t *testing.T, token string) *httptest.Server {
 	}
 	searcher := search.New(st, search.Options{})
 	reg := metrics.New("test")
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Metrics: reg, Version: "test"})
+	compiler := bundle.New(st, searcher, bundle.Options{OnCache: reg.RecordCache})
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Metrics: reg, Version: "test"})
 	h := httpapi.New(httpapi.Deps{
 		Store:    st,
 		Searcher: searcher,
+		Compiler: compiler,
 		MCP:      mcpserver.Handler(mcpSrv, nil),
 		APIToken: token,
 		Metrics:  reg,
@@ -91,8 +94,46 @@ func TestMCPToolsOverHTTP(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names = append(names, tool.Name)
 	}
-	if got := strings.Join(names, ","); got != "get_document,list_scopes,search_context" {
+	if got := strings.Join(names, ","); got != "compile_bundle,get_document,list_scopes,report_usage,search_context" {
 		t.Errorf("tools = %s", got)
+	}
+
+	// compile_bundle: budgeted, deterministic, then cached; report_usage records feedback.
+	b1, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "compile_bundle",
+		Arguments: map[string]any{"task_description": "add partial refunds to the portal", "max_tokens": 700},
+	})
+	if err != nil || b1.IsError {
+		t.Fatalf("compile_bundle: err=%v res=%+v", err, b1)
+	}
+	var bo mcpserver.CompileBundleOutput
+	raw, _ := json.Marshal(b1.StructuredContent)
+	if err := json.Unmarshal(raw, &bo); err != nil {
+		t.Fatal(err)
+	}
+	if bo.Cached || bo.Tokens == 0 || bo.Tokens > bo.Budget || len(bo.Sections) == 0 || !strings.HasPrefix(bo.Content, "<!-- briefd bundle "+bo.BundleID) {
+		t.Errorf("bundle = id:%s tokens:%d budget:%d sections:%d cached:%v", bo.BundleID, bo.Tokens, bo.Budget, len(bo.Sections), bo.Cached)
+	}
+	b2, _ := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "compile_bundle",
+		Arguments: map[string]any{"task_description": "add partial refunds to the portal", "max_tokens": 700},
+	})
+	raw, _ = json.Marshal(b2.StructuredContent)
+	var bo2 mcpserver.CompileBundleOutput
+	_ = json.Unmarshal(raw, &bo2)
+	if !bo2.Cached || bo2.Content != bo.Content {
+		t.Error("second compile should be a byte-identical cache hit")
+	}
+	ru, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "report_usage",
+		Arguments: map[string]any{"bundle_id": bo.BundleID, "useful_chunk_ids": []string{bo.Sections[0].ChunkID}},
+	})
+	if err != nil || ru.IsError || !strings.Contains(ru.Content[0].(*mcp.TextContent).Text, "Recorded feedback") {
+		t.Errorf("report_usage: err=%v res=%+v", err, ru)
+	}
+	ru, _ = session.CallTool(ctx, &mcp.CallToolParams{Name: "report_usage", Arguments: map[string]any{"bundle_id": "nope"}})
+	if !ru.IsError {
+		t.Error("report_usage with unknown bundle should be a tool error")
 	}
 
 	// search_context: relevant chunk, budget respected, structured output.
@@ -111,7 +152,7 @@ func TestMCPToolsOverHTTP(t *testing.T) {
 		t.Errorf("expected retry doc in text result, got:\n%s", text)
 	}
 	var out mcpserver.SearchContextOutput
-	raw, _ := json.Marshal(res.StructuredContent)
+	raw, _ = json.Marshal(res.StructuredContent)
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
 	}
@@ -226,6 +267,35 @@ func TestRESTSearchAndDocs(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("bad top_k: status %d", resp.StatusCode)
+	}
+
+	// POST /api/bundle and /api/usage
+	resp, err = client.Post(srv.URL+"/api/bundle", "application/json", strings.NewReader(`{"task":"settlement batch is late","max_tokens":500,"scopes":["domain","projects/ledger-service"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var br struct {
+		BundleID string `json:"bundle_id"`
+		Tokens   int    `json:"tokens"`
+		Budget   int    `json:"budget"`
+		Content  string `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&br); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || br.Tokens == 0 || br.Tokens > br.Budget || !strings.Contains(br.Content, "projects/ledger-service/runbook.md") {
+		t.Errorf("bundle response: status %d, %+v", resp.StatusCode, br)
+	}
+	resp, _ = client.Post(srv.URL+"/api/usage", "application/json", strings.NewReader(`{"bundle_id":"`+br.BundleID+`","useful_chunk_ids":[],"client":"curl"}`))
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("usage: status %d", resp.StatusCode)
+	}
+	resp, _ = client.Post(srv.URL+"/api/bundle", "application/json", strings.NewReader(`{"task":""}`))
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("empty task: status %d", resp.StatusCode)
 	}
 
 	resp, _ = client.Get(srv.URL + "/api/docs/projects/ledger-service/runbook.md?scopes=domain")

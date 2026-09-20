@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
@@ -26,6 +27,7 @@ var dashboardFS embed.FS
 type Deps struct {
 	Store    *store.Store
 	Searcher *search.Searcher
+	Compiler *bundle.Compiler
 	// MCP is the streamable-HTTP MCP handler, mounted at /mcp.
 	MCP http.Handler
 	// APIToken protects /mcp and /api/*; empty disables authentication.
@@ -65,6 +67,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("/mcp", auth(d.MCP))
 	mux.Handle("/mcp/", auth(d.MCP))
 	mux.Handle("GET /api/search", auth(http.HandlerFunc(a.search)))
+	mux.Handle("POST /api/bundle", auth(http.HandlerFunc(a.bundle)))
+	mux.Handle("POST /api/usage", auth(http.HandlerFunc(a.usage)))
 	mux.Handle("GET /api/scopes", auth(http.HandlerFunc(a.scopes)))
 	mux.Handle("GET /api/docs/{path...}", auth(http.HandlerFunc(a.document)))
 
@@ -100,13 +104,24 @@ func (a *api) prometheus(w http.ResponseWriter, _ *http.Request) {
 
 func (a *api) stats(w http.ResponseWriter, r *http.Request) {
 	snap := a.deps.Metrics.Snapshot()
+	snap.Extra = map[string]any{}
 	if sync, err := a.deps.Store.GetSyncState(r.Context()); err == nil {
-		snap.Extra = map[string]any{
-			"source":       sync.Source,
-			"last_commit":  sync.LastCommit,
-			"last_sync_at": nullableTime(sync.LastSyncAt),
-			"last_error":   sync.LastError,
-		}
+		snap.Extra["source"] = sync.Source
+		snap.Extra["last_commit"] = sync.LastCommit
+		snap.Extra["last_sync_at"] = nullableTime(sync.LastSyncAt)
+		snap.Extra["last_error"] = sync.LastError
+	}
+	if fp, err := a.deps.Store.GetIndexFingerprint(r.Context()); err == nil {
+		snap.Extra["index_fingerprint"] = fp
+	}
+	if bs, err := a.deps.Store.GetBundleStats(r.Context()); err == nil {
+		snap.Extra["bundles_cached"] = bs.Bundles
+	}
+	if n, err := a.deps.Store.CountUsage(r.Context()); err == nil {
+		snap.Extra["usage_events"] = n
+	}
+	if a.deps.Searcher != nil {
+		snap.Extra["hybrid"] = a.deps.Searcher.Hybrid()
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, snap)
@@ -167,6 +182,78 @@ func (a *api) search(w http.ResponseWriter, r *http.Request) {
 		Tokens: res.TotalTokens, Chunks: len(res.Chunks), Omitted: res.Omitted,
 	}, false)
 	writeJSON(w, http.StatusOK, res)
+}
+
+type bundleRequest struct {
+	Task      string   `json:"task"`
+	MaxTokens int      `json:"max_tokens"`
+	Scopes    []string `json:"scopes"`
+}
+
+func (a *api) bundle(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	var req bundleRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		a.record(start, metrics.Request{Name: "api_bundle"}, true)
+		writeError(w, http.StatusBadRequest, "invalid_json", "body must be JSON: {task, max_tokens?, scopes?}")
+		return
+	}
+	if strings.TrimSpace(req.Task) == "" || req.MaxTokens < 0 {
+		a.record(start, metrics.Request{Name: "api_bundle"}, true)
+		writeError(w, http.StatusBadRequest, "invalid_request", "task is required and max_tokens must be positive")
+		return
+	}
+	res, err := a.deps.Compiler.Compile(r.Context(), bundle.Request{Task: req.Task, Scopes: req.Scopes, MaxTokens: req.MaxTokens})
+	if err != nil {
+		a.record(start, metrics.Request{Name: "api_bundle", Query: req.Task}, true)
+		a.deps.Logger.Error("bundle failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "bundle_failed", "compiling the bundle failed")
+		return
+	}
+	a.record(start, metrics.Request{Name: "api_bundle", Query: req.Task, Scopes: res.Scopes, Tokens: res.Tokens, Chunks: len(res.Sections)}, false)
+	writeJSON(w, http.StatusOK, res)
+}
+
+type usageRequest struct {
+	BundleID       string   `json:"bundle_id"`
+	UsefulChunkIDs []string `json:"useful_chunk_ids"`
+	Client         string   `json:"client"`
+}
+
+func (a *api) usage(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	var req usageRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || req.BundleID == "" {
+		a.record(start, metrics.Request{Name: "api_usage"}, true)
+		writeError(w, http.StatusBadRequest, "invalid_request", "body must be JSON: {bundle_id, useful_chunk_ids?, client?}")
+		return
+	}
+	b, err := a.deps.Store.GetBundle(r.Context(), req.BundleID)
+	if errors.Is(err, store.ErrNotFound) {
+		a.record(start, metrics.Request{Name: "api_usage", Query: req.BundleID}, true)
+		writeError(w, http.StatusNotFound, "not_found", "bundle not found")
+		return
+	}
+	if err != nil {
+		a.record(start, metrics.Request{Name: "api_usage", Query: req.BundleID}, true)
+		writeError(w, http.StatusInternalServerError, "usage_failed", "loading the bundle failed")
+		return
+	}
+	useful := map[string]bool{}
+	for _, id := range req.UsefulChunkIDs {
+		useful[id] = true
+	}
+	events := make([]store.UsageEvent, 0, len(b.Sections))
+	for _, s := range b.Sections {
+		events = append(events, store.UsageEvent{BundleID: b.ID, ChunkID: s.ChunkID, Useful: useful[s.ChunkID], Client: req.Client})
+	}
+	if err := a.deps.Store.PutUsage(r.Context(), events); err != nil {
+		a.record(start, metrics.Request{Name: "api_usage", Query: req.BundleID}, true)
+		writeError(w, http.StatusInternalServerError, "usage_failed", "storing usage failed")
+		return
+	}
+	a.record(start, metrics.Request{Name: "api_usage", Query: req.BundleID, Chunks: len(events)}, false)
+	writeJSON(w, http.StatusOK, map[string]int{"recorded": len(events)})
 }
 
 func (a *api) scopes(w http.ResponseWriter, r *http.Request) {

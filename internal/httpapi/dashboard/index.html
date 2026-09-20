@@ -393,7 +393,9 @@
 
     $('t-chk').textContent = num(t.chunks_served);
     const pressure = t.chunks_served + t.chunks_omitted ? Math.round(100 * t.chunks_omitted / (t.chunks_served + t.chunks_omitted)) : 0;
-    $('t-chk-sub').textContent = t.chunks_omitted ? `${num(t.chunks_omitted)} omitted by budget (${pressure}%)` : 'nothing omitted by budget';
+    const lookups = t.cache_hits + t.cache_misses;
+    const cache = lookups ? ` · bundle cache ${Math.round(100 * t.cache_hits / lookups)}% hit` : '';
+    $('t-chk-sub').textContent = (t.chunks_omitted ? `${num(t.chunks_omitted)} omitted (${pressure}%)` : 'nothing omitted') + cache;
 
     const search = s.by_name.find((b) => b.name === 'search_context');
     $('t-p95').textContent = search ? ms(search.p95_ms) : '—';

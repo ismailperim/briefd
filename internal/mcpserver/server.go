@@ -14,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
@@ -24,6 +25,7 @@ import (
 type Deps struct {
 	Store    *store.Store
 	Searcher *search.Searcher
+	Compiler *bundle.Compiler
 	// Metrics receives one record per tool call; nil disables instrumentation.
 	Metrics *metrics.Registry
 	Version string
@@ -47,6 +49,18 @@ func New(d Deps) *mcp.Server {
 		Description: "Search the team knowledge base and return the most relevant sections that fit a token budget. Use it before implementing anything that may be governed by domain rules, conventions or past decisions.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.searchContext)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "compile_bundle",
+		Description: "Compile the knowledge relevant to a task into one context block that fits a token budget: deduplicated, ordered domain → conventions → project, with a source line per section and a bundle_id. Deterministic and cached; prefer it over search_context when you want context to read rather than results to inspect.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
+	}, t.compileBundle)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "report_usage",
+		Description: "Optional feedback after using a bundle: which sections were actually useful. Helps improve ranking over time.",
+		Annotations: &mcp.ToolAnnotations{IdempotentHint: true},
+	}, t.reportUsage)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_document",
@@ -74,11 +88,12 @@ func Handler(srv *mcp.Server, logger *slog.Logger) http.Handler {
 }
 
 const instructions = `briefd serves your team's shared knowledge (domain rules, conventions,
-architecture decisions, project notes) on demand. Call search_context with a short
-description of the task before writing code that could be affected by team rules; pass
-scopes=["domain","conventions","projects/<name>"] to include a project's own notes.
-Results are ranked sections with source paths; call get_document when you need the
-full document.`
+architecture decisions, project notes) on demand. Before writing code that could be
+affected by team rules, call compile_bundle with a short description of the task to get a
+budgeted context block, or search_context to inspect ranked sections. Pass
+scopes=["domain","conventions","projects/<name>"] to include a project's own notes. Call
+get_document when you need a full document, and report_usage with the bundle_id and the
+chunk_ids that helped once you are done.`
 
 type tools struct {
 	deps Deps
@@ -170,9 +185,92 @@ func RenderChunks(out SearchContextOutput) string {
 	fmt.Fprintf(&sb, "%d section(s), %d tokens (budget %d, %d omitted). Scopes: %s\n",
 		len(out.Chunks), out.TotalTokens, out.Budget, out.Omitted, strings.Join(out.Scopes, ", "))
 	for i, c := range out.Chunks {
-		fmt.Fprintf(&sb, "\n--- [%d] %s — %s (%s)\n%s\n", i+1, c.DocPath, c.Heading, c.Scope, c.Content)
+		fmt.Fprintf(&sb, "\n--- [%d] %s — %s (%s)\n%s\n", i+1, c.DocPath, c.Heading, c.Scope, bundle.Body(c.Content))
 	}
 	return sb.String()
+}
+
+// CompileBundleInput is the compile_bundle tool input.
+type CompileBundleInput struct {
+	TaskDescription string   `json:"task_description" jsonschema:"What you are about to do, in one or two sentences (e.g. 'add partial refunds to the merchant portal')"`
+	MaxTokens       int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the whole bundle (default 2000). Never exceeded."`
+	Scopes          []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to draw from. Default: domain and conventions."`
+}
+
+// CompileBundleOutput is the structured compile_bundle result.
+type CompileBundleOutput struct {
+	BundleID  string                `json:"bundle_id"`
+	Tokens    int                   `json:"tokens"`
+	Budget    int                   `json:"budget"`
+	Sections  []store.BundleSection `json:"sections"`
+	Scopes    []string              `json:"scopes"`
+	Truncated bool                  `json:"truncated"`
+	Cached    bool                  `json:"cached"`
+	Content   string                `json:"content"`
+}
+
+func (t *tools) compileBundle(ctx context.Context, _ *mcp.CallToolRequest, in CompileBundleInput) (_ *mcp.CallToolResult, out CompileBundleOutput, err error) {
+	start := time.Now()
+	defer func() {
+		t.record(start, metrics.Request{
+			Name: "compile_bundle", Query: in.TaskDescription, Scopes: out.Scopes, Tokens: out.Tokens, Chunks: len(out.Sections),
+		}, err)
+	}()
+	if in.MaxTokens < 0 {
+		return nil, out, errors.New("max_tokens must be positive")
+	}
+	res, err := t.deps.Compiler.Compile(ctx, bundle.Request{Task: in.TaskDescription, Scopes: in.Scopes, MaxTokens: in.MaxTokens})
+	if err != nil {
+		return nil, out, err
+	}
+	out = CompileBundleOutput{
+		BundleID: res.ID, Tokens: res.Tokens, Budget: res.Budget, Sections: res.Sections,
+		Scopes: res.Scopes, Truncated: res.Truncated, Cached: res.Cached, Content: res.Content,
+	}
+	return textResult(res.Content), out, nil
+}
+
+// ReportUsageInput is the report_usage tool input.
+type ReportUsageInput struct {
+	BundleID       string   `json:"bundle_id" jsonschema:"The bundle_id returned by compile_bundle"`
+	UsefulChunkIDs []string `json:"useful_chunk_ids" jsonschema:"chunk_ids from the bundle's sections that were actually useful (may be empty)"`
+}
+
+// ReportUsageOutput acknowledges stored feedback.
+type ReportUsageOutput struct {
+	Recorded int `json:"recorded"`
+}
+
+func (t *tools) reportUsage(ctx context.Context, req *mcp.CallToolRequest, in ReportUsageInput) (_ *mcp.CallToolResult, out ReportUsageOutput, err error) {
+	start := time.Now()
+	defer func() { t.record(start, metrics.Request{Name: "report_usage", Query: in.BundleID}, err) }()
+	if strings.TrimSpace(in.BundleID) == "" {
+		return nil, out, errors.New("bundle_id must not be empty")
+	}
+	b, err := t.deps.Store.GetBundle(ctx, in.BundleID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, out, fmt.Errorf("bundle %q not found (bundles are dropped when the knowledge changes)", in.BundleID)
+	}
+	if err != nil {
+		return nil, out, err
+	}
+	client := ""
+	if req != nil && req.Session != nil && req.Session.InitializeParams() != nil && req.Session.InitializeParams().ClientInfo != nil {
+		client = req.Session.InitializeParams().ClientInfo.Name
+	}
+	useful := make(map[string]bool, len(in.UsefulChunkIDs))
+	for _, id := range in.UsefulChunkIDs {
+		useful[id] = true
+	}
+	events := make([]store.UsageEvent, 0, len(b.Sections))
+	for _, s := range b.Sections {
+		events = append(events, store.UsageEvent{BundleID: b.ID, ChunkID: s.ChunkID, Useful: useful[s.ChunkID], Client: client})
+	}
+	if err := t.deps.Store.PutUsage(ctx, events); err != nil {
+		return nil, out, err
+	}
+	out = ReportUsageOutput{Recorded: len(events)}
+	return textResult(fmt.Sprintf("Recorded feedback for %d section(s) of bundle %s. Thank you.", len(events), b.ID)), out, nil
 }
 
 // GetDocumentInput is the get_document tool input.

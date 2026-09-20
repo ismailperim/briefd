@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
@@ -105,10 +106,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if cfg.LogLevel == "debug" {
 		mcpLogger = logger
 	}
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Metrics: reg, Version: version, Logger: mcpLogger})
+	compiler := bundle.New(st, searcher, bundle.Options{
+		DefaultScopes:    cfg.Search.DefaultScopes,
+		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
+		OnCache:          reg.RecordCache,
+	})
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Metrics: reg, Version: version, Logger: mcpLogger})
 	handler := httpapi.New(httpapi.Deps{
 		Store:              st,
 		Searcher:           searcher,
+		Compiler:           compiler,
 		MCP:                mcpserver.Handler(mcpSrv, mcpLogger),
 		APIToken:           cfg.APIToken,
 		Metrics:            reg,

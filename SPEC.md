@@ -75,9 +75,11 @@ refs: ["services/payment/**"]  # code paths this doc governs (staleness input, v
 
 ### 3.2 REST (secondary)
 
-`GET /api/search`, `POST /api/bundle`, `GET /api/docs/{path}`, `POST /api/proposals`,
-`GET /api/health`, `GET /api/stats` (chunk counts, index freshness, cache hit rate,
-token-served counters). Auth: single bearer token (`BRIEFD_API_TOKEN`); MCP uses the same.
+`GET /api/search`, `POST /api/bundle` (`{task, max_tokens?, scopes?}`), `POST /api/usage`
+(`{bundle_id, useful_chunk_ids?, client?}`), `GET /api/docs/{path}`, `GET /api/scopes`,
+`POST /api/proposals`, `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
+cache hit rate, token-served counters). Auth: single bearer token (`BRIEFD_API_TOKEN`);
+MCP uses the same.
 
 `GET /metrics` — Prometheus text format, no auth by default (configurable):
 request counts and latency histograms per tool/endpoint, tokens served, cache hits/misses,
@@ -121,8 +123,15 @@ inspection of the index, same ranking as the API) · `briefd model pull` · `bri
   rank → stop before exceeding budget; if the top chunk alone exceeds budget, return its
   head with a truncation marker. Token counting via tiktoken-compatible approximation
   (documented margin of error; budget enforced with 5% safety headroom).
-- **Bundle cache:** key = `hash(task_description + scopes + max_tokens + repo_commit)`,
-  stored in SQLite, in-process LRU in front. Invalidation is automatic (commit hash in key).
+- **Bundle cache:** key = `hash(task_description + sorted scopes + max_tokens +
+  index_fingerprint + embedding_model)`, stored in SQLite, in-process LRU (256 entries) in
+  front. `index_fingerprint` hashes every indexed (path, content_hash) — it changes with
+  the repo commit but also for plain-directory sources — so invalidation is automatic;
+  stale rows are pruned after each index run. `bundle_id` is the first 16 hex chars of
+  the key, so identical requests share an id.
+- **Dedupe:** chunks with identical content or a term-set Jaccard ≥ 0.85 to an already
+  selected chunk are dropped. Rendered sections omit the chunk's own heading line (the
+  attribution line carries the breadcrumb).
 
 ## 6. Data model (SQLite, WAL)
 
@@ -133,10 +142,11 @@ chunks(rowid, id, doc_id, title, heading_path, content, tokens, content_hash, po
 chunks_fts        -- FTS5 external-content table over chunks(title, heading_path, content),
                   -- kept in sync by triggers; tokenizer: porter unicode61 remove_diacritics 2
 chunk_vectors     -- chunk_id, model, dim, embedding BLOB (L2-normalized float32 LE)
-bundles(id, cache_key, task_hash, repo_commit, content, tokens, created_at, hits)
+bundles(id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens,
+        sections, truncated, created_at, hits)
 usage_events(id, bundle_id, chunk_id, useful, client, created_at)
 proposals(id, branch, doc_path, description, status, created_at)
-sync_state(source, last_commit, last_sync_at, last_error)
+sync_state(source, last_commit, last_sync_at, last_error, index_fingerprint)
 ```
 
 ## 7. Embeddings

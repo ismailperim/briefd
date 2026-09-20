@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `compile_bundle` (MCP) and `POST /api/bundle` (REST): compiles a task into one
+  context block — near-duplicate sections dropped, greedy packing within the
+  budget with 5% headroom, domain → conventions → project ordering, source
+  line per section, truncation marker when nothing fits. Byte-identical for
+  identical inputs and cached in SQLite + an in-process LRU keyed on task,
+  scopes, budget, index fingerprint and embedding model.
+- `report_usage` (MCP) and `POST /api/usage`: stores which sections helped.
+- Bundle cache hit rate on `/metrics`, `/api/stats` and the dashboard.
 - Hybrid retrieval: local `all-MiniLM-L6-v2` embeddings computed by a pure-Go
   encoder (no CGO, no ONNX runtime; weights downloaded once or via
   `briefd model pull`), Ollama and OpenAI-compatible adapters, vectors stored

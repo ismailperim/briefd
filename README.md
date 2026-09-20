@@ -59,9 +59,11 @@ connection status and the three tools:
 
 | Tool | Purpose |
 |---|---|
+| `compile_bundle(task_description, max_tokens?, scopes?)` | one deduplicated, scope-ordered context block within the budget; deterministic and cached |
 | `search_context(query, max_tokens?, scopes?, top_k?)` | ranked sections that fit the budget |
 | `get_document(doc_path, scopes?)` | one document in full |
 | `list_scopes()` | scopes with document/section counts |
+| `report_usage(bundle_id, useful_chunk_ids)` | optional feedback, stored for future ranking |
 
 On first start briefd downloads the embedding model (`all-MiniLM-L6-v2`,
 ~87 MB) into your user cache and embeds the corpus in the background — BM25
@@ -94,6 +96,8 @@ It is unauthenticated by default; set `metrics.require_auth: true` to change tha
 ```sh
 curl -H "Authorization: Bearer dev-token" \
   "localhost:7788/api/search?q=refund+approval&max_tokens=500&scopes=domain"
+curl -H "Authorization: Bearer dev-token" -H "Content-Type: application/json" \
+  -d '{"task":"add partial refunds to the portal","max_tokens":800}' localhost:7788/api/bundle
 curl -H "Authorization: Bearer dev-token" localhost:7788/api/scopes
 curl -H "Authorization: Bearer dev-token" localhost:7788/api/docs/domain/glossary.md
 curl localhost:7788/api/health

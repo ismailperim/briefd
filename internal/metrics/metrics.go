@@ -67,6 +67,8 @@ type Registry struct {
 	vectors        int
 	vectorsPending int
 	embeddingsOn   bool
+
+	cacheHits, cacheMisses int64
 }
 
 type key struct {
@@ -168,6 +170,17 @@ type ScopeCount struct {
 	Tokens    int    `json:"tokens"`
 }
 
+// RecordCache counts a bundle cache lookup.
+func (r *Registry) RecordCache(hit bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if hit {
+		r.cacheHits++
+	} else {
+		r.cacheMisses++
+	}
+}
+
 // SetVectors records the size of the vector index and how many chunks
 // still await embedding. Calling it marks embeddings as enabled.
 func (r *Registry) SetVectors(indexed, pending int) {
@@ -256,6 +269,7 @@ func (r *Registry) WritePrometheus(w io.Writer) {
 		fmt.Fprintf(w, "briefd_index_tokens{scope=%q} %d\n", sc, r.indexTokens[sc])
 	}
 
+	fmt.Fprintf(w, "# HELP briefd_bundle_cache_total Bundle cache lookups by result.\n# TYPE briefd_bundle_cache_total counter\nbriefd_bundle_cache_total{result=\"hit\"} %d\nbriefd_bundle_cache_total{result=\"miss\"} %d\n", r.cacheHits, r.cacheMisses)
 	if r.embeddingsOn {
 		fmt.Fprintf(w, "# HELP briefd_vectors Chunks with an up-to-date embedding.\n# TYPE briefd_vectors gauge\nbriefd_vectors %d\n", r.vectors)
 		fmt.Fprintf(w, "# HELP briefd_vectors_pending Chunks still waiting to be embedded.\n# TYPE briefd_vectors_pending gauge\nbriefd_vectors_pending %d\n", r.vectorsPending)
@@ -293,8 +307,10 @@ type Totals struct {
 	Chunks       int   `json:"chunks"`
 	IndexTokens  int   `json:"index_tokens"`
 	// Vectors is -1 when embeddings are disabled.
-	Vectors        int `json:"vectors"`
-	VectorsPending int `json:"vectors_pending"`
+	Vectors        int   `json:"vectors"`
+	VectorsPending int   `json:"vectors_pending"`
+	CacheHits      int64 `json:"cache_hits"`
+	CacheMisses    int64 `json:"cache_misses"`
 }
 
 // NameStats summarizes one (surface, name) series.
@@ -363,6 +379,7 @@ func (r *Registry) Snapshot() Snapshot {
 	}
 	sort.Slice(snap.Index, func(i, j int) bool { return snap.Index[i].Scope < snap.Index[j].Scope })
 
+	snap.Totals.CacheHits, snap.Totals.CacheMisses = r.cacheHits, r.cacheMisses
 	snap.Totals.Vectors, snap.Totals.VectorsPending = -1, 0
 	if r.embeddingsOn {
 		snap.Totals.Vectors, snap.Totals.VectorsPending = r.vectors, r.vectorsPending

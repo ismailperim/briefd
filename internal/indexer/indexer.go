@@ -36,13 +36,15 @@ type Options struct {
 
 // Stats summarizes an indexing run.
 type Stats struct {
-	Scanned  int           `json:"scanned"`
-	Indexed  int           `json:"indexed"`
-	Skipped  int           `json:"skipped"`
-	Deleted  int           `json:"deleted"`
-	Chunks   int           `json:"chunks"`
-	Embedded int           `json:"embedded"`
-	Duration time.Duration `json:"duration"`
+	Scanned  int `json:"scanned"`
+	Indexed  int `json:"indexed"`
+	Skipped  int `json:"skipped"`
+	Deleted  int `json:"deleted"`
+	Chunks   int `json:"chunks"`
+	Embedded int `json:"embedded"`
+	// Fingerprint identifies the resulting index state (see store.IndexFingerprint).
+	Fingerprint string        `json:"fingerprint"`
+	Duration    time.Duration `json:"duration"`
 }
 
 // Run indexes opts.Root into st. Unchanged files (by content hash) are
@@ -109,6 +111,21 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		n, err := embedPending(ctx, st, opts, log)
 		stats.Embedded = n
 		if err != nil {
+			return stats, err
+		}
+	}
+
+	// Record the resulting knowledge state and drop bundles compiled against
+	// an older one; their cache keys can never match again.
+	stats.Fingerprint, err = st.IndexFingerprint(ctx)
+	if err != nil {
+		return stats, err
+	}
+	if err := st.SetIndexFingerprint(ctx, stats.Fingerprint); err != nil {
+		return stats, err
+	}
+	if stats.Indexed > 0 || stats.Deleted > 0 {
+		if _, err := st.PruneBundles(ctx, stats.Fingerprint); err != nil {
 			return stats, err
 		}
 	}
