@@ -1,0 +1,23 @@
+# Build artifacts
+/bin/
+/dist/
+coverage.out
+*.test
+
+# Runtime data (the index is a disposable cache; never commit it)
+*.db
+*.db-wal
+*.db-shm
+/data/
+
+# Local configuration and secrets
+briefd.yaml
+!deploy/briefd.example.yaml
+.env
+.env.*
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

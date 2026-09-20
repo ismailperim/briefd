@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose an enhancement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that briefd makes hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: spec
+    attributes:
+      label: Spec check
+      options:
+        - label: I checked SPEC.md and docs/adr/ and this does not conflict with a locked decision (or I am proposing an ADR)

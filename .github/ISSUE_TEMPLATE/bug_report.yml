@@ -1,0 +1,38 @@
+name: Bug report
+description: Something is not working as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: briefd version
+      description: Output of `briefd version`
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Knowledge repo layout / sample doc
+        2. Command or MCP call
+        3. Observed output
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: OS, architecture, embedding adapter (onnx/ollama/none), how briefd is deployed
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell
