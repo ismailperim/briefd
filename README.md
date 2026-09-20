@@ -16,6 +16,8 @@
   <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/ismailperim/briefd"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <a href="https://github.com/ismailperim/briefd/pkgs/container/briefd"><img alt="Container" src="https://img.shields.io/badge/ghcr.io-briefd-0f172a?logo=docker"></a>
+  <a href="https://registry.modelcontextprotocol.io/?search=briefd"><img alt="MCP Registry" src="https://img.shields.io/badge/MCP%20Registry-io.github.ismailperim%2Fbriefd-22c55e"></a>
+  <a href="https://glama.ai/mcp/servers/ismailperim/briefd"><img alt="Glama score" src="https://glama.ai/mcp/servers/ismailperim/briefd/badges/score.svg"></a>
 </p>
 
 ---
