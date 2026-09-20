@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `PORT` environment variable (when `BRIEFD_LISTEN` is unset) and `GET /healthz`
+  alias, for PaaS and directory runners.
+
 ### Changed
 
 - Releases are cut with `make release VERSION=X.Y.Z`; the release workflow

@@ -62,6 +62,7 @@ func New(d Deps) http.Handler {
 	// Unauthenticated: liveness, the static dashboard shell (it fetches its
 	// data with the token), and by default the Prometheus endpoint.
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /healthz", a.health) // conventional alias for platform health checks
 	mux.HandleFunc("GET /{$}", a.dashboard)
 	auth := bearer(d.APIToken)
 	if d.Metrics != nil {

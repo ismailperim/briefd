@@ -146,6 +146,13 @@ func (c *Config) applyEnv() error {
 		}
 	}
 	str("LISTEN", &c.Listen)
+	// PaaS and directory runners (Render, Railway, Fly, Glama) hand out the
+	// port as PORT; honor it when BRIEFD_LISTEN is not set explicitly.
+	if _, ok := os.LookupEnv("BRIEFD_LISTEN"); !ok {
+		if port := os.Getenv("PORT"); port != "" {
+			c.Listen = ":" + port
+		}
+	}
 	str("DB", &c.DB)
 	str("SOURCE", &c.Source)
 	str("API_TOKEN", &c.APIToken)

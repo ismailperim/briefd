@@ -38,6 +38,20 @@ func TestLoadPrecedence(t *testing.T) {
 	}
 }
 
+func TestPortEnv(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("PORT", "9999")
+	cfg, err := Load("")
+	if err != nil || cfg.Listen != ":9999" {
+		t.Errorf("PORT should set listen, got %q (%v)", cfg.Listen, err)
+	}
+	t.Setenv("BRIEFD_LISTEN", ":7000")
+	cfg, _ = Load("")
+	if cfg.Listen != ":7000" {
+		t.Errorf("BRIEFD_LISTEN must win over PORT, got %q", cfg.Listen)
+	}
+}
+
 func TestLoadMissingFile(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if _, err := Load(""); err != nil {
