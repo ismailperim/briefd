@@ -35,7 +35,7 @@ make build
 Then connect Claude Code to it:
 
 ```sh
-claude mcp add --transport http briefd http://localhost:8080/mcp \
+claude mcp add --transport http briefd http://localhost:7788/mcp \
   --header "Authorization: Bearer dev-token"
 ```
 
@@ -46,7 +46,7 @@ or add it to your project's `.mcp.json`:
   "mcpServers": {
     "briefd": {
       "type": "http",
-      "url": "http://localhost:8080/mcp",
+      "url": "http://localhost:7788/mcp",
       "headers": { "Authorization": "Bearer dev-token" }
     }
   }
@@ -70,7 +70,7 @@ environment variables.
 
 ### Dashboard and metrics
 
-Open <http://localhost:8080/> for a read-only status page: requests, tokens
+Open <http://localhost:7788/> for a read-only status page: requests, tokens
 served, latency percentiles per tool, index size per scope, sync state, the
 last 100 requests, and a search box for manual inspection. It asks for the
 bearer token once and keeps it in your browser.
@@ -85,10 +85,10 @@ It is unauthenticated by default; set `metrics.require_auth: true` to change tha
 
 ```sh
 curl -H "Authorization: Bearer dev-token" \
-  "localhost:8080/api/search?q=refund+approval&max_tokens=500&scopes=domain"
-curl -H "Authorization: Bearer dev-token" localhost:8080/api/scopes
-curl -H "Authorization: Bearer dev-token" localhost:8080/api/docs/domain/glossary.md
-curl localhost:8080/api/health
+  "localhost:7788/api/search?q=refund+approval&max_tokens=500&scopes=domain"
+curl -H "Authorization: Bearer dev-token" localhost:7788/api/scopes
+curl -H "Authorization: Bearer dev-token" localhost:7788/api/docs/domain/glossary.md
+curl localhost:7788/api/health
 ```
 
 ### CLI

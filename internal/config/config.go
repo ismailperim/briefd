@@ -55,7 +55,7 @@ type Search struct {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Listen:   ":8080",
+		Listen:   ":7788",
 		DB:       "briefd.db",
 		Source:   "",
 		LogLevel: "info",

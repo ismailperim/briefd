@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/api/stats` JSON snapshot (per-tool counts, p50/p95 latency, tokens served,
   index size per scope, sync state, recent requests) and an embedded read-only
   dashboard at `/` with a search box.
+- Default listen address is `:7788` (8080 is too often taken by something else).
 - `briefd serve`: MCP server (streamable HTTP, official Go SDK) with
   `search_context`, `get_document` and `list_scopes`; REST endpoints
   `/api/search`, `/api/docs/{path}`, `/api/scopes`, `/api/health`; single

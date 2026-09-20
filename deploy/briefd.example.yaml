@@ -3,7 +3,7 @@
 # most common ones with flags: flags > env > this file > defaults.
 
 # Address for MCP (/mcp), REST (/api) and the dashboard (/).
-listen: ":8080"            # BRIEFD_LISTEN
+listen: ":7788"            # BRIEFD_LISTEN
 
 # SQLite database. It is a disposable cache of the knowledge source.
 db: "briefd.db"            # BRIEFD_DB

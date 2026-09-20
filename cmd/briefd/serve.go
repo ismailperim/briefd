@@ -24,7 +24,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	cfgFile := fs.String("config", envOr("CONFIG", ""), "config file (default briefd.yaml if present)")
-	listen := fs.String("listen", "", "listen address (default :8080)")
+	listen := fs.String("listen", "", "listen address (default :7788)")
 	db := fs.String("db", "", "SQLite database path (default briefd.db)")
 	source := fs.String("source", "", "knowledge directory to index and watch")
 	token := fs.String("token", "", "bearer token for /mcp and /api (default: none, authentication disabled)")
@@ -112,7 +112,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", cfg.Listen, err)
+		return fmt.Errorf("listening on %s: %w (pick another address with --listen, e.g. --listen :7789)", cfg.Listen, err)
 	}
 	logger.Info("briefd listening", "addr", ln.Addr().String(), "mcp", "/mcp", "api", "/api", "db", cfg.DB, "source", cfg.Source)
 	fmt.Fprintf(stdout, "briefd %s listening on http://%s  (dashboard: /  MCP: /mcp  metrics: /metrics)\n", version, displayAddr(ln.Addr()))
