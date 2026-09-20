@@ -15,6 +15,7 @@ import (
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/mcpserver"
+	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -66,13 +67,15 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return err
 	}
 	defer st.Close()
+	reg := metrics.New(version)
 
 	if cfg.Source != "" {
-		if _, err := indexer.Run(ctx, st, indexer.Options{Root: cfg.Source, Logger: logger}); err != nil {
+		if err := reindex(ctx, st, cfg.Source, reg, logger); err != nil {
 			return fmt.Errorf("initial index: %w", err)
 		}
 	} else {
 		logger.Warn("no source configured; serving the existing index only")
+		refreshIndexGauges(ctx, st, reg)
 	}
 	if cfg.APIToken == "" {
 		logger.Warn("BRIEFD_API_TOKEN is not set; /mcp and /api are unauthenticated")
@@ -89,14 +92,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if cfg.LogLevel == "debug" {
 		mcpLogger = logger
 	}
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Version: version, Logger: mcpLogger})
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Metrics: reg, Version: version, Logger: mcpLogger})
 	handler := httpapi.New(httpapi.Deps{
-		Store:    st,
-		Searcher: searcher,
-		MCP:      mcpserver.Handler(mcpSrv, mcpLogger),
-		APIToken: cfg.APIToken,
-		Version:  version,
-		Logger:   logger,
+		Store:              st,
+		Searcher:           searcher,
+		MCP:                mcpserver.Handler(mcpSrv, mcpLogger),
+		APIToken:           cfg.APIToken,
+		Metrics:            reg,
+		MetricsRequireAuth: cfg.Metrics.RequireAuth,
+		Version:            version,
+		Logger:             logger,
 	})
 
 	srv := &http.Server{
@@ -110,13 +115,13 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return fmt.Errorf("listening on %s: %w", cfg.Listen, err)
 	}
 	logger.Info("briefd listening", "addr", ln.Addr().String(), "mcp", "/mcp", "api", "/api", "db", cfg.DB, "source", cfg.Source)
-	fmt.Fprintf(stdout, "briefd %s listening on http://%s  (MCP endpoint: /mcp)\n", version, displayAddr(ln.Addr()))
+	fmt.Fprintf(stdout, "briefd %s listening on http://%s  (dashboard: /  MCP: /mcp  metrics: /metrics)\n", version, displayAddr(ln.Addr()))
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 
 	if cfg.Source != "" && cfg.Sync.Interval > 0 {
-		go syncLoop(ctx, st, cfg.Source, cfg.Sync.Interval, logger)
+		go syncLoop(ctx, st, cfg.Source, cfg.Sync.Interval, reg, logger)
 	}
 
 	select {
@@ -133,9 +138,35 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 }
 
+// reindex runs the indexer once and reports the outcome to metrics.
+func reindex(ctx context.Context, st *store.Store, root string, reg *metrics.Registry, logger *slog.Logger) error {
+	stats, err := indexer.Run(ctx, st, indexer.Options{Root: root, Logger: logger})
+	reg.RecordSync(err)
+	if err != nil {
+		return err
+	}
+	if stats.Indexed > 0 || stats.Deleted > 0 {
+		logger.Info("index updated", "indexed", stats.Indexed, "deleted", stats.Deleted, "skipped", stats.Skipped)
+	}
+	refreshIndexGauges(ctx, st, reg)
+	return nil
+}
+
+func refreshIndexGauges(ctx context.Context, st *store.Store, reg *metrics.Registry) {
+	scopes, err := st.ListScopes(ctx)
+	if err != nil {
+		return
+	}
+	counts := make([]metrics.ScopeCount, len(scopes))
+	for i, s := range scopes {
+		counts[i] = metrics.ScopeCount{Scope: s.Scope, Documents: s.Documents, Chunks: s.Chunks, Tokens: s.Tokens}
+	}
+	reg.SetIndex(counts)
+}
+
 // syncLoop re-scans a local source directory on a fixed interval. It is
 // replaced by git polling in M5.
-func syncLoop(ctx context.Context, st *store.Store, root string, every time.Duration, logger *slog.Logger) {
+func syncLoop(ctx context.Context, st *store.Store, root string, every time.Duration, reg *metrics.Registry, logger *slog.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -143,13 +174,8 @@ func syncLoop(ctx context.Context, st *store.Store, root string, every time.Dura
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			stats, err := indexer.Run(ctx, st, indexer.Options{Root: root, Logger: logger})
-			if err != nil {
+			if err := reindex(ctx, st, root, reg, logger); err != nil && ctx.Err() == nil {
 				logger.Error("sync failed", "err", err)
-				continue
-			}
-			if stats.Indexed > 0 || stats.Deleted > 0 {
-				logger.Info("sync applied changes", "indexed", stats.Indexed, "deleted", stats.Deleted)
 			}
 		}
 	}

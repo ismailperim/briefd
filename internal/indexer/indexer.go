@@ -104,7 +104,7 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 	if err != nil {
 		return stats, fmt.Errorf("recording sync state: %w", err)
 	}
-	log.Info("index complete", "scanned", stats.Scanned, "indexed", stats.Indexed,
+	log.Debug("index complete", "scanned", stats.Scanned, "indexed", stats.Indexed,
 		"skipped", stats.Skipped, "deleted", stats.Deleted, "duration", stats.Duration)
 	return stats, nil
 }

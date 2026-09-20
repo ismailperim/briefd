@@ -68,6 +68,19 @@ Edits to files under `--source` are picked up within `sync.interval`
 (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)) or `BRIEFD_*`
 environment variables.
 
+### Dashboard and metrics
+
+Open <http://localhost:8080/> for a read-only status page: requests, tokens
+served, latency percentiles per tool, index size per scope, sync state, the
+last 100 requests, and a search box for manual inspection. It asks for the
+bearer token once and keeps it in your browser.
+
+`GET /metrics` exposes the same counters in Prometheus text format
+(`briefd_requests_total`, `briefd_tokens_served_total`,
+`briefd_request_duration_seconds`, `briefd_index_chunks`, `briefd_sync_runs_total`, …).
+It is unauthenticated by default; set `metrics.require_auth: true` to change that.
+`GET /api/stats` returns a JSON snapshot for your own tooling.
+
 ### REST
 
 ```sh

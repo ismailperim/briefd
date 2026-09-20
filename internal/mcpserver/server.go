@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 	"github.com/ismailperim/briefd/internal/tokenizer"
@@ -22,8 +24,10 @@ import (
 type Deps struct {
 	Store    *store.Store
 	Searcher *search.Searcher
-	Version  string
-	Logger   *slog.Logger
+	// Metrics receives one record per tool call; nil disables instrumentation.
+	Metrics *metrics.Registry
+	Version string
+	Logger  *slog.Logger
 }
 
 // New builds an MCP server with the briefd tool set registered.
@@ -80,6 +84,17 @@ type tools struct {
 	deps Deps
 }
 
+// record reports a finished tool call to the metrics registry.
+func (t *tools) record(start time.Time, req metrics.Request, err error) {
+	if t.deps.Metrics == nil {
+		return
+	}
+	req.Surface = metrics.SurfaceMCP
+	req.Duration = time.Since(start)
+	req.Error = err != nil
+	t.deps.Metrics.Record(req)
+}
+
 // SearchContextInput is the search_context tool input.
 type SearchContextInput struct {
 	Query     string   `json:"query" jsonschema:"What you are working on or looking for, in natural language (e.g. 'retry policy for acquirer calls')"`
@@ -108,7 +123,14 @@ type ChunkOut struct {
 	Score   float64 `json:"score"`
 }
 
-func (t *tools) searchContext(ctx context.Context, _ *mcp.CallToolRequest, in SearchContextInput) (*mcp.CallToolResult, SearchContextOutput, error) {
+func (t *tools) searchContext(ctx context.Context, _ *mcp.CallToolRequest, in SearchContextInput) (_ *mcp.CallToolResult, out SearchContextOutput, err error) {
+	start := time.Now()
+	defer func() {
+		t.record(start, metrics.Request{
+			Name: "search_context", Query: in.Query, Scopes: out.Scopes,
+			Tokens: out.TotalTokens, Chunks: len(out.Chunks), Omitted: out.Omitted,
+		}, err)
+	}()
 	if strings.TrimSpace(in.Query) == "" {
 		return nil, SearchContextOutput{}, errors.New("query must not be empty")
 	}
@@ -121,7 +143,7 @@ func (t *tools) searchContext(ctx context.Context, _ *mcp.CallToolRequest, in Se
 	if err != nil {
 		return nil, SearchContextOutput{}, err
 	}
-	out := SearchContextOutput{
+	out = SearchContextOutput{
 		Chunks:      make([]ChunkOut, 0, len(res.Chunks)),
 		TotalTokens: res.TotalTokens,
 		Budget:      res.Budget,
@@ -169,7 +191,11 @@ type GetDocumentOutput struct {
 	Tokens  int      `json:"tokens"`
 }
 
-func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetDocumentInput) (*mcp.CallToolResult, GetDocumentOutput, error) {
+func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetDocumentInput) (_ *mcp.CallToolResult, out GetDocumentOutput, err error) {
+	start := time.Now()
+	defer func() {
+		t.record(start, metrics.Request{Name: "get_document", Query: in.DocPath, Scopes: in.Scopes, Tokens: out.Tokens, Chunks: 1}, err)
+	}()
 	p := strings.TrimPrefix(strings.TrimSpace(in.DocPath), "/")
 	if p == "" {
 		return nil, GetDocumentOutput{}, errors.New("doc_path must not be empty")
@@ -184,7 +210,7 @@ func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetD
 	if len(in.Scopes) > 0 && !slices.Contains(in.Scopes, doc.Scope) {
 		return nil, GetDocumentOutput{}, fmt.Errorf("document %q is in scope %q, not in the requested scopes", p, doc.Scope)
 	}
-	out := GetDocumentOutput{
+	out = GetDocumentOutput{
 		Path: doc.Path, Scope: doc.Scope, Title: doc.Title, Tags: doc.Tags,
 		Content: content, Tokens: tokenizer.Count(content),
 	}
@@ -197,7 +223,9 @@ type ListScopesOutput struct {
 	Scopes []store.ScopeInfo `json:"scopes"`
 }
 
-func (t *tools) listScopes(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, ListScopesOutput, error) {
+func (t *tools) listScopes(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (_ *mcp.CallToolResult, out ListScopesOutput, err error) {
+	start := time.Now()
+	defer func() { t.record(start, metrics.Request{Name: "list_scopes"}, err) }()
 	scopes, err := t.deps.Store.ListScopes(ctx)
 	if err != nil {
 		return nil, ListScopesOutput{}, err

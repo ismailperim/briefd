@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/mcpserver"
+	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -33,12 +35,14 @@ func newTestServer(t *testing.T, token string) *httptest.Server {
 		t.Fatal(err)
 	}
 	searcher := search.New(st, search.Options{})
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Version: "test"})
+	reg := metrics.New("test")
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Metrics: reg, Version: "test"})
 	h := httpapi.New(httpapi.Deps{
 		Store:    st,
 		Searcher: searcher,
 		MCP:      mcpserver.Handler(mcpSrv, nil),
 		APIToken: token,
+		Metrics:  reg,
 		Version:  "test",
 	})
 	srv := httptest.NewServer(h)
@@ -240,5 +244,76 @@ func TestRESTSearchAndDocs(t *testing.T) {
 	}
 	if doc["scope"] != "projects/ledger-service" || !strings.Contains(doc["content"].(string), "Projection drift") {
 		t.Errorf("unexpected doc: %v", doc["scope"])
+	}
+}
+
+func TestMetricsStatsAndDashboard(t *testing.T) {
+	srv := newTestServer(t, testToken)
+	client := &http.Client{Transport: bearerTransport{token: testToken, base: http.DefaultTransport}}
+	session := connect(t, srv, testToken)
+	ctx := context.Background()
+
+	for range 3 {
+		if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "search_context", Arguments: map[string]any{"query": "settlement batch"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "get_document", Arguments: map[string]any{"doc_path": "nope.md"}}); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Get(srv.URL + "/api/search?q=payout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	// /api/stats reflects the calls above.
+	resp, err = client.Get(srv.URL + "/api/stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var snap metrics.Snapshot
+	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap.Totals.Requests != 5 || snap.Totals.Errors != 1 || snap.Totals.TokensServed == 0 {
+		t.Errorf("totals = %+v", snap.Totals)
+	}
+	if len(snap.Recent) != 5 || snap.Recent[0].Name != "api_search" || snap.Recent[1].Name != "get_document" || !snap.Recent[1].Error {
+		t.Errorf("recent = %+v", snap.Recent)
+	}
+	if snap.Extra["source"] == nil {
+		t.Errorf("extra sync info missing: %v", snap.Extra)
+	}
+
+	// /metrics is open by default and in Prometheus format.
+	resp, err = http.Get(srv.URL + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get("Content-Type"), "text/plain") {
+		t.Errorf("/metrics status %d type %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(string(body), `briefd_requests_total{surface="mcp",name="search_context",status="ok"} 3`) {
+		t.Errorf("metrics output missing search_context counter:\n%s", body)
+	}
+
+	// Dashboard shell is served without auth.
+	resp, err = http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "<title>briefd</title>") {
+		t.Errorf("dashboard status %d", resp.StatusCode)
+	}
+	resp, _ = http.Get(srv.URL + "/api/stats")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("/api/stats without token: %d", resp.StatusCode)
 	}
 }

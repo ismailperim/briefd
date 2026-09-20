@@ -23,10 +23,18 @@ type Config struct {
 	// URL once gitsync lands (M5).
 	Source string `yaml:"source"`
 	// APIToken protects /mcp and /api. Empty disables authentication.
-	APIToken string `yaml:"api_token"`
-	LogLevel string `yaml:"log_level"`
-	Sync     Sync   `yaml:"sync"`
-	Search   Search `yaml:"search"`
+	APIToken string  `yaml:"api_token"`
+	LogLevel string  `yaml:"log_level"`
+	Sync     Sync    `yaml:"sync"`
+	Search   Search  `yaml:"search"`
+	Metrics  Metrics `yaml:"metrics"`
+}
+
+// Metrics controls the Prometheus endpoint.
+type Metrics struct {
+	// RequireAuth puts GET /metrics behind the bearer token. Off by default
+	// so scrapers work without secrets; the endpoint exposes counts only.
+	RequireAuth bool `yaml:"require_auth"`
 }
 
 // Sync controls how often the source is re-scanned.

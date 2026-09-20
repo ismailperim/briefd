@@ -24,3 +24,6 @@ search:
   default_scopes: [domain, conventions]   # BRIEFD_DEFAULT_SCOPES (comma-separated)
   default_max_tokens: 2000                # BRIEFD_DEFAULT_MAX_TOKENS
   max_top_k: 50
+
+metrics:
+  require_auth: false      # true = GET /metrics also needs the bearer token

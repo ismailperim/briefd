@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>briefd</title>
+<meta name="description" content="briefd status dashboard: requests, tokens served, index contents and sync state.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23276ef1'/><path d='M4 4h5a2.5 2.5 0 0 1 0 5H4zM4 8h5.5a2.5 2.5 0 0 1 0 5H4z' fill='none' stroke='white' stroke-width='1.6'/></svg>">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6ea; --text: #17202a; --muted: #66707c;
+    --accent: #276ef1; --ok: #1f8a4c; --warn: #b7791f; --err: #c53030; --chip: #eef2f7;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b95a3;
+      --accent: #6ea0ff; --ok: #4cc27a; --warn: #e0a94a; --err: #f07070; --chip: #222833;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b95a3;
+    --accent: #6ea0ff; --ok: #4cc27a; --warn: #e0a94a; --err: #f07070; --chip: #222833;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+  a { color: var(--accent); text-decoration: none; }
+  main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; margin-bottom: 18px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  header h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; font-family: var(--mono); }
+  .meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 14px; margin-left: auto; align-items: center; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-size: 12px; font-family: var(--mono); }
+  .pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.err { color: var(--err); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tile .value { font-family: var(--mono); font-size: 24px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tile .sub { color: var(--muted); font-size: 12px; margin-top: 2px; font-family: var(--mono); }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
+  @media (min-width: 900px) { .grid.two { grid-template-columns: 3fr 2fr; } }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  section.panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.mono { font-family: var(--mono); font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  .wrap { overflow-x: auto; }
+  .muted { color: var(--muted); }
+  .q { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { color: var(--muted); padding: 10px 0; font-size: 13px; }
+  form.search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  input, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[name=q] { flex: 1 1 260px; }
+  input[name=scopes] { flex: 0 1 220px; }
+  input[name=max_tokens] { flex: 0 0 110px; }
+  button { background: var(--accent); color: #fff; border-color: transparent; cursor: pointer; padding: 7px 14px; }
+  button.secondary { background: var(--chip); color: var(--text); }
+  .result { border-top: 1px solid var(--line); padding: 8px 0; }
+  .result:first-child { border-top: none; }
+  .result summary { cursor: pointer; display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+  .result summary::-webkit-details-marker { display: none; }
+  .result .h { font-weight: 600; }
+  .result .p { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .result pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; background: var(--bg); border-radius: 7px; padding: 10px; margin: 8px 0 0; }
+  #auth { display: none; margin-bottom: 14px; }
+  #auth.show { display: block; }
+  #auth form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #auth input { flex: 1 1 260px; font-family: var(--mono); }
+  .footer { color: var(--muted); font-size: 12px; margin-top: 18px; display: flex; gap: 14px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>briefd <span id="version">—</span></h1>
+    <div class="meta">
+      <span id="uptime">uptime —</span>
+      <span id="sync" class="pill">sync —</span>
+      <span id="conn" class="pill">connecting…</span>
+    </div>
+  </header>
+
+  <section id="auth" class="panel">
+    <form id="authForm">
+      <span>This server requires a bearer token to read stats and search.</span>
+      <input name="token" type="password" placeholder="BRIEFD_API_TOKEN" autocomplete="off">
+      <button type="submit">Connect</button>
+    </form>
+  </section>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Requests</div><div class="value" id="t-req">—</div><div class="sub" id="t-err">—</div></div>
+    <div class="tile"><div class="label">Tokens served</div><div class="value" id="t-tok">—</div><div class="sub" id="t-tokavg">—</div></div>
+    <div class="tile"><div class="label">Sections served</div><div class="value" id="t-chk">—</div><div class="sub" id="t-omit">—</div></div>
+    <div class="tile"><div class="label">Latency p95</div><div class="value" id="t-p95">—</div><div class="sub" id="t-p50">—</div></div>
+    <div class="tile"><div class="label">Index</div><div class="value" id="t-docs">—</div><div class="sub" id="t-idx">—</div></div>
+  </div>
+
+  <div class="grid two">
+    <section class="panel">
+      <h2>By tool / route</h2>
+      <div class="wrap"><table>
+        <thead><tr><th>Name</th><th>Surface</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Tokens</th><th class="num">Sections</th><th class="num">Omitted</th><th class="num">avg</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
+        <tbody id="byName"><tr><td colspan="10" class="empty">No requests yet. Connect an MCP client and call <code>search_context</code>.</td></tr></tbody>
+      </table></div>
+    </section>
+    <section class="panel">
+      <h2>Index by scope</h2>
+      <div class="wrap"><table>
+        <thead><tr><th>Scope</th><th class="num">Docs</th><th class="num">Sections</th><th class="num">Tokens</th></tr></thead>
+        <tbody id="scopes"><tr><td colspan="4" class="empty">Index is empty.</td></tr></tbody>
+      </table></div>
+      <p class="muted" id="source" style="margin:10px 0 0;font-size:12px"></p>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Try a search</h2>
+      <form class="search" id="searchForm">
+        <input name="q" placeholder="what is our retry policy for acquirer calls?" required>
+        <input name="scopes" placeholder="scopes (domain,conventions)">
+        <input name="max_tokens" type="number" min="1" placeholder="max_tokens" value="2000">
+        <button type="submit">Search</button>
+      </form>
+      <div id="results"></div>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Recent requests</h2>
+      <div class="wrap"><table>
+        <thead><tr><th>Time</th><th>Surface</th><th>Name</th><th>Query</th><th>Scopes</th><th class="num">Sections</th><th class="num">Tokens</th><th class="num">ms</th><th>Status</th></tr></thead>
+        <tbody id="recent"><tr><td colspan="9" class="empty">Nothing yet.</td></tr></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="footer">
+    <a href="/metrics">/metrics</a>
+    <a href="/api/health">/api/health</a>
+    <span>MCP endpoint: <code>/mcp</code></span>
+    <span id="refreshed"></span>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const TOKEN_KEY = 'briefd_token';
+  let token = '';
+  try { token = localStorage.getItem(TOKEN_KEY) || ''; } catch (_) {}
+
+  const headers = () => token ? { 'Authorization': 'Bearer ' + token } : {};
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const num = (n) => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e4 ? (n/1e3).toFixed(1)+'k' : String(Math.round(n));
+  const ms = (v) => v == null ? '—' : v < 1 ? v.toFixed(2)+' ms' : v < 100 ? v.toFixed(1)+' ms' : Math.round(v)+' ms';
+  const ago = (iso) => {
+    if (!iso) return 'never';
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime())/1000);
+    return s < 60 ? Math.round(s)+'s ago' : s < 3600 ? Math.round(s/60)+'m ago' : s < 86400 ? (s/3600).toFixed(1)+'h ago' : (s/86400).toFixed(1)+'d ago';
+  };
+  const dur = (s) => { const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m ${Math.floor(s%60)}s`; };
+  const clock = (iso) => new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+  function setConn(state, text) {
+    const el = $('conn'); el.className = 'pill ' + state; el.textContent = text;
+  }
+
+  async function api(path) {
+    const r = await fetch(path, { headers: headers(), cache: 'no-store' });
+    if (r.status === 401) { $('auth').classList.add('show'); setConn('warn', 'token required'); throw new Error('unauthorized'); }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    $('auth').classList.remove('show');
+    return r.json();
+  }
+
+  function render(s) {
+    $('version').textContent = s.version;
+    $('uptime').textContent = 'up ' + dur(s.uptime_seconds);
+    const t = s.totals;
+    $('t-req').textContent = num(t.requests);
+    $('t-err').textContent = t.errors ? `${t.errors} error${t.errors === 1 ? '' : 's'}` : 'no errors';
+    $('t-tok').textContent = num(t.tokens_served);
+    $('t-tokavg').textContent = t.requests ? `~${num(t.tokens_served / Math.max(1, t.requests))} per request` : '—';
+    $('t-chk').textContent = num(t.chunks_served);
+    $('t-omit').textContent = `${num(t.chunks_omitted)} omitted by budget`;
+    const search = s.by_name.find((b) => b.name === 'search_context') || s.by_name[0];
+    $('t-p95').textContent = search ? ms(search.p95_ms) : '—';
+    $('t-p50').textContent = search ? `p50 ${ms(search.p50_ms)} · ${search.name}` : 'no samples';
+    $('t-docs').textContent = `${t.documents} docs`;
+    $('t-idx').textContent = `${num(t.chunks)} sections · ~${num(t.index_tokens)} tokens`;
+
+    const sync = s.sync; const x = s.extra || {};
+    const syncEl = $('sync');
+    if (sync.last_error) { syncEl.className = 'pill err'; syncEl.textContent = 'sync failing: ' + sync.last_error; }
+    else if (sync.last_ok) { syncEl.className = 'pill ok'; syncEl.textContent = 'synced ' + ago(sync.last_ok); }
+    else { syncEl.className = 'pill'; syncEl.textContent = 'no sync yet'; }
+    $('source').textContent = x.source ? `source: ${x.source}${x.last_commit ? ' @ ' + x.last_commit.slice(0, 10) : ''} · ${sync.runs} run${sync.runs === 1 ? '' : 's'}` : '';
+
+    $('byName').innerHTML = s.by_name.length ? s.by_name.map((b) => `<tr>
+      <td class="mono">${esc(b.name)}</td><td class="muted">${esc(b.surface)}</td>
+      <td class="num">${num(b.requests)}</td><td class="num${b.errors ? '' : ' muted'}">${num(b.errors)}</td>
+      <td class="num">${num(b.tokens)}</td><td class="num">${num(b.chunks)}</td><td class="num muted">${num(b.omitted)}</td>
+      <td class="num">${ms(b.avg_ms)}</td><td class="num">${ms(b.p50_ms)}</td><td class="num">${ms(b.p95_ms)}</td></tr>`).join('')
+      : '<tr><td colspan="10" class="empty">No requests yet. Connect an MCP client and call <code>search_context</code>.</td></tr>';
+
+    $('scopes').innerHTML = s.index.length ? s.index.map((i) => `<tr><td class="mono">${esc(i.scope)}</td>
+      <td class="num">${i.documents}</td><td class="num">${i.chunks}</td><td class="num">${num(i.tokens)}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">Index is empty.</td></tr>';
+
+    $('recent').innerHTML = s.recent.length ? s.recent.map((r) => `<tr>
+      <td class="mono muted">${clock(r.at)}</td><td class="muted">${esc(r.surface)}</td><td class="mono">${esc(r.name)}</td>
+      <td class="q" title="${esc(r.query)}">${esc(r.query)}</td><td class="mono muted">${esc((r.scopes || []).join(', '))}</td>
+      <td class="num">${r.chunks}</td><td class="num">${num(r.tokens)}</td><td class="num">${ms(r.ms)}</td>
+      <td>${r.error ? '<span class="pill err">error</span>' : '<span class="pill ok">ok</span>'}</td></tr>`).join('')
+      : '<tr><td colspan="9" class="empty">Nothing yet.</td></tr>';
+
+    $('refreshed').textContent = 'refreshed ' + clock(new Date().toISOString());
+  }
+
+  let timer = null;
+  async function refresh() {
+    try { render(await api('/api/stats')); setConn('ok', 'live'); }
+    catch (e) { if (e.message !== 'unauthorized') setConn('err', 'offline'); }
+  }
+  function schedule() {
+    clearInterval(timer);
+    timer = setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+
+  $('authForm').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    token = new FormData(ev.target).get('token').trim();
+    try { localStorage.setItem(TOKEN_KEY, token); } catch (_) {}
+    refresh();
+  });
+
+  $('searchForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    const p = new URLSearchParams({ q: fd.get('q') });
+    if (fd.get('scopes')) p.set('scopes', fd.get('scopes'));
+    if (fd.get('max_tokens')) p.set('max_tokens', fd.get('max_tokens'));
+    const out = $('results');
+    out.innerHTML = '<div class="empty">Searching…</div>';
+    try {
+      const res = await api('/api/search?' + p.toString());
+      out.innerHTML = (res.chunks.length ? res.chunks.map((c, i) => `<details class="result"${i === 0 ? ' open' : ''}>
+        <summary><span class="h">${esc(c.heading)}</span><span class="p">${esc(c.doc_path)} · ${c.tokens} tok · score ${c.score.toFixed(2)}</span></summary>
+        <pre>${esc(c.content)}</pre></details>`).join('') : '<div class="empty">No matching sections.</div>')
+        + `<div class="muted" style="font-size:12px;margin-top:8px">${res.chunks.length} section(s), ${res.total_tokens} tokens (budget ${res.budget}), ${res.omitted} omitted · scopes ${esc(res.scopes.join(', '))}</div>`;
+      refresh();
+    } catch (e) { out.innerHTML = `<div class="empty">Search failed: ${esc(e.message)}</div>`; }
+  });
+
+  refresh(); schedule();
+})();
+</script>
+</body>
+</html>

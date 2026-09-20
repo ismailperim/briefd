@@ -5,6 +5,7 @@ package httpapi
 
 import (
 	"crypto/subtle"
+	"embed"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -13,9 +14,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 )
+
+//go:embed dashboard/index.html
+var dashboardFS embed.FS
 
 // Deps are the collaborators the HTTP layer needs.
 type Deps struct {
@@ -25,8 +30,12 @@ type Deps struct {
 	MCP http.Handler
 	// APIToken protects /mcp and /api/*; empty disables authentication.
 	APIToken string
-	Version  string
-	Logger   *slog.Logger
+	// Metrics backs /metrics and /api/stats; nil disables both.
+	Metrics *metrics.Registry
+	// MetricsRequireAuth puts /metrics behind the bearer token too.
+	MetricsRequireAuth bool
+	Version            string
+	Logger             *slog.Logger
 }
 
 // New returns the root handler.
@@ -37,11 +46,22 @@ func New(d Deps) http.Handler {
 	a := &api{deps: d}
 	mux := http.NewServeMux()
 
-	// Unauthenticated: liveness and version.
+	// Unauthenticated: liveness, the static dashboard shell (it fetches its
+	// data with the token), and by default the Prometheus endpoint.
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /{$}", a.dashboard)
+	auth := bearer(d.APIToken)
+	if d.Metrics != nil {
+		metricsHandler := http.HandlerFunc(a.prometheus)
+		if d.MetricsRequireAuth {
+			mux.Handle("GET /metrics", auth(metricsHandler))
+		} else {
+			mux.Handle("GET /metrics", metricsHandler)
+		}
+		mux.Handle("GET /api/stats", auth(http.HandlerFunc(a.stats)))
+	}
 
 	// Authenticated surface.
-	auth := bearer(d.APIToken)
 	mux.Handle("/mcp", auth(d.MCP))
 	mux.Handle("/mcp/", auth(d.MCP))
 	mux.Handle("GET /api/search", auth(http.HandlerFunc(a.search)))
@@ -49,6 +69,47 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/docs/{path...}", auth(http.HandlerFunc(a.document)))
 
 	return logRequests(d.Logger, mux)
+}
+
+// record reports a finished REST request to the metrics registry.
+func (a *api) record(start time.Time, req metrics.Request, failed bool) {
+	if a.deps.Metrics == nil {
+		return
+	}
+	req.Surface = metrics.SurfaceREST
+	req.Duration = time.Since(start)
+	req.Error = failed
+	a.deps.Metrics.Record(req)
+}
+
+func (a *api) dashboard(w http.ResponseWriter, _ *http.Request) {
+	page, err := dashboardFS.ReadFile("dashboard/index.html")
+	if err != nil {
+		http.Error(w, "dashboard unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(page)
+}
+
+func (a *api) prometheus(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	a.deps.Metrics.WritePrometheus(w)
+}
+
+func (a *api) stats(w http.ResponseWriter, r *http.Request) {
+	snap := a.deps.Metrics.Snapshot()
+	if sync, err := a.deps.Store.GetSyncState(r.Context()); err == nil {
+		snap.Extra = map[string]any{
+			"source":       sync.Source,
+			"last_commit":  sync.LastCommit,
+			"last_sync_at": nullableTime(sync.LastSyncAt),
+			"last_error":   sync.LastError,
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, snap)
 }
 
 type api struct {
@@ -71,9 +132,11 @@ func (a *api) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) search(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	q := r.URL.Query()
 	text := strings.TrimSpace(q.Get("q"))
 	if text == "" {
+		a.record(start, metrics.Request{Name: "api_search"}, true)
 		writeError(w, http.StatusBadRequest, "missing_query", "q is required")
 		return
 	}
@@ -94,15 +157,22 @@ func (a *api) search(w http.ResponseWriter, r *http.Request) {
 		MaxTokens: maxTokens,
 	})
 	if err != nil {
+		a.record(start, metrics.Request{Name: "api_search", Query: text}, true)
 		a.deps.Logger.Error("search failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "search_failed", "search failed")
 		return
 	}
+	a.record(start, metrics.Request{
+		Name: "api_search", Query: text, Scopes: res.Scopes,
+		Tokens: res.TotalTokens, Chunks: len(res.Chunks), Omitted: res.Omitted,
+	}, false)
 	writeJSON(w, http.StatusOK, res)
 }
 
 func (a *api) scopes(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	scopes, err := a.deps.Store.ListScopes(r.Context())
+	a.record(start, metrics.Request{Name: "api_scopes"}, err != nil)
 	if err != nil {
 		a.deps.Logger.Error("list scopes failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "list_failed", "listing scopes failed")
@@ -115,8 +185,10 @@ func (a *api) scopes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) document(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	path := r.PathValue("path")
 	doc, content, err := a.deps.Store.GetDocument(r.Context(), path)
+	a.record(start, metrics.Request{Name: "api_docs", Query: path, Chunks: 1}, err != nil)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "document not found")
 		return
