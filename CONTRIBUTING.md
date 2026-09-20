@@ -62,6 +62,19 @@ Two layers, both mandatory where applicable:
   in the same PR — spec and code must not drift.
 - Add a line to `CHANGELOG.md` under *Unreleased* for user-visible changes.
 
+## Releasing (maintainers)
+
+Version comes from the git tag; nothing is hard-coded. To cut a release:
+
+1. Make sure `CHANGELOG.md` has the changes under *Unreleased*.
+2. `make release VERSION=X.Y.Z` — moves the changelog section, updates
+   `deploy/server.json`, commits, tags `vX.Y.Z` and pushes.
+3. The release workflow checks the metadata, builds binaries (goreleaser),
+   pushes the multi-arch image to ghcr.io and publishes the MCP Registry entry.
+
+Development builds report `git describe` (e.g. `v0.2.1-4-gabc123-dirty`);
+release binaries report the clean tag.
+
 ## Dependencies
 
 - Apache-2.0-compatible licenses only. No AGPL/GPL/SSPL. Check before adding.

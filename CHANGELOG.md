@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Releases are cut with `make release VERSION=X.Y.Z`; the release workflow
+  verifies changelog/server.json consistency and publishes to the MCP Registry
+  automatically (GitHub OIDC).
+
 ### Added
 
 - `briefd init [DIR]`: scaffolds a knowledge repository with the expected layout

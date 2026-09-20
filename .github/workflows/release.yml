@@ -7,10 +7,19 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write   # MCP Registry login via GitHub OIDC
 
 jobs:
+  check:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-release.sh "${{ github.ref_name }}"
+
   binaries:
     name: Binaries (goreleaser)
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +38,7 @@ jobs:
 
   image:
     name: Container image (ghcr.io)
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,3 +71,20 @@ jobs:
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
             DATE=${{ github.event.head_commit.timestamp }}
+
+  registry:
+    name: MCP Registry
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        run: |
+          curl -sSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s)_$(uname -m | sed 's/x86_64/amd64/').tar.gz" | tar xz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
+      - name: Publish deploy/server.json
+        run: |
+          cp deploy/server.json server.json
+          mcp-publisher validate
+          mcp-publisher login github-oidc
+          mcp-publisher publish

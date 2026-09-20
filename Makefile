@@ -8,7 +8,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-.PHONY: all build test lint fmt tidy eval bench docker clean help
+.PHONY: all build test lint fmt tidy eval bench docker release clean help
 
 all: build test lint ## Build, test and lint
 
@@ -30,6 +30,9 @@ eval: build ## Run the retrieval quality eval on the English and Turkish golden 
 
 bench: build ## Measure knowledge tokens per task: static CLAUDE.md vs compile_bundle
 	./$(BIN_DIR)/$(BINARY) bench --config /dev/null --markdown
+
+release: ## Cut a release: make release VERSION=X.Y.Z (changelog + server.json + tag + push)
+	scripts/release.sh $(VERSION)
 
 docker: ## Build the container image locally
 	docker build -f Dockerfile --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) -t briefd:$(VERSION) -t briefd:local .
