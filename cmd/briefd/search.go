@@ -18,6 +18,7 @@ func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	db := fs.String("db", envOr("DB", defaultDB), "SQLite database path")
 	scopes := fs.String("scopes", "", "comma-separated scopes (default: domain,conventions)")
 	topK := fs.Int("top-k", search.DefaultTopK, "maximum number of results")
+	maxTokens := fs.Int("max-tokens", search.DefaultMaxTokens, "token budget for the returned chunks")
 	asJSON := fs.Bool("json", false, "print results as JSON")
 	full := fs.Bool("full", false, "print full chunk content instead of a preview")
 	fs.Usage = func() {
@@ -40,11 +41,11 @@ func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	}
 	defer st.Close()
 
-	q := search.Query{Text: query, TopK: *topK}
+	q := search.Query{Text: query, TopK: *topK, MaxTokens: *maxTokens}
 	if *scopes != "" {
 		q.Scopes = strings.Split(*scopes, ",")
 	}
-	hits, err := search.New(st).Search(ctx, q)
+	res, err := search.New(st, search.Options{}).Search(ctx, q)
 	if err != nil {
 		return err
 	}
@@ -52,16 +53,13 @@ func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if *asJSON {
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
-		if hits == nil {
-			hits = []store.ChunkHit{}
-		}
-		return enc.Encode(hits)
+		return enc.Encode(res)
 	}
-	if len(hits) == 0 {
+	if len(res.Chunks) == 0 {
 		fmt.Fprintln(stdout, "no results")
 		return nil
 	}
-	for i, h := range hits {
+	for i, h := range res.Chunks {
 		fmt.Fprintf(stdout, "%2d. %-7.3f %s  [%s]\n    %s  (%d tokens, id %s)\n",
 			i+1, h.Score, h.HeadingPath, h.Scope, h.DocPath, h.Tokens, h.ChunkID)
 		if *full {
@@ -71,6 +69,8 @@ func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 		fmt.Fprintln(stdout)
 	}
+	fmt.Fprintf(stdout, "%d chunk(s), %d tokens (budget %d), %d omitted, scopes %s\n",
+		len(res.Chunks), res.TotalTokens, res.Budget, res.Omitted, strings.Join(res.Scopes, ","))
 	return nil
 }
 

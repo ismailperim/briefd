@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `briefd serve`: MCP server (streamable HTTP, official Go SDK) with
+  `search_context`, `get_document` and `list_scopes`; REST endpoints
+  `/api/search`, `/api/docs/{path}`, `/api/scopes`, `/api/health`; single
+  bearer token; periodic re-scan of the source directory; YAML + `BRIEFD_*`
+  configuration.
+- Token budgets: `search_context` and `/api/search` never return more than
+  `max_tokens` (5% headroom over the estimate).
 - `briefd index`: walks a knowledge directory, parses front matter, chunks
   Markdown on H2/H3 headings (200–800 tokens, stable chunk IDs) and stores
   documents + chunks in SQLite with an FTS5 index. Incremental by content hash;

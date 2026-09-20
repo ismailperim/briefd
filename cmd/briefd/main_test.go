@@ -18,7 +18,7 @@ func TestRun(t *testing.T) {
 		{name: "no args prints usage", args: nil, wantCode: 2, wantStderr: "Usage:"},
 		{name: "version", args: []string{"version"}, wantCode: 0, wantStdout: "briefd dev"},
 		{name: "help", args: []string{"help"}, wantCode: 0, wantStdout: "Usage:"},
-		{name: "serve not implemented", args: []string{"serve"}, wantCode: 1, wantStderr: "not implemented"},
+		{name: "eval not implemented", args: []string{"eval"}, wantCode: 1, wantStderr: "not implemented"},
 		{name: "unknown command", args: []string{"bogus"}, wantCode: 2, wantStderr: `unknown command "bogus"`},
 		{name: "index bad flag", args: []string{"index", "--nope"}, wantCode: 2, wantStderr: "flag provided but not defined"},
 		{name: "search without query", args: []string{"search"}, wantCode: 2, wantStderr: "Usage: briefd search"},

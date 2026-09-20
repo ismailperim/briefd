@@ -1,0 +1,26 @@
+# briefd configuration. Copy to briefd.yaml (or pass --config) and adjust.
+# Every key can be overridden with a BRIEFD_* environment variable, and the
+# most common ones with flags: flags > env > this file > defaults.
+
+# Address for MCP (/mcp), REST (/api) and the dashboard (/).
+listen: ":8080"            # BRIEFD_LISTEN
+
+# SQLite database. It is a disposable cache of the knowledge source.
+db: "briefd.db"            # BRIEFD_DB
+
+# Knowledge repository directory (git URL support arrives in M5).
+source: "./knowledge"      # BRIEFD_SOURCE
+
+# Bearer token required on /mcp and /api. Empty disables authentication —
+# only do that on a trusted network.
+api_token: ""              # BRIEFD_API_TOKEN
+
+log_level: info            # BRIEFD_LOG_LEVEL: debug | info | warn | error
+
+sync:
+  interval: 60s            # BRIEFD_SYNC_INTERVAL; 0 = index once at startup
+
+search:
+  default_scopes: [domain, conventions]   # BRIEFD_DEFAULT_SCOPES (comma-separated)
+  default_max_tokens: 2000                # BRIEFD_DEFAULT_MAX_TOKENS
+  max_top_k: 50

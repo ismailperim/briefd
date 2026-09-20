@@ -29,6 +29,7 @@ linters:
     gosec:
       excludes:
         - G104 # unhandled errors: errcheck covers this with a curated exclude list
+        - G304 # file inclusion via variable: briefd reads user-supplied paths by design
     misspell:
       locale: US
     revive:
@@ -39,7 +40,7 @@ linters:
     generated: lax
     rules:
       - path: _test\.go
-        linters: [gosec]
+        linters: [gosec, errcheck]
 
 formatters:
   enable:

@@ -19,19 +19,72 @@ bundles** to coding agents (Claude Code, Cursor, Codex) over
 
 ## Status
 
-Pre-alpha, built milestone by milestone. Today you can index a directory of
-Markdown and search it from the CLI (BM25). The MCP server, hybrid retrieval,
-bundle compilation and git sync are in progress. See [`SPEC.md`](SPEC.md) for
-the full specification.
+Pre-alpha, built milestone by milestone. Today briefd indexes a directory of
+Markdown, serves it to Claude Code (or any MCP client) over streamable HTTP
+with BM25 ranking and a hard token budget, and exposes the same over REST.
+Hybrid (vector + BM25) retrieval, bundle compilation and git sync are in
+progress. See [`SPEC.md`](SPEC.md) for the full specification.
 
-## Try it
+## Quickstart
 
 ```sh
 make build
+./bin/briefd serve --source testdata/knowledge --db /tmp/briefd.db --token dev-token
+```
+
+Then connect Claude Code to it:
+
+```sh
+claude mcp add --transport http briefd http://localhost:8080/mcp \
+  --header "Authorization: Bearer dev-token"
+```
+
+or add it to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "briefd": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer dev-token" }
+    }
+  }
+}
+```
+
+Ask Claude Code something like *"what is our retry policy for acquirer calls?"*
+and it will call `search_context`; check `/mcp` inside Claude Code to see the
+connection status and the three tools:
+
+| Tool | Purpose |
+|---|---|
+| `search_context(query, max_tokens?, scopes?, top_k?)` | ranked sections that fit the budget |
+| `get_document(doc_path, scopes?)` | one document in full |
+| `list_scopes()` | scopes with document/section counts |
+
+Edits to files under `--source` are picked up within `sync.interval`
+(default 60 s). Configuration lives in `briefd.yaml`
+(see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)) or `BRIEFD_*`
+environment variables.
+
+### REST
+
+```sh
+curl -H "Authorization: Bearer dev-token" \
+  "localhost:8080/api/search?q=refund+approval&max_tokens=500&scopes=domain"
+curl -H "Authorization: Bearer dev-token" localhost:8080/api/scopes
+curl -H "Authorization: Bearer dev-token" localhost:8080/api/docs/domain/glossary.md
+curl localhost:8080/api/health
+```
+
+### CLI
+
+```sh
 ./bin/briefd index --source testdata/knowledge --db /tmp/briefd.db
 ./bin/briefd search --db /tmp/briefd.db "retry policy"
 ./bin/briefd search --db /tmp/briefd.db --scopes projects/ledger-service "projection drift"
-./bin/briefd search --db /tmp/briefd.db --json "refund approval threshold"
+./bin/briefd search --db /tmp/briefd.db --json --max-tokens 500 "refund approval threshold"
 ```
 
 `testdata/knowledge/` is a small, fictional payments-domain knowledge repo that

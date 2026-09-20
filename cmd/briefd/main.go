@@ -70,7 +70,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runIndex(ctx, args[1:], stdout, stderr, logger)
 	case "search":
 		err = runSearch(ctx, args[1:], stdout, stderr)
-	case "serve", "eval":
+	case "serve":
+		err = runServe(ctx, args[1:], stdout, stderr)
+	case "eval":
 		fmt.Fprintf(stderr, "briefd: %q is not implemented yet\n", cmd)
 		return 1
 	default:
@@ -97,14 +99,5 @@ func envOr(name, def string) string {
 }
 
 func logLevel(def string) slog.Level {
-	switch envOr("LOG_LEVEL", def) {
-	case "debug":
-		return slog.LevelDebug
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
+	return parseLevel(envOr("LOG_LEVEL", def))
 }
