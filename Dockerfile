@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build context is the repository root:  docker build -f deploy/Dockerfile .
+# Build context is the repository root:  docker build .
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

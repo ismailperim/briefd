@@ -9,7 +9,7 @@ services:
     image: ghcr.io/ismailperim/briefd:latest
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "7788:7788"
     environment:

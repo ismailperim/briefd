@@ -32,7 +32,7 @@ bench: build ## Measure knowledge tokens per task: static CLAUDE.md vs compile_b
 	./$(BIN_DIR)/$(BINARY) bench --config /dev/null --markdown
 
 docker: ## Build the container image locally
-	docker build -f deploy/Dockerfile --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) -t briefd:$(VERSION) -t briefd:local .
+	docker build -f Dockerfile --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) -t briefd:$(VERSION) -t briefd:local .
 
 tidy: ## Tidy go.mod/go.sum and fail if anything changed
 	go mod tidy
