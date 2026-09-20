@@ -53,16 +53,7 @@ a static `CLAUDE.md` cannot.
 
 ## How it works
 
-```
- knowledge repo (git)          briefd (one binary, one SQLite file)              your agents
-┌───────────────────┐   sync   ┌───────────────────────────────────────┐   MCP    ┌─────────────┐
-│ domain/           │ ───────▶ │ chunk → BM25 + local embeddings       │ ◀──────▶ │ Claude Code │
-│ conventions/      │  pull /  │ hybrid retrieval (RRF) → budget packer │  REST    │ Cursor      │
-│ projects/<name>/  │  webhook │ bundle cache · metrics · dashboard     │ ◀──────▶ │ Codex, …    │
-└───────────────────┘          └───────────────────────────────────────┘          └─────────────┘
-        ▲                                                                              │
-        └────────────── propose_update → branch briefd/proposal-<id> → PR ◀────────────┘
-```
+<img src="docs/assets/diagram-pipeline.png" alt="Pipeline: knowledge repo → sync → chunker → SQLite (FTS5 + vectors) → hybrid retrieval → budget packer → MCP/REST → agents" width="100%">
 
 - **Git is the source of truth.** The index is a disposable cache rebuilt from a clone.
 - **Agents never write to the index.** `propose_update` opens a reviewable branch/PR; what
@@ -230,7 +221,8 @@ v0.1 is feature-complete; expect rough edges before 1.0. Planned next:
 - a multilingual embedding option and glossary-alias query expansion
 - multiple knowledge repositories per instance
 
-The full specification is in [`SPEC.md`](SPEC.md); decisions are recorded in [`docs/adr/`](docs/adr/).
+Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a guided tour with diagrams. The full
+specification is in [`SPEC.md`](SPEC.md); decisions are recorded in [`docs/adr/`](docs/adr/).
 
 ## Contributing
 
