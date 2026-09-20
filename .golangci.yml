@@ -20,6 +20,15 @@ linters:
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
+        # Deferred cleanup whose error cannot be acted upon.
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        - (*database/sql.Tx).Rollback
+        - (*github.com/ismailperim/briefd/internal/store.Store).Close
+    gosec:
+      excludes:
+        - G104 # unhandled errors: errcheck covers this with a curated exclude list
     misspell:
       locale: US
     revive:

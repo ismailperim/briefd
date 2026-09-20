@@ -9,5 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `briefd index`: walks a knowledge directory, parses front matter, chunks
+  Markdown on H2/H3 headings (200–800 tokens, stable chunk IDs) and stores
+  documents + chunks in SQLite with an FTS5 index. Incremental by content hash;
+  deleted files are removed from the index.
+- `briefd search`: BM25 search over the index with scope filtering, JSON output,
+  and diacritics-insensitive, stemmed matching.
+- Sample knowledge repository under `testdata/knowledge/`.
 - Project skeleton: Go module, `briefd version` command, Makefile, lint config,
-  CI, and ADR-0001 recording the core architecture.
+  CI, ADR-0001 (core architecture) and ADR-0002 (SQLite driver, vector search).
