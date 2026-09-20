@@ -93,7 +93,8 @@ manual inspection. Read-only; it never mutates state. Same bearer token as the A
 ### 3.3 CLI
 
 `briefd serve` · `briefd index [--source DIR] [--rebuild]` · `briefd search <query>` (CLI
-inspection of the index, same ranking as the API) · `briefd eval` · `briefd version`
+inspection of the index, same ranking as the API) · `briefd model pull` · `briefd eval` ·
+`briefd version`
 
 ## 4. Ingestion & indexing
 
@@ -111,7 +112,10 @@ inspection of the index, same ranking as the API) · `briefd eval` · `briefd ve
 ## 5. Search & bundle compilation
 
 - **Hybrid retrieval:** FTS5 BM25 top-50 + brute-force cosine top-50 (vectors stored in
-  SQLite, scanned in memory; ADR-0002) → **RRF (k=60)**.
+  SQLite, scanned in memory; ADR-0002) → **RRF (k=60)**. The BM25 list is built AND-first
+  (chunks containing every query term lead; any-term matches follow with RRF weight 0.25)
+  and query stop words are dropped (ADR-0004). Modes `bm25`, `vector`, `hybrid` are
+  selectable per request for evaluation.
 - **Budget packer (`compile_bundle`):** greedy fill in fused-rank order → dedupe
   near-identical chunks → order by scope priority (domain > conventions > project) then
   rank → stop before exceeding budget; if the top chunk alone exceeds budget, return its
@@ -137,20 +141,24 @@ sync_state(source, last_commit, last_sync_at, last_error)
 
 ## 7. Embeddings
 
-- Default: bundled ONNX `all-MiniLM-L6-v2` (384-dim), CPU, no network.
-- Adapters (config-selected): `onnx` (default) | `ollama` | `openai-compatible` | `none`
-  (BM25-only mode).
+- Default: `all-MiniLM-L6-v2` (384-dim) executed in-process by a pure-Go encoder
+  (ADR-0003), CPU only. Weights (`model.safetensors` + `vocab.txt`) are fetched once into
+  `embeddings.model_dir` with pinned checksums, or pre-fetched with `briefd model pull`.
+- Adapters (config-selected): `local` (default) | `ollama` | `openai-compatible` | `none`
+  (BM25-only mode; also `embeddings.enabled: false`).
 - Changing the embedding model invalidates `chunk_vectors` (model name stored alongside;
   mismatch triggers re-embed).
 
 ## 8. Evaluation (part of the product, not an afterthought)
 
-- `eval/golden/`: corpus (real ADRs/conventions, anonymized) + `queries.yaml`
-  (30–50 entries: `{query, expected_chunk_ids, type: keyword|paraphrase|typo|mixed-lang}`).
+- Corpus: `testdata/knowledge/` (fictional payments platform, 44 docs). Queries:
+  `eval/golden/queries.yaml` (47 entries: `{id, query, type: keyword|paraphrase|typo|mixed-lang,
+  expected: [{path, heading}]}`), written in task language rather than document wording.
 - `briefd eval` outputs Recall@5, Recall@10, MRR — overall and per query type — and
   compares BM25-only vs hybrid.
-- CI gate: `eval/thresholds.yaml` (initial: Recall@5 ≥ 0.85 hybrid). Chunking/embedding/
-  fusion changes must include before/after eval numbers.
+- CI gate: `eval/thresholds.yaml`. Target: Recall@5 ≥ 0.85 hybrid; the gate is set at the
+  measured baseline (0.80 as of 2026-09-20, see ADR-0004) and raised as retrieval improves.
+  Chunking/embedding/fusion changes must include before/after eval numbers.
 
 ## 9. Non-functional requirements
 
@@ -179,6 +187,6 @@ contradiction detection for proposals · multi-repo knowledge sources ·
 | M1 | ingest + FTS5, CLI search | `briefd index && briefd search "retry policy"` |
 | M2 | MCP server with `search_context` (BM25) | Claude Code queries it live |
 | M2b | Metrics + embedded web dashboard | open `/`, see live request/token counters |
-| M3 | ONNX embeddings + sqlite-vec + RRF | eval shows hybrid > BM25 |
+| M3 | Local embeddings + vector scan + RRF | eval shows hybrid > BM25 |
 | M4 | `compile_bundle` + budget packer + cache | deterministic bundle, budget respected |
 | M5 | git sync loop + `propose_update` + docker/goreleaser | end-to-end team flow |

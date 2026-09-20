@@ -41,3 +41,18 @@ jobs:
       - run: make test
       - name: Verify go.mod is tidy
         run: make tidy
+
+  eval:
+    name: Retrieval eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/briefd/models
+          key: minilm-l6-v2-53aa5117
+      - run: make eval

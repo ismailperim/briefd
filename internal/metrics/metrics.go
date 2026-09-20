@@ -63,6 +63,10 @@ type Registry struct {
 	syncRuns    map[string]int64 // status -> count
 	syncLastOK  time.Time
 	syncLastErr string
+
+	vectors        int
+	vectorsPending int
+	embeddingsOn   bool
 }
 
 type key struct {
@@ -164,6 +168,14 @@ type ScopeCount struct {
 	Tokens    int    `json:"tokens"`
 }
 
+// SetVectors records the size of the vector index and how many chunks
+// still await embedding. Calling it marks embeddings as enabled.
+func (r *Registry) SetVectors(indexed, pending int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.vectors, r.vectorsPending, r.embeddingsOn = indexed, pending, true
+}
+
 // RecordSync records the outcome of one sync/index run.
 func (r *Registry) RecordSync(err error) {
 	r.mu.Lock()
@@ -244,6 +256,10 @@ func (r *Registry) WritePrometheus(w io.Writer) {
 		fmt.Fprintf(w, "briefd_index_tokens{scope=%q} %d\n", sc, r.indexTokens[sc])
 	}
 
+	if r.embeddingsOn {
+		fmt.Fprintf(w, "# HELP briefd_vectors Chunks with an up-to-date embedding.\n# TYPE briefd_vectors gauge\nbriefd_vectors %d\n", r.vectors)
+		fmt.Fprintf(w, "# HELP briefd_vectors_pending Chunks still waiting to be embedded.\n# TYPE briefd_vectors_pending gauge\nbriefd_vectors_pending %d\n", r.vectorsPending)
+	}
 	fmt.Fprint(w, "# HELP briefd_sync_runs_total Source sync runs by outcome.\n# TYPE briefd_sync_runs_total counter\n")
 	for _, st := range []string{"ok", "error"} {
 		fmt.Fprintf(w, "briefd_sync_runs_total{status=%q} %d\n", st, r.syncRuns[st])
@@ -276,6 +292,9 @@ type Totals struct {
 	Documents    int   `json:"documents"`
 	Chunks       int   `json:"chunks"`
 	IndexTokens  int   `json:"index_tokens"`
+	// Vectors is -1 when embeddings are disabled.
+	Vectors        int `json:"vectors"`
+	VectorsPending int `json:"vectors_pending"`
 }
 
 // NameStats summarizes one (surface, name) series.
@@ -344,6 +363,10 @@ func (r *Registry) Snapshot() Snapshot {
 	}
 	sort.Slice(snap.Index, func(i, j int) bool { return snap.Index[i].Scope < snap.Index[j].Scope })
 
+	snap.Totals.Vectors, snap.Totals.VectorsPending = -1, 0
+	if r.embeddingsOn {
+		snap.Totals.Vectors, snap.Totals.VectorsPending = r.vectors, r.vectorsPending
+	}
 	snap.Sync = SyncStats{Runs: r.syncRuns["ok"] + r.syncRuns["error"], Failures: r.syncRuns["error"], LastError: r.syncLastErr}
 	if !r.syncLastOK.IsZero() {
 		t := r.syncLastOK

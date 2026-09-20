@@ -27,9 +27,10 @@ wrong, stop and propose an ADR instead of changing code.
    in SQLite** (in-memory scan in Go, see ADR-0002) fused with **RRF, k=60**. No ANN
    libraries, no vector extensions. BM25-only mode must remain available via config
    (`embeddings.enabled=false`).
-4. **Embeddings: local ONNX by default** (`all-MiniLM-L6-v2`, 384-dim), pluggable
-   adapters: `ollama`, `openai-compatible`. Adapter interface first, implementations
-   behind it.
+4. **Embeddings: local by default** — `all-MiniLM-L6-v2` (384-dim) run by our pure-Go
+   encoder (ADR-0003; weights downloaded once, no ONNX runtime, no CGO), pluggable
+   adapters: `ollama`, `openai-compatible`, `none`. Adapter interface first,
+   implementations behind it.
 5. **Git is the source of truth. The index is a disposable cache.** The service must be
    able to rebuild the entire index from a fresh clone. Never store knowledge that exists
    only in SQLite.
@@ -55,7 +56,7 @@ briefd/
 │   ├── indexer/         # walks a source, diffs against the store, upserts/deletes
 │   ├── store/           # SQLite: schema, migrations, queries (sqlc or hand-written)
 │   ├── search/          # fts5 query, vec query, rrf fusion
-│   ├── embed/           # Embedder interface + onnx/ollama/openai adapters
+│   ├── embed/           # Embedder interface + minilm (pure Go) / ollama / openai adapters
 │   ├── bundle/          # compile_bundle: selection + token packing + cache
 │   ├── mcpserver/       # MCP tools (streamable HTTP)
 │   ├── httpapi/         # REST + health + /metrics + embedded dashboard
@@ -86,9 +87,8 @@ briefd/
   outside `main`.
 - No premature abstraction: interfaces only where a second implementation exists or is
   specced (Embedder is the canonical example).
-- SQLite is accessed through the cgo-free `ncruces/go-sqlite3` driver (ADR-0002). CGO is
-  acceptable only for the ONNX runtime and must be confined to `embed/onnx/`. Everything
-  else stays pure Go.
+- The whole binary is pure Go: SQLite via `ncruces/go-sqlite3` (ADR-0002), embeddings via
+  `internal/embed/minilm` (ADR-0003). Do not introduce CGO without an ADR.
 - All SQL lives in `internal/store`. No SQL strings elsewhere.
 - Config precedence: flags > env (`BRIEFD_*`) > yaml > defaults.
 

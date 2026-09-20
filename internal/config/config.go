@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/ismailperim/briefd/internal/embed"
 )
 
 // Config is the fully resolved configuration.
@@ -28,6 +30,8 @@ type Config struct {
 	Sync     Sync    `yaml:"sync"`
 	Search   Search  `yaml:"search"`
 	Metrics  Metrics `yaml:"metrics"`
+	// Embeddings selects the vector adapter (SPEC §7, ADR-0003).
+	Embeddings embed.Config `yaml:"embeddings"`
 }
 
 // Metrics controls the Prometheus endpoint.
@@ -65,6 +69,7 @@ func Default() Config {
 			DefaultMaxTokens: 2000,
 			MaxTopK:          50,
 		},
+		Embeddings: embed.Default(),
 	}
 }
 
@@ -125,6 +130,25 @@ func (c *Config) applyEnv() error {
 		}
 		c.Search.DefaultMaxTokens = n
 	}
+	str("EMBEDDINGS_PROVIDER", &c.Embeddings.Provider)
+	str("EMBEDDINGS_MODEL", &c.Embeddings.Model)
+	str("EMBEDDINGS_MODEL_DIR", &c.Embeddings.ModelDir)
+	str("EMBEDDINGS_URL", &c.Embeddings.URL)
+	str("EMBEDDINGS_API_KEY", &c.Embeddings.APIKey)
+	if v, ok := os.LookupEnv("BRIEFD_EMBEDDINGS_ENABLED"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("BRIEFD_EMBEDDINGS_ENABLED: %w", err)
+		}
+		c.Embeddings.Enabled = b
+	}
+	if v, ok := os.LookupEnv("BRIEFD_EMBEDDINGS_AUTO_DOWNLOAD"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("BRIEFD_EMBEDDINGS_AUTO_DOWNLOAD: %w", err)
+		}
+		c.Embeddings.AutoDownload = b
+	}
 	return nil
 }
 
@@ -149,6 +173,14 @@ func (c *Config) Validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("config: unknown log_level %q", c.LogLevel)
+	}
+	switch c.Embeddings.Provider {
+	case "", "local", "ollama", "openai", "openai-compatible", "none":
+	default:
+		return fmt.Errorf("config: unknown embeddings.provider %q", c.Embeddings.Provider)
+	}
+	if c.Embeddings.BatchSize < 0 {
+		return errors.New("config: embeddings.batch_size must be >= 0")
 	}
 	return nil
 }

@@ -8,7 +8,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-.PHONY: all build test lint fmt tidy clean help
+.PHONY: all build test lint fmt tidy eval clean help
 
 all: build test lint ## Build, test and lint
 
@@ -23,6 +23,9 @@ lint: ## Run golangci-lint (includes formatter checks)
 
 fmt: ## Format sources with the configured formatters
 	golangci-lint fmt ./...
+
+eval: build ## Run the retrieval quality eval against the golden set (downloads the model once)
+	./$(BIN_DIR)/$(BINARY) eval --config /dev/null
 
 tidy: ## Tidy go.mod/go.sum and fail if anything changed
 	go mod tidy

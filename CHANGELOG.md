@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Hybrid retrieval: local `all-MiniLM-L6-v2` embeddings computed by a pure-Go
+  encoder (no CGO, no ONNX runtime; weights downloaded once or via
+  `briefd model pull`), Ollama and OpenAI-compatible adapters, vectors stored
+  in SQLite and scanned in memory, fused with BM25 by weighted RRF. Chunks are
+  re-embedded only when their content or the model changes.
+- `briefd eval`: Recall@5/10 and MRR for bm25, vector and hybrid against a
+  47-query golden set over the sample corpus (now 44 documents); CI gate via
+  `eval/thresholds.yaml`.
+- `briefd search --mode bm25|vector|hybrid`, `--embeddings` provider override,
+  `embeddings.*` configuration, vector counts on the dashboard and `/metrics`.
 - Dashboard: sparklines for requests/tokens/latency, requests-per-minute,
   budget-pressure ratio, sortable per-tool table, index share bars, click a
   recent request to re-run it, onboarding snippet when idle, theme toggle

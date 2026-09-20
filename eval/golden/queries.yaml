@@ -1,0 +1,264 @@
+# Retrieval quality golden set (SPEC §8).
+#
+# Corpus: testdata/knowledge (fictional payments platform). Each query is
+# written the way a developer or coding agent would ask while working on a
+# task — not by copying the document's wording. `expected` lists the chunks
+# that answer it as {path, heading}; heading matches the end of the chunk's
+# breadcrumb ("Title > H2 > H3"), case-insensitively. All scopes are searched.
+#
+# Types: keyword (terms appear verbatim), paraphrase (meaning only),
+# typo (misspelled terms), mixed-lang (Turkish or mixed Turkish/English).
+#
+# Do not edit expected answers to make a failing eval pass (CLAUDE.md).
+
+queries:
+  # ---------------------------------------------------------------- keyword
+  - id: kw-retry-policy
+    type: keyword
+    query: retry policy exponential backoff attempts
+    expected:
+      - { path: conventions/error-handling-and-retries.md, heading: Retry policy }
+  - id: kw-refund-window
+    type: keyword
+    query: refund window days after capture
+    expected:
+      - { path: domain/rules/refunds.md, heading: Refund window }
+  - id: kw-idempotency-retention
+    type: keyword
+    query: idempotency key retention
+    expected:
+      - { path: domain/rules/idempotency.md, heading: Retention }
+  - id: kw-payout-schedule
+    type: keyword
+    query: payout schedules daily weekly manual
+    expected:
+      - { path: domain/rules/settlement-and-payouts.md, heading: Payout schedules }
+  - id: kw-chargeback-evidence-deadline
+    type: keyword
+    query: chargeback evidence deadline
+    expected:
+      - { path: domain/rules/disputes-and-chargebacks.md, heading: Evidence deadlines }
+  - id: kw-webhook-signature
+    type: keyword
+    query: webhook HMAC signature header
+    expected:
+      - { path: domain/rules/webhooks-policy.md, heading: Signing }
+      - { path: conventions/api-design.md, heading: Webhooks }
+  - id: kw-velocity-limits
+    type: keyword
+    query: card velocity limits per minute
+    expected:
+      - { path: domain/rules/fraud-and-risk-scoring.md, heading: Velocity limits }
+  - id: kw-projection-drift
+    type: keyword
+    query: LedgerProjectionDrift alert
+    expected:
+      - { path: projects/ledger-service/runbook.md, heading: Projection drift alert }
+  - id: kw-kyc-tiers
+    type: keyword
+    query: KYC tiers volume cap
+    expected:
+      - { path: domain/rules/kyc-and-onboarding.md, heading: Tiers }
+  - id: kw-canary-rollout
+    type: keyword
+    query: canary rollout 5% traffic rollback
+    expected:
+      - { path: conventions/infra/kubernetes.md, heading: Rollouts }
+  - id: kw-fx-snapshot
+    type: keyword
+    query: daily FX snapshot 00:00 UTC
+    expected:
+      - { path: domain/decisions/0012-multi-currency.md, heading: Decision }
+  - id: kw-outbox
+    type: keyword
+    query: transactional outbox relay
+    expected:
+      - { path: domain/decisions/0009-transactional-outbox.md, heading: Decision }
+
+  # ------------------------------------------------------------- paraphrase
+  - id: pp-money-back-late
+    type: paraphrase
+    query: a customer wants their money back for a purchase from seven months ago, can we still do it?
+    expected:
+      - { path: domain/rules/refunds.md, heading: Refund window }
+  - id: pp-who-approves-big-refund
+    type: paraphrase
+    query: does someone else have to sign off on a large refund?
+    expected:
+      - { path: domain/rules/refunds.md, heading: Approval thresholds }
+  - id: pp-bank-bounced-payout
+    type: paraphrase
+    query: the merchant's bank sent the transfer back, what do we do with the money
+    expected:
+      - { path: domain/rules/settlement-and-payouts.md, heading: Payout failures }
+  - id: pp-same-request-twice
+    type: paraphrase
+    query: client sends the same create-payment call twice with a different body
+    expected:
+      - { path: domain/rules/idempotency.md, heading: Replay semantics }
+  - id: pp-how-much-we-charge
+    type: paraphrase
+    query: at what moment is our commission deducted from a sale
+    expected:
+      - { path: domain/rules/fees-and-pricing.md, heading: When fees are charged }
+      - { path: domain/rules/settlement-and-payouts.md, heading: Fees }
+  - id: pp-floats-for-money
+    type: paraphrase
+    query: can I use a float64 for an amount in Go
+    expected:
+      - { path: conventions/go-style.md, heading: Money }
+      - { path: domain/rules/currencies-and-rounding.md, heading: Representation }
+  - id: pp-dependency-down
+    type: paraphrase
+    query: an external provider keeps timing out, should we keep hammering it?
+    expected:
+      - { path: conventions/error-handling-and-retries.md, heading: Circuit breaking }
+      - { path: conventions/error-handling-and-retries.md, heading: Classifying failures }
+  - id: pp-remove-column
+    type: paraphrase
+    query: how do I safely get rid of a database column nobody uses anymore
+    expected:
+      - { path: conventions/database-migrations.md, heading: Backward compatibility }
+  - id: pp-suspicious-merchant
+    type: paraphrase
+    query: a merchant has way too many disputes lately, what happens to them
+    expected:
+      - { path: domain/rules/fraud-and-risk-scoring.md, heading: Merchant monitoring }
+  - id: pp-delete-user-data
+    type: paraphrase
+    query: a shopper asks us to delete everything we know about them
+    expected:
+      - { path: domain/rules/data-retention-and-privacy.md, heading: Right to erasure }
+  - id: pp-who-runs-incident
+    type: paraphrase
+    query: production is on fire, who is in charge and what do we do first
+    expected:
+      - { path: conventions/incident-response.md, heading: Roles }
+      - { path: conventions/incident-response.md, heading: First actions }
+  - id: pp-two-payouts-same-day
+    type: paraphrase
+    query: why can't two replicas both create a payout for the same merchant
+    expected:
+      - { path: domain/decisions/0021-payout-scheduler-redesign.md, heading: Decision }
+  - id: pp-store-card-number
+    type: paraphrase
+    query: can my service keep the full card number in its own table
+    expected:
+      - { path: domain/rules/data-retention-and-privacy.md, heading: Cardholder data }
+      - { path: domain/decisions/0018-card-tokenization-vault.md, heading: Decision }
+  - id: pp-hide-unfinished-feature
+    type: paraphrase
+    query: I want to merge half-done work without exposing it to merchants
+    expected:
+      - { path: conventions/feature-flags.md, heading: When to use a flag }
+      - { path: conventions/feature-flags.md, heading: Flag types }
+  - id: pp-when-deploy
+    type: paraphrase
+    query: is it okay to ship the payouts service on a Friday evening
+    expected:
+      - { path: conventions/ci-cd-pipeline.md, heading: Deployment windows }
+  - id: pp-list-endpoint-paging
+    type: paraphrase
+    query: how should a list endpoint page through thousands of transactions
+    expected:
+      - { path: conventions/api-design.md, heading: Pagination }
+  - id: pp-acquirer-failover
+    type: paraphrase
+    query: when do we switch a payment to the backup card processor
+    expected:
+      - { path: projects/payments-service/README.md, heading: Acquirer routing }
+  - id: pp-hold-during-dispute
+    type: paraphrase
+    query: what happens to the merchant's balance while a chargeback is being fought
+    expected:
+      - { path: domain/rules/disputes-and-chargebacks.md, heading: Funds handling }
+  - id: pp-flaky-test
+    type: paraphrase
+    query: a test fails randomly in CI, should I add a retry
+    expected:
+      - { path: conventions/testing-strategy.md, heading: Flaky tests }
+
+  # ------------------------------------------------------------------- typo
+  - id: ty-idempotancy
+    type: typo
+    query: idempotancy key requierd endpoints
+    expected:
+      - { path: domain/rules/idempotency.md, heading: Which requests require an idempotency key }
+  - id: ty-chargback
+    type: typo
+    query: chargback reason codes
+    expected:
+      - { path: domain/rules/disputes-and-chargebacks.md, heading: Reason codes }
+  - id: ty-settelment
+    type: typo
+    query: settelment batch cut time
+    expected:
+      - { path: domain/rules/settlement-and-payouts.md, heading: Settlement cycle }
+  - id: ty-authorisation-expiry
+    type: typo
+    query: authorisation expirey days
+    expected:
+      - { path: domain/glossary.md, heading: Authorization }
+  - id: ty-kubernets-resources
+    type: typo
+    query: kubernets memory limits requets
+    expected:
+      - { path: conventions/infra/kubernetes.md, heading: Resources }
+  - id: ty-reconcilation
+    type: typo
+    query: reconcilation exceptions que
+    expected:
+      - { path: domain/rules/reconciliation.md, heading: Exceptions }
+  - id: ty-loging-pan
+    type: typo
+    query: loging card numbers PAN forbiden
+    expected:
+      - { path: conventions/observability.md, heading: Logging }
+  - id: ty-postmortum
+    type: typo
+    query: postmortum blameless deadline
+    expected:
+      - { path: conventions/incident-response.md, heading: Postmortems }
+
+  # ------------------------------------------------------------- mixed-lang
+  - id: ml-ters-ibraz
+    type: mixed-lang
+    query: ters ibraz nedir
+    expected:
+      - { path: domain/glossary.md, heading: Chargeback }
+  - id: ml-uye-isyeri
+    type: mixed-lang
+    query: üye işyeri tanımı
+    expected:
+      - { path: domain/glossary.md, heading: Merchant }
+  - id: ml-hakedis
+    type: mixed-lang
+    query: hakediş ödemesi ne zaman yapılır
+    expected:
+      - { path: domain/glossary.md, heading: Payout }
+      - { path: domain/rules/settlement-and-payouts.md, heading: Payout schedules }
+  - id: ml-iade-suresi
+    type: mixed-lang
+    query: iade süresi kaç gün
+    expected:
+      - { path: domain/rules/refunds.md, heading: Refund window }
+  - id: ml-retry-turkish
+    type: mixed-lang
+    query: acquirer çağrısı başarısız olursa kaç kez retry yapıyoruz
+    expected:
+      - { path: conventions/error-handling-and-retries.md, heading: Retry policy }
+  - id: ml-webhook-imza
+    type: mixed-lang
+    query: webhook imzası nasıl doğrulanır
+    expected:
+      - { path: domain/rules/webhooks-policy.md, heading: Signing }
+  - id: ml-kyc-belge
+    type: mixed-lang
+    query: KYC belgeleri kaç günde inceleniyor
+    expected:
+      - { path: domain/rules/kyc-and-onboarding.md, heading: Document review }
+  - id: ml-deploy-saati
+    type: mixed-lang
+    query: production deploy hangi saatlerde yapılabilir
+    expected:
+      - { path: conventions/ci-cd-pipeline.md, heading: Deployment windows }

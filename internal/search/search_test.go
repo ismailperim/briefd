@@ -14,18 +14,21 @@ import (
 
 func TestBuildMatch(t *testing.T) {
 	tests := []struct {
-		in, want string
+		in, wantAll, wantAny string
 	}{
-		{"", ""},
-		{"   ", ""},
-		{"retry policy", `"retry" OR "policy"`},
-		{`"quoted" AND (injection) NOT x*`, `"quoted" OR "and" OR "injection" OR "not" OR "x"`},
-		{"Ödeme iadesi", `"ödeme" OR "iadesi"`},
-		{"payment-service v2", `"payment" OR "service" OR "v2"`},
+		{"", "", ""},
+		{"   ", "", ""},
+		{"retry policy", `"retry" "policy"`, `"retry" OR "policy"`},
+		{`"quoted" AND (injection) NOT x*`, `"quoted" "injection" "x"`, `"quoted" OR "injection" OR "x"`},
+		{"Ödeme iadesi", `"ödeme" "iadesi"`, `"ödeme" OR "iadesi"`},
+		{"payment-service v2", `"payment" "service" "v2"`, `"payment" OR "service" OR "v2"`},
+		{"what is the refund window", `"refund" "window"`, `"refund" OR "window"`},
+		{"the who", `"the" "who"`, `"the" OR "who"`},
 	}
 	for _, tt := range tests {
-		if got := BuildMatch(tt.in); got != tt.want {
-			t.Errorf("BuildMatch(%q) = %q, want %q", tt.in, got, tt.want)
+		all, anyTerm := BuildMatch(tt.in)
+		if all != tt.wantAll || anyTerm != tt.wantAny {
+			t.Errorf("BuildMatch(%q) = (%q, %q), want (%q, %q)", tt.in, all, anyTerm, tt.wantAll, tt.wantAny)
 		}
 	}
 }

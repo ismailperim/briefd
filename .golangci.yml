@@ -26,10 +26,15 @@ linters:
         - (*database/sql.Stmt).Close
         - (*database/sql.Tx).Rollback
         - (*github.com/ismailperim/briefd/internal/store.Store).Close
+        - (io.ReadCloser).Close
+        - (*os.File).Close
+        - os.Remove
     gosec:
       excludes:
         - G104 # unhandled errors: errcheck covers this with a curated exclude list
         - G304 # file inclusion via variable: briefd reads user-supplied paths by design
+        - G703 # path traversal taint: same as G304, paths come from config/flags by design
+        - G115 # int -> uint conversions of lengths/counts cannot overflow here
     misspell:
       locale: US
     revive:

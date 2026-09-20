@@ -6,23 +6,26 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"github.com/ismailperim/briefd/internal/search"
 	"github.com/ismailperim/briefd/internal/store"
 )
 
-func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer, logger *slog.Logger) error {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	db := fs.String("db", envOr("DB", defaultDB), "SQLite database path")
+	var common commonFlags
+	common.register(fs)
 	scopes := fs.String("scopes", "", "comma-separated scopes (default: domain,conventions)")
 	topK := fs.Int("top-k", search.DefaultTopK, "maximum number of results")
 	maxTokens := fs.Int("max-tokens", search.DefaultMaxTokens, "token budget for the returned chunks")
+	mode := fs.String("mode", "", "retrieval mode: bm25 | vector | hybrid (default: hybrid when embeddings are enabled)")
 	asJSON := fs.Bool("json", false, "print results as JSON")
 	full := fs.Bool("full", false, "print full chunk content instead of a preview")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, "Usage: briefd search [flags] <query>\n\nRun a BM25 search against the index.\n\n")
+		fmt.Fprint(stderr, "Usage: briefd search [flags] <query>\n\nQuery the index the same way search_context does.\n\n")
 		fs.PrintDefaults()
 	}
 	positional, err := parseInterleaved(fs, args)
@@ -34,18 +37,42 @@ func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		return errUsage
 	}
 	query := strings.Join(positional, " ")
+	cfg, err := common.load()
+	if err != nil {
+		return err
+	}
+	if *mode == search.ModeBM25 {
+		cfg.Embeddings.Enabled = false
+	}
 
-	st, err := store.Open(*db)
+	st, err := store.Open(cfg.DB)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
 
-	q := search.Query{Text: query, TopK: *topK, MaxTokens: *maxTokens}
+	searcher := search.New(st, search.Options{
+		DefaultScopes: cfg.Search.DefaultScopes, DefaultMaxTokens: cfg.Search.DefaultMaxTokens, MaxTopK: cfg.Search.MaxTopK,
+	})
+	embedder, err := openEmbedder(ctx, cfg, logger, stderr)
+	if err != nil {
+		return err
+	}
+	if embedder != nil {
+		searcher.WithEmbedder(embedder)
+		if err := searcher.Reload(ctx); err != nil {
+			return err
+		}
+		if searcher.Vectors().Len() == 0 {
+			fmt.Fprintln(stderr, "note: no vectors in the index yet; run `briefd index` with embeddings enabled")
+		}
+	}
+
+	q := search.Query{Text: query, TopK: *topK, MaxTokens: *maxTokens, Mode: *mode}
 	if *scopes != "" {
 		q.Scopes = strings.Split(*scopes, ",")
 	}
-	res, err := search.New(st, search.Options{}).Search(ctx, q)
+	res, err := searcher.Search(ctx, q)
 	if err != nil {
 		return err
 	}
@@ -69,8 +96,8 @@ func runSearch(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 		fmt.Fprintln(stdout)
 	}
-	fmt.Fprintf(stdout, "%d chunk(s), %d tokens (budget %d), %d omitted, scopes %s\n",
-		len(res.Chunks), res.TotalTokens, res.Budget, res.Omitted, strings.Join(res.Scopes, ","))
+	fmt.Fprintf(stdout, "%d chunk(s), %d tokens (budget %d), %d omitted, mode %s, scopes %s\n",
+		len(res.Chunks), res.TotalTokens, res.Budget, res.Omitted, res.Mode, strings.Join(res.Scopes, ","))
 	return nil
 }
 

@@ -1,0 +1,14 @@
+# CI gate for `briefd eval` (SPEC §8). The eval fails when a metric for the
+# named mode drops below its threshold. Raise these as retrieval improves;
+# never lower them to make a change pass without an ADR-level discussion.
+#
+# Baseline on 2026-09-20 (47 queries, 44 docs / 221 chunks, local MiniLM):
+#   bm25   R@5 0.681  R@10 0.755  MRR 0.591
+#   vector R@5 0.809  R@10 0.904  MRR 0.700
+#   hybrid R@5 0.809  R@10 0.936  MRR 0.709
+# SPEC's initial target of hybrid R@5 >= 0.85 is not met yet; the gap is in
+# paraphrase and Turkish queries (see ADR-0004 for follow-ups).
+hybrid:
+  recall_at_5: 0.80
+  recall_at_10: 0.90
+  mrr: 0.70

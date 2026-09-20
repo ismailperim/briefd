@@ -21,9 +21,9 @@ bundles** to coding agents (Claude Code, Cursor, Codex) over
 
 Pre-alpha, built milestone by milestone. Today briefd indexes a directory of
 Markdown, serves it to Claude Code (or any MCP client) over streamable HTTP
-with BM25 ranking and a hard token budget, and exposes the same over REST.
-Hybrid (vector + BM25) retrieval, bundle compilation and git sync are in
-progress. See [`SPEC.md`](SPEC.md) for the full specification.
+with hybrid retrieval (BM25 + local embeddings, fused with RRF) and a hard
+token budget, and exposes the same over REST. Bundle compilation and git sync
+are in progress. See [`SPEC.md`](SPEC.md) for the full specification.
 
 ## Quickstart
 
@@ -63,6 +63,14 @@ connection status and the three tools:
 | `get_document(doc_path, scopes?)` | one document in full |
 | `list_scopes()` | scopes with document/section counts |
 
+On first start briefd downloads the embedding model (`all-MiniLM-L6-v2`,
+~87 MB) into your user cache and embeds the corpus in the background — BM25
+answers immediately, hybrid ranking kicks in as vectors land. Run
+`briefd model pull` to pre-fetch the model, point `embeddings.model_dir` at a
+directory containing `model.safetensors` + `vocab.txt` for offline installs,
+or use `--embeddings none` for BM25-only. Ollama and OpenAI-compatible
+services are supported as alternative embedding providers.
+
 Edits to files under `--source` are picked up within `sync.interval`
 (default 60 s). Configuration lives in `briefd.yaml`
 (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml)) or `BRIEFD_*`
@@ -98,7 +106,15 @@ curl localhost:7788/api/health
 ./bin/briefd search --db /tmp/briefd.db "retry policy"
 ./bin/briefd search --db /tmp/briefd.db --scopes projects/ledger-service "projection drift"
 ./bin/briefd search --db /tmp/briefd.db --json --max-tokens 500 "refund approval threshold"
+./bin/briefd search --db /tmp/briefd.db --mode bm25 "money back after seven months"   # compare retrievers
 ```
+
+### Retrieval quality
+
+`make eval` indexes `testdata/knowledge/` and scores the golden queries in
+`eval/golden/queries.yaml` (Recall@5, Recall@10, MRR per retrieval mode and
+query type). CI fails if hybrid drops below `eval/thresholds.yaml`. Any change
+to chunking, embeddings or fusion must report before/after numbers.
 
 `testdata/knowledge/` is a small, fictional payments-domain knowledge repo that
 follows the expected layout:

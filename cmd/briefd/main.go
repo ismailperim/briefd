@@ -32,6 +32,7 @@ Commands:
   serve     Start the MCP + REST server
   index     Build or update the knowledge index from a directory
   search    Query the index from the command line
+  model     Manage the local embedding model (model pull)
   eval      Run the retrieval quality evaluation
   version   Print version information
 
@@ -54,8 +55,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	// One-shot commands print their own summary, so logs default to warn;
-	// the long-running server defaults to info.
-	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: logLevel("warn")}))
+	// the long-running server defaults to info. Model downloads and
+	// embedding progress are always worth showing.
+	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: logLevel("info")}))
 
 	var err error
 	switch cmd := args[0]; cmd {
@@ -69,12 +71,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "index":
 		err = runIndex(ctx, args[1:], stdout, stderr, logger)
 	case "search":
-		err = runSearch(ctx, args[1:], stdout, stderr)
+		err = runSearch(ctx, args[1:], stdout, stderr, logger)
+	case "model":
+		err = runModel(ctx, args[1:], stdout, stderr, logger)
 	case "serve":
 		err = runServe(ctx, args[1:], stdout, stderr)
 	case "eval":
-		fmt.Fprintf(stderr, "briefd: %q is not implemented yet\n", cmd)
-		return 1
+		err = runEval(ctx, args[1:], stdout, stderr, logger)
 	default:
 		fmt.Fprintf(stderr, "briefd: unknown command %q\n\n%s", cmd, usageText)
 		return 2

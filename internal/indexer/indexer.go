@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/ingest"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -23,6 +24,14 @@ type Options struct {
 	Force bool
 	// Logger receives per-file progress; nil disables logging.
 	Logger *slog.Logger
+	// Embedder, when set, computes vectors for chunks that lack an
+	// up-to-date one after the documents are stored.
+	Embedder embed.Embedder
+	// BatchSize is how many chunks are embedded per call (default 16).
+	BatchSize int
+	// OnProgress, if set, is called after every embedded batch with the
+	// number of vectors written so far and the number still pending.
+	OnProgress func(done, pending int)
 }
 
 // Stats summarizes an indexing run.
@@ -32,6 +41,7 @@ type Stats struct {
 	Skipped  int           `json:"skipped"`
 	Deleted  int           `json:"deleted"`
 	Chunks   int           `json:"chunks"`
+	Embedded int           `json:"embedded"`
 	Duration time.Duration `json:"duration"`
 }
 
@@ -95,6 +105,14 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		log.Debug("deleted", "path", p)
 	}
 
+	if opts.Embedder != nil {
+		n, err := embedPending(ctx, st, opts, log)
+		stats.Embedded = n
+		if err != nil {
+			return stats, err
+		}
+	}
+
 	stats.Duration = time.Since(start)
 	err = st.SetSyncState(ctx, store.SyncState{
 		Source:     opts.Root,
@@ -105,6 +123,60 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		return stats, fmt.Errorf("recording sync state: %w", err)
 	}
 	log.Debug("index complete", "scanned", stats.Scanned, "indexed", stats.Indexed,
-		"skipped", stats.Skipped, "deleted", stats.Deleted, "duration", stats.Duration)
+		"skipped", stats.Skipped, "deleted", stats.Deleted, "embedded", stats.Embedded, "duration", stats.Duration)
 	return stats, nil
+}
+
+// embedPending computes vectors for every chunk that has none (or a stale
+// one) for the configured model, in batches, and prunes orphaned vectors.
+func embedPending(ctx context.Context, st *store.Store, opts Options, log *slog.Logger) (int, error) {
+	batch := opts.BatchSize
+	if batch <= 0 {
+		batch = 16
+	}
+	model := opts.Embedder.Name()
+	if _, err := st.PruneVectors(ctx); err != nil {
+		return 0, err
+	}
+	pending, err := st.CountPendingVectors(ctx, model)
+	if err != nil {
+		return 0, err
+	}
+	if pending == 0 {
+		return 0, nil
+	}
+	log.Info("embedding chunks", "pending", pending, "model", model)
+	done := 0
+	started := time.Now()
+	for {
+		if err := ctx.Err(); err != nil {
+			return done, err
+		}
+		chunks, err := st.PendingVectors(ctx, model, batch)
+		if err != nil {
+			return done, err
+		}
+		if len(chunks) == 0 {
+			break
+		}
+		texts := make([]string, len(chunks))
+		for i, c := range chunks {
+			texts[i] = c.Text
+		}
+		vecs, err := opts.Embedder.Embed(ctx, texts)
+		if err != nil {
+			return done, fmt.Errorf("embedding batch: %w", err)
+		}
+		if err := st.PutVectors(ctx, model, chunks, vecs); err != nil {
+			return done, err
+		}
+		done += len(chunks)
+		if opts.OnProgress != nil {
+			opts.OnProgress(done, pending-done)
+		}
+		if done%(batch*8) == 0 || done == pending {
+			log.Info("embedding progress", "done", done, "pending", pending-done, "elapsed", time.Since(started).Round(time.Second))
+		}
+	}
+	return done, nil
 }

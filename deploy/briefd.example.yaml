@@ -27,3 +27,16 @@ search:
 
 metrics:
   require_auth: false      # true = GET /metrics also needs the bearer token
+
+embeddings:
+  enabled: true            # BRIEFD_EMBEDDINGS_ENABLED; false = BM25-only search
+  provider: local          # BRIEFD_EMBEDDINGS_PROVIDER: local | ollama | openai | none
+  # local: all-MiniLM-L6-v2 run in-process (pure Go). Weights are downloaded
+  # once into model_dir (~87 MB) or pre-fetched with `briefd model pull`.
+  model_dir: ""            # BRIEFD_EMBEDDINGS_MODEL_DIR; default: <user cache>/briefd/models/all-MiniLM-L6-v2
+  auto_download: true      # BRIEFD_EMBEDDINGS_AUTO_DOWNLOAD
+  # ollama / openai: remote embedding services.
+  model: ""                # BRIEFD_EMBEDDINGS_MODEL, e.g. nomic-embed-text or text-embedding-3-small
+  url: ""                  # BRIEFD_EMBEDDINGS_URL, e.g. http://localhost:11434 or https://api.openai.com/v1
+  api_key: ""              # BRIEFD_EMBEDDINGS_API_KEY (openai only)
+  batch_size: 16           # chunks per embedding call while indexing

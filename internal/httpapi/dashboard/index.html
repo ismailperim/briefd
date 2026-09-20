@@ -401,7 +401,8 @@
     spark($('s-p95'), hist.map((h) => h.p95));
 
     $('t-docs').innerHTML = `${num(t.documents)}<small>docs</small>`;
-    $('t-docs-sub').textContent = `${num(t.chunks)} sections · ≈${num(t.index_tokens)} tokens`;
+    const vec = t.vectors < 0 ? 'BM25 only' : t.vectors_pending ? `embedding ${num(t.vectors)}/${num(t.vectors + t.vectors_pending)}` : `${num(t.vectors)} vectors · hybrid`;
+    $('t-docs-sub').textContent = `${num(t.chunks)} sections · ${vec}`;
 
     const sync = s.sync, x = s.extra || {};
     if (sync.last_error) {

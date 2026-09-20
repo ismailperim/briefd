@@ -9,9 +9,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
-	"github.com/ismailperim/briefd/internal/config"
+	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/mcpserver"
@@ -23,9 +24,9 @@ import (
 func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	cfgFile := fs.String("config", envOr("CONFIG", ""), "config file (default briefd.yaml if present)")
+	var common commonFlags
+	common.register(fs)
 	listen := fs.String("listen", "", "listen address (default :7788)")
-	db := fs.String("db", "", "SQLite database path (default briefd.db)")
 	source := fs.String("source", "", "knowledge directory to index and watch")
 	token := fs.String("token", "", "bearer token for /mcp and /api (default: none, authentication disabled)")
 	syncInterval := fs.Duration("sync-interval", -1, "how often to re-scan the source; 0 disables (default 60s)")
@@ -37,16 +38,13 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return errUsage
 	}
 
-	cfg, err := config.Load(*cfgFile)
+	cfg, err := common.load()
 	if err != nil {
 		return err
 	}
 	// Flags override everything else.
 	if *listen != "" {
 		cfg.Listen = *listen
-	}
-	if *db != "" {
-		cfg.DB = *db
 	}
 	if *source != "" {
 		cfg.Source = *source
@@ -69,23 +67,38 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	defer st.Close()
 	reg := metrics.New(version)
 
-	if cfg.Source != "" {
-		if err := reindex(ctx, st, cfg.Source, reg, logger); err != nil {
-			return fmt.Errorf("initial index: %w", err)
-		}
-	} else {
-		logger.Warn("no source configured; serving the existing index only")
-		refreshIndexGauges(ctx, st, reg)
-	}
-	if cfg.APIToken == "" {
-		logger.Warn("BRIEFD_API_TOKEN is not set; /mcp and /api are unauthenticated")
-	}
-
 	searcher := search.New(st, search.Options{
 		DefaultScopes:    cfg.Search.DefaultScopes,
 		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
 		MaxTopK:          cfg.Search.MaxTopK,
 	})
+	embedder, err := openEmbedder(ctx, cfg, logger, stderr)
+	if err != nil {
+		return err
+	}
+	if embedder != nil {
+		searcher.WithEmbedder(embedder)
+		if err := searcher.Reload(ctx); err != nil {
+			return err
+		}
+	} else {
+		logger.Warn("embeddings disabled; search is BM25-only")
+	}
+	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize}
+
+	if cfg.Source != "" {
+		// Documents are indexed before we listen so BM25 works immediately;
+		// embeddings can take minutes and run in the background.
+		if err := syncer.run(ctx, cfg.Source, false); err != nil {
+			return fmt.Errorf("initial index: %w", err)
+		}
+	} else {
+		logger.Warn("no source configured; serving the existing index only")
+		syncer.refreshGauges(ctx)
+	}
+	if cfg.APIToken == "" {
+		logger.Warn("BRIEFD_API_TOKEN is not set; /mcp and /api are unauthenticated")
+	}
 	// The MCP SDK logs every session at info level, which in stateless mode
 	// means every request; only surface that when debugging.
 	var mcpLogger *slog.Logger
@@ -120,8 +133,15 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 
-	if cfg.Source != "" && cfg.Sync.Interval > 0 {
-		go syncLoop(ctx, st, cfg.Source, cfg.Sync.Interval, reg, logger)
+	if cfg.Source != "" {
+		go func() {
+			if err := syncer.run(ctx, cfg.Source, true); err != nil && ctx.Err() == nil {
+				logger.Error("background embedding failed", "err", err)
+			}
+		}()
+		if cfg.Sync.Interval > 0 {
+			go syncer.loop(ctx, cfg.Source, cfg.Sync.Interval)
+		}
 	}
 
 	select {
@@ -138,35 +158,73 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 }
 
-// reindex runs the indexer once and reports the outcome to metrics.
-func reindex(ctx context.Context, st *store.Store, root string, reg *metrics.Registry, logger *slog.Logger) error {
-	stats, err := indexer.Run(ctx, st, indexer.Options{Root: root, Logger: logger})
-	reg.RecordSync(err)
+// syncer runs the indexer (documents, then embeddings) and keeps metrics
+// and the in-memory vector index current. Runs are serialized.
+type syncer struct {
+	st       *store.Store
+	reg      *metrics.Registry
+	logger   *slog.Logger
+	searcher *search.Searcher
+	embedder embed.Embedder
+	batch    int
+	mu       sync.Mutex
+}
+
+// run indexes root. With embeddings=true it also computes missing vectors,
+// reloading the vector index as batches land.
+func (s *syncer) run(ctx context.Context, root string, embeddings bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	opts := indexer.Options{Root: root, Logger: s.logger}
+	if embeddings && s.embedder != nil {
+		opts.Embedder = s.embedder
+		opts.BatchSize = s.batch
+		opts.OnProgress = func(done, pending int) {
+			s.reg.SetVectors(s.searcher.Vectors().Len()+done, pending)
+			if pending == 0 || done%128 == 0 {
+				if err := s.searcher.Reload(ctx); err == nil {
+					s.reg.SetVectors(s.searcher.Vectors().Len(), pending)
+				}
+			}
+		}
+	}
+	stats, err := indexer.Run(ctx, s.st, opts)
+	s.reg.RecordSync(err)
 	if err != nil {
 		return err
 	}
-	if stats.Indexed > 0 || stats.Deleted > 0 {
-		logger.Info("index updated", "indexed", stats.Indexed, "deleted", stats.Deleted, "skipped", stats.Skipped)
+	if stats.Indexed > 0 || stats.Deleted > 0 || stats.Embedded > 0 {
+		s.logger.Info("index updated", "indexed", stats.Indexed, "deleted", stats.Deleted,
+			"skipped", stats.Skipped, "embedded", stats.Embedded)
 	}
-	refreshIndexGauges(ctx, st, reg)
+	if stats.Embedded > 0 || stats.Deleted > 0 {
+		if err := s.searcher.Reload(ctx); err != nil {
+			return err
+		}
+	}
+	s.refreshGauges(ctx)
 	return nil
 }
 
-func refreshIndexGauges(ctx context.Context, st *store.Store, reg *metrics.Registry) {
-	scopes, err := st.ListScopes(ctx)
+func (s *syncer) refreshGauges(ctx context.Context) {
+	scopes, err := s.st.ListScopes(ctx)
 	if err != nil {
 		return
 	}
 	counts := make([]metrics.ScopeCount, len(scopes))
-	for i, s := range scopes {
-		counts[i] = metrics.ScopeCount{Scope: s.Scope, Documents: s.Documents, Chunks: s.Chunks, Tokens: s.Tokens}
+	for i, sc := range scopes {
+		counts[i] = metrics.ScopeCount{Scope: sc.Scope, Documents: sc.Documents, Chunks: sc.Chunks, Tokens: sc.Tokens}
 	}
-	reg.SetIndex(counts)
+	s.reg.SetIndex(counts)
+	if s.embedder != nil {
+		pending, _ := s.st.CountPendingVectors(ctx, s.embedder.Name())
+		s.reg.SetVectors(s.searcher.Vectors().Len(), pending)
+	}
 }
 
-// syncLoop re-scans a local source directory on a fixed interval. It is
+// loop re-scans a local source directory on a fixed interval. It is
 // replaced by git polling in M5.
-func syncLoop(ctx context.Context, st *store.Store, root string, every time.Duration, reg *metrics.Registry, logger *slog.Logger) {
+func (s *syncer) loop(ctx context.Context, root string, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -174,8 +232,8 @@ func syncLoop(ctx context.Context, st *store.Store, root string, every time.Dura
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if err := reindex(ctx, st, root, reg, logger); err != nil && ctx.Err() == nil {
-				logger.Error("sync failed", "err", err)
+			if err := s.run(ctx, root, true); err != nil && ctx.Err() == nil {
+				s.logger.Error("sync failed", "err", err)
 			}
 		}
 	}

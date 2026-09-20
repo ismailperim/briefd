@@ -22,3 +22,5 @@ Template:
 |---|---|---|
 | [0001](0001-core-architecture.md) | Core architecture | accepted (amended by 0002) |
 | [0002](0002-sqlite-driver-and-vector-search.md) | SQLite driver and vector search strategy | accepted |
+| [0003](0003-embeddings-pure-go-minilm.md) | Default embeddings: all-MiniLM-L6-v2 in pure Go | accepted |
+| [0004](0004-hybrid-fusion-tuning.md) | Hybrid fusion: AND-first BM25 and weighted RRF | accepted |
