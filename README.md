@@ -117,7 +117,8 @@ same bearer token.
 
 ## Your knowledge repo
 
-briefd expects a git repository (or directory) of Markdown with three kinds of folders:
+briefd expects a git repository (or directory) of Markdown with three kinds of folders
+(`briefd init <dir>` scaffolds it with example documents):
 
 ```
 knowledge-repo/
@@ -171,6 +172,10 @@ The image is distroless and pure Go (~34 MB, linux/amd64 + arm64). Database, che
 live in the `briefd-data` volume. Mount a directory and set `BRIEFD_SOURCE=/knowledge` to serve
 local files instead.
 
+**On your own machine** (private knowledge, company network): see
+[`deploy/local/`](deploy/local/) for a localhost-only config, a launchd service, and the
+`.mcp.json` / `CLAUDE.md` templates for your projects.
+
 **Configuration** — `briefd.yaml` (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml))
 or `BRIEFD_*` environment variables; flags override both. The ones you will actually touch:
 
@@ -217,6 +222,7 @@ Every change to chunking, embeddings or fusion ships with before/after numbers
 ## CLI
 
 ```sh
+briefd init       # scaffold a knowledge repo (domain/, conventions/, projects/)
 briefd serve      # MCP + REST + dashboard
 briefd index      # index a directory into the database (--rebuild to start over)
 briefd search     # query like search_context does (--mode bm25|vector|hybrid, --json)

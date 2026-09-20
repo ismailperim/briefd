@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `briefd init [DIR]`: scaffolds a knowledge repository with the expected layout
+  and example documents.
+- `deploy/local/`: localhost-only config, macOS launchd service, `.mcp.json` and
+  `CLAUDE.md` templates for private, on-machine use.
+
 ## [0.2.1] — 2026-09-20
 
 ### Changed

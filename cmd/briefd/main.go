@@ -29,6 +29,7 @@ Usage:
   briefd <command> [flags]
 
 Commands:
+  init      Create a starter knowledge repository layout
   serve     Start the MCP + REST server
   index     Build or update the knowledge index from a directory
   search    Query the index from the command line
@@ -69,6 +70,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usageText)
 		return 0
+	case "init":
+		err = runInit(args[1:], stdout, stderr)
 	case "index":
 		err = runIndex(ctx, args[1:], stdout, stderr, logger)
 	case "search":
