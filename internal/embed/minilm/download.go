@@ -14,34 +14,22 @@ import (
 	"time"
 )
 
-// Files that make up the model, with pinned digests of the upstream
-// revision so a tampered or truncated download is rejected.
-var files = []struct {
-	name, sha256 string
-}{
-	{"model.safetensors", "53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db"},
-	{"vocab.txt", "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"},
-}
-
-// DefaultBaseURL is where the weights are fetched from.
-const DefaultBaseURL = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/"
-
-// Present reports whether dir already holds every model file.
-func Present(dir string) bool {
-	for _, f := range files {
-		if _, err := os.Stat(filepath.Join(dir, f.name)); err != nil {
+// Present reports whether dir already holds every file of spec.
+func Present(spec Spec, dir string) bool {
+	for _, f := range spec.Files {
+		if _, err := os.Stat(filepath.Join(dir, f.Name)); err != nil {
 			return false
 		}
 	}
 	return true
 }
 
-// Pull downloads any missing model file into dir, verifying digests. It is
-// idempotent: files already present are left alone (their digest is not
+// Pull downloads any missing file of spec into dir, verifying digests. It
+// is idempotent: files already present are left alone (their digest is not
 // re-checked so an offline install with locally provided files works).
-func Pull(ctx context.Context, dir, baseURL string, logger *slog.Logger) error {
+func Pull(ctx context.Context, spec Spec, dir, baseURL string, logger *slog.Logger) error {
 	if baseURL == "" {
-		baseURL = DefaultBaseURL
+		baseURL = spec.BaseURL
 	}
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
@@ -49,15 +37,15 @@ func Pull(ctx context.Context, dir, baseURL string, logger *slog.Logger) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("creating model dir %s: %w", dir, err)
 	}
-	client := &http.Client{Timeout: 15 * time.Minute}
-	for _, f := range files {
-		dst := filepath.Join(dir, f.name)
+	client := &http.Client{Timeout: 30 * time.Minute}
+	for _, f := range spec.Files {
+		dst := filepath.Join(dir, f.Name)
 		if _, err := os.Stat(dst); err == nil {
 			continue
 		}
-		logger.Info("downloading embedding model file", "file", f.name, "from", baseURL)
-		if err := download(ctx, client, baseURL+f.name, dst, f.sha256); err != nil {
-			return fmt.Errorf("downloading %s: %w", f.name, err)
+		logger.Info("downloading embedding model file", "model", spec.Name, "file", f.Name, "from", baseURL)
+		if err := download(ctx, client, baseURL+f.Name, dst, f.SHA256); err != nil {
+			return fmt.Errorf("downloading %s: %w", f.Name, err)
 		}
 	}
 	return nil
@@ -99,15 +87,15 @@ func download(ctx context.Context, client *http.Client, url, dst, wantSHA string
 // downloading is disabled.
 var ErrNotPresent = errors.New("model files not present")
 
-// LoadOrPull loads the model from dir, downloading it first when allowed.
-func LoadOrPull(ctx context.Context, dir string, autoDownload bool, baseURL string, logger *slog.Logger) (*Model, error) {
-	if !Present(dir) {
+// LoadOrPull loads spec from dir, downloading it first when allowed.
+func LoadOrPull(ctx context.Context, spec Spec, dir string, autoDownload bool, baseURL string, logger *slog.Logger) (*Model, error) {
+	if !Present(spec, dir) {
 		if !autoDownload {
 			return nil, fmt.Errorf("%w in %s (run `briefd model pull` or enable embeddings.auto_download)", ErrNotPresent, dir)
 		}
-		if err := Pull(ctx, dir, baseURL, logger); err != nil {
+		if err := Pull(ctx, spec, dir, baseURL, logger); err != nil {
 			return nil, err
 		}
 	}
-	return Load(dir)
+	return Load(spec, dir)
 }

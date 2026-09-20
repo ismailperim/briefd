@@ -32,7 +32,7 @@ Commands:
   serve     Start the MCP + REST server
   index     Build or update the knowledge index from a directory
   search    Query the index from the command line
-  model     Manage the local embedding model (model pull)
+  model     Manage local embedding models (model list | model pull)
   eval      Run the retrieval quality evaluation
   bench     Measure knowledge tokens per task: static CLAUDE.md vs compile_bundle
   version   Print version information

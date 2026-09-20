@@ -1,0 +1,11 @@
+# CI gate for `briefd eval` on the Turkish corpus (testdata/knowledge-tr,
+# eval/golden/queries-tr.yaml, 30 queries). Baseline 2026-09-20 with the
+# default multilingual-e5-small model:
+#   bm25   R@5 0.733  R@10 0.767  MRR 0.602
+#   vector R@5 0.950  R@10 1.000  MRR 0.832
+#   hybrid R@5 0.933  R@10 1.000  MRR 0.847
+# (all-MiniLM-L6-v2 for comparison: hybrid 0.850 / 0.850 / 0.669)
+hybrid:
+  recall_at_5: 0.90
+  recall_at_10: 0.95
+  mrr: 0.80

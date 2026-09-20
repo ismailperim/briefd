@@ -14,15 +14,19 @@ import (
 	"github.com/ismailperim/briefd/internal/embed/remote"
 )
 
-// Embedder turns texts into L2-normalised float32 vectors.
+// Embedder turns texts into L2-normalized float32 vectors.
 type Embedder interface {
 	// Name identifies the model; it is stored with every vector so a model
 	// change invalidates them (SPEC §7). Example: "local/all-MiniLM-L6-v2".
 	Name() string
 	// Dim is the vector length.
 	Dim() int
-	// Embed encodes texts in order. Implementations may batch internally.
+	// Embed encodes documents (passages) in order. Implementations may
+	// batch internally.
 	Embed(ctx context.Context, texts []string) ([][]float32, error)
+	// EmbedQuery encodes a search query. Asymmetric models (E5) apply a
+	// different prefix than for passages; others behave like Embed.
+	EmbedQuery(ctx context.Context, text string) ([]float32, error)
 }
 
 // Config selects and configures the adapter.
@@ -31,9 +35,11 @@ type Config struct {
 	Enabled bool `yaml:"enabled"`
 	// Provider is local | ollama | openai | none.
 	Provider string `yaml:"provider"`
-	// Model is the remote model name (ollama/openai). Ignored by local.
+	// Model names the model: for local, all-MiniLM-L6-v2 (English, default)
+	// or multilingual-e5-small (100+ languages); for ollama/openai the
+	// remote model name.
 	Model string `yaml:"model"`
-	// ModelDir holds the local model files. Default: <user cache>/briefd/models/all-MiniLM-L6-v2.
+	// ModelDir holds the local model files. Default: <user cache>/briefd/models/<model>.
 	ModelDir string `yaml:"model_dir"`
 	// AutoDownload lets the local adapter fetch missing weights.
 	AutoDownload bool `yaml:"auto_download"`
@@ -52,21 +58,26 @@ func Default() Config {
 	return Config{
 		Enabled:      true,
 		Provider:     "local",
-		ModelDir:     DefaultModelDir(),
+		ModelDir:     "", // resolved per model, see ModelDir
 		AutoDownload: true,
 		BatchSize:    16,
 	}
 }
 
-// DefaultModelDir is $XDG_CACHE_HOME/briefd/models/all-MiniLM-L6-v2 (or the
-// OS equivalent), falling back to ./models/all-MiniLM-L6-v2.
-func DefaultModelDir() string {
+// DefaultModelDir is $XDG_CACHE_HOME/briefd/models/<model> (or the OS
+// equivalent), falling back to ./models/<model>.
+func DefaultModelDir() string { return ModelDir(minilm.DefaultModel) }
+
+// ModelDir returns the default directory for a named local model.
+func ModelDir(model string) string {
+	if model == "" {
+		model = minilm.DefaultModel
+	}
 	base, err := os.UserCacheDir()
 	if err != nil {
-		base = "."
-		return filepath.Join(base, "models", minilm.ModelName)
+		return filepath.Join("models", model)
 	}
-	return filepath.Join(base, "briefd", "models", minilm.ModelName)
+	return filepath.Join(base, "briefd", "models", model)
 }
 
 // New constructs the configured Embedder. It returns (nil, nil) when
@@ -77,11 +88,15 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (Embedder, error)
 	}
 	switch cfg.Provider {
 	case "", "local":
+		spec, err := minilm.SpecFor(cfg.Model)
+		if err != nil {
+			return nil, err
+		}
 		dir := cfg.ModelDir
 		if dir == "" {
-			dir = DefaultModelDir()
+			dir = ModelDir(spec.Name)
 		}
-		m, err := minilm.LoadOrPull(ctx, dir, cfg.AutoDownload, "", logger)
+		m, err := minilm.LoadOrPull(ctx, spec, dir, cfg.AutoDownload, "", logger)
 		if err != nil {
 			return nil, fmt.Errorf("local embeddings: %w", err)
 		}
@@ -118,7 +133,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (Embedder, error)
 type localEmbedder struct{ m *minilm.Model }
 
 // Name implements Embedder.
-func (localEmbedder) Name() string { return "local/" + minilm.ModelName }
+func (l localEmbedder) Name() string { return "local/" + l.m.Spec().Name }
 
 // Dim implements Embedder.
 func (localEmbedder) Dim() int { return minilm.Dim }
@@ -126,4 +141,9 @@ func (localEmbedder) Dim() int { return minilm.Dim }
 // Embed implements Embedder.
 func (l localEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	return l.m.Embed(ctx, texts)
+}
+
+// EmbedQuery implements Embedder.
+func (l localEmbedder) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	return l.m.EmbedQuery(ctx, text)
 }

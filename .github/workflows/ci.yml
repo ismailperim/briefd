@@ -54,5 +54,5 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/briefd/models
-          key: minilm-l6-v2-53aa5117
+          key: models-e5-small-1a55775f
       - run: make eval

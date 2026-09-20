@@ -13,7 +13,7 @@ import (
 // tokenizer implements BERT's uncased tokenization: basic cleanup and
 // punctuation/CJK splitting, lower-casing with accent stripping, then
 // greedy longest-match-first WordPiece.
-type tokenizer struct {
+type wordpieceTokenizer struct {
 	vocab        map[string]int
 	maxWordChars int
 	maxSeq       int // including [CLS] and [SEP]
@@ -38,8 +38,8 @@ func loadVocab(path string) (map[string]int, error) {
 	return vocab, nil
 }
 
-func newTokenizer(vocab map[string]int, maxSeq int) (*tokenizer, error) {
-	t := &tokenizer{vocab: vocab, maxWordChars: 100, maxSeq: maxSeq}
+func newTokenizer(vocab map[string]int, maxSeq int) (*wordpieceTokenizer, error) {
+	t := &wordpieceTokenizer{vocab: vocab, maxWordChars: 100, maxSeq: maxSeq}
 	var ok [3]bool
 	t.unkID, ok[0] = vocab["[UNK]"]
 	t.clsID, ok[1] = vocab["[CLS]"]
@@ -52,7 +52,7 @@ func newTokenizer(vocab map[string]int, maxSeq int) (*tokenizer, error) {
 
 // encode returns token ids for text, wrapped in [CLS] ... [SEP] and
 // truncated to maxSeq.
-func (t *tokenizer) encode(text string) []int {
+func (t *wordpieceTokenizer) encode(text string) []int {
 	ids := make([]int, 0, 64)
 	ids = append(ids, t.clsID)
 	for _, word := range basicTokenize(text) {
@@ -65,7 +65,7 @@ func (t *tokenizer) encode(text string) []int {
 	return append(ids, t.sepID)
 }
 
-func (t *tokenizer) wordpiece(word string, ids []int) []int {
+func (t *wordpieceTokenizer) wordpiece(word string, ids []int) []int {
 	runes := []rune(word)
 	if len(runes) > t.maxWordChars {
 		return append(ids, t.unkID)

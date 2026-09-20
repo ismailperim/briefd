@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 )
 
 // safetensors is a minimal reader for the Hugging Face safetensors format:
@@ -14,6 +13,7 @@ import (
 type safetensors struct {
 	header map[string]tensorInfo
 	data   []byte
+	close  func() error
 }
 
 type tensorInfo struct {
@@ -23,11 +23,12 @@ type tensorInfo struct {
 }
 
 func openSafetensors(path string) (*safetensors, error) {
-	raw, err := os.ReadFile(path)
+	raw, closeFn, err := mapFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 	if len(raw) < 8 {
+		_ = closeFn()
 		return nil, fmt.Errorf("reading %s: file too short", path)
 	}
 	n := binary.LittleEndian.Uint64(raw[:8])
@@ -38,7 +39,7 @@ func openSafetensors(path string) (*safetensors, error) {
 	if err := json.Unmarshal(raw[8:8+n], &header); err != nil {
 		return nil, fmt.Errorf("reading %s header: %w", path, err)
 	}
-	st := &safetensors{header: map[string]tensorInfo{}, data: raw[8+n:]}
+	st := &safetensors{header: map[string]tensorInfo{}, data: raw[8+n:], close: closeFn}
 	for name, msg := range header {
 		if name == "__metadata__" {
 			continue
@@ -55,7 +56,34 @@ func openSafetensors(path string) (*safetensors, error) {
 	return st, nil
 }
 
-// f32 returns a float32 tensor by name, validating its shape.
+// raw returns the bytes of a float32 tensor without copying, for tables
+// that are read row by row (word embeddings).
+func (st *safetensors) raw(name string, shape ...int) ([]byte, error) {
+	ti, ok := st.header[name]
+	if !ok {
+		return nil, fmt.Errorf("tensor %s: not found", name)
+	}
+	if ti.DType != "F32" {
+		return nil, fmt.Errorf("tensor %s: dtype %s, want F32", name, ti.DType)
+	}
+	if len(ti.Shape) != len(shape) {
+		return nil, fmt.Errorf("tensor %s: shape %v, want %v", name, ti.Shape, shape)
+	}
+	want := 1
+	for i, d := range shape {
+		if ti.Shape[i] != d {
+			return nil, fmt.Errorf("tensor %s: shape %v, want %v", name, ti.Shape, shape)
+		}
+		want *= d
+	}
+	b := st.data[ti.DataOffsets[0]:ti.DataOffsets[1]]
+	if len(b) != want*4 {
+		return nil, fmt.Errorf("tensor %s: %d bytes, want %d", name, len(b), want*4)
+	}
+	return b, nil
+}
+
+// f32 returns a float32 tensor by name (copied), validating its shape.
 func (st *safetensors) f32(name string, shape ...int) ([]float32, error) {
 	ti, ok := st.header[name]
 	if !ok {

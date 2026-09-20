@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/ismailperim/briefd/internal/embed"
+	"github.com/ismailperim/briefd/internal/embed/minilm"
 	"github.com/ismailperim/briefd/internal/gitsync"
 )
 
@@ -223,7 +224,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: unknown log_level %q", c.LogLevel)
 	}
 	switch c.Embeddings.Provider {
-	case "", "local", "ollama", "openai", "openai-compatible", "none":
+	case "", "local":
+		if _, err := minilm.SpecFor(c.Embeddings.Model); err != nil {
+			return fmt.Errorf("config: %w", err)
+		}
+	case "ollama", "openai", "openai-compatible", "none":
 	default:
 		return fmt.Errorf("config: unknown embeddings.provider %q", c.Embeddings.Provider)
 	}

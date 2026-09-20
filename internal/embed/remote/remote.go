@@ -62,6 +62,15 @@ func (o *Ollama) Embed(ctx context.Context, texts []string) ([][]float32, error)
 	return resp.Embeddings, nil
 }
 
+// EmbedQuery implements Embedder (no query prefix for Ollama models).
+func (o *Ollama) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	out, err := o.Embed(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return out[0], nil
+}
+
 // OpenAI calls POST {url}/embeddings with a bearer token.
 type OpenAI struct {
 	url, model, key string
@@ -121,6 +130,15 @@ func (o *OpenAI) Embed(ctx context.Context, texts []string) ([][]float32, error)
 	o.dim = len(out[0])
 	o.mu.Unlock()
 	return out, nil
+}
+
+// EmbedQuery implements Embedder.
+func (o *OpenAI) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	out, err := o.Embed(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return out[0], nil
 }
 
 func postJSON(ctx context.Context, client *http.Client, url, bearer string, body, out any) error {

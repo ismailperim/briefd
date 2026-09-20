@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Multilingual embeddings: `multilingual-e5-small` (100+ languages) runs in the
+  same pure-Go encoder via a new SentencePiece Unigram tokenizer and is now the
+  default model; `embeddings.model: all-MiniLM-L6-v2` keeps the faster
+  English-only model. Model weights are memory-mapped. `briefd model list`,
+  `briefd model pull --model`, `--model` on every command.
+- Turkish evaluation corpus (`testdata/knowledge-tr`, 12 docs) and golden set
+  (30 queries) with its own CI threshold file. Hybrid retrieval on it: R@5 0.93,
+  R@10 1.00, MRR 0.85 (was 0.85 / 0.85 / 0.67 with MiniLM).
+
+### Changed
+
+- `Embedder` gained `EmbedQuery` so asymmetric models apply query/passage prefixes.
+- Docker image caches models under `/data/cache` (`XDG_CACHE_HOME`).
+
 ## [0.1.0] — 2026-09-20
 
 First release: everything below.

@@ -16,12 +16,14 @@ type commonFlags struct {
 	cfgFile    string
 	db         string
 	embeddings string
+	model      string
 }
 
 func (c *commonFlags) register(fs *flag.FlagSet) {
 	fs.StringVar(&c.cfgFile, "config", envOr("CONFIG", ""), "config file (default briefd.yaml if present)")
 	fs.StringVar(&c.db, "db", "", "SQLite database path (default briefd.db)")
 	fs.StringVar(&c.embeddings, "embeddings", "", "embedding provider: local | ollama | openai | none (default from config)")
+	fs.StringVar(&c.model, "model", "", "embedding model, e.g. multilingual-e5-small (default from config)")
 }
 
 // load resolves the configuration and applies the common flag overrides.
@@ -36,6 +38,9 @@ func (c *commonFlags) load() (config.Config, error) {
 	if c.embeddings != "" {
 		cfg.Embeddings.Provider = c.embeddings
 		cfg.Embeddings.Enabled = c.embeddings != "none"
+	}
+	if c.model != "" {
+		cfg.Embeddings.Model = c.model
 	}
 	return cfg, cfg.Validate()
 }

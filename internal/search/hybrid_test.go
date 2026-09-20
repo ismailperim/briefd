@@ -21,7 +21,11 @@ var synonyms = map[string]string{
 }
 
 func (fakeEmbedder) Name() string { return "fake/bow" }
-func (fakeEmbedder) Dim() int     { return 64 }
+func (f fakeEmbedder) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	out, err := f.Embed(ctx, []string{text})
+	return out[0], err
+}
+func (fakeEmbedder) Dim() int { return 64 }
 func (fakeEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
 	out := make([][]float32, len(texts))
 	for i, t := range texts {

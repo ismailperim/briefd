@@ -1,0 +1,167 @@
+# Turkish golden set over testdata/knowledge-tr (a Turkish-language subset of
+# the sample corpus). Same rules as queries.yaml: queries are written the way
+# a Turkish-speaking developer or agent would ask, not by copying the text.
+# Types: keyword, paraphrase, typo, mixed-lang (English terms in a Turkish
+# sentence or vice versa — the everyday reality of Turkish engineering teams).
+
+queries:
+  # ---------------------------------------------------------------- keyword
+  - id: tr-kw-iade-suresi
+    type: keyword
+    query: iade süresi 180 gün
+    expected:
+      - { path: domain/kurallar/iadeler.md, heading: İade süresi }
+  - id: tr-kw-onay-esikleri
+    type: keyword
+    query: iade onay eşikleri risk ekibi
+    expected:
+      - { path: domain/kurallar/iadeler.md, heading: Onay eşikleri }
+  - id: tr-kw-hakedis-takvimi
+    type: keyword
+    query: hakediş takvimi günlük haftalık manuel
+    expected:
+      - { path: domain/kurallar/mutabakat-ve-hakedis.md, heading: Hakediş takvimleri }
+  - id: tr-kw-kanit-suresi
+    type: keyword
+    query: ters ibraz kanıt süresi Visa Mastercard
+    expected:
+      - { path: domain/kurallar/itiraz-ve-ters-ibraz.md, heading: Kanıt süreleri }
+  - id: tr-kw-idempotency-saklama
+    type: keyword
+    query: idempotency kayıtları saklama süresi
+    expected:
+      - { path: domain/kurallar/idempotency.md, heading: Saklama }
+  - id: tr-kw-devre-kesici
+    type: keyword
+    query: devre kesici hata oranı yarı açık
+    expected:
+      - { path: conventions/hata-ve-yeniden-deneme.md, heading: Devre kesici }
+  - id: tr-kw-kyc-seviyeler
+    type: keyword
+    query: KYC seviyeleri aylık hacim tavanı
+    expected:
+      - { path: domain/kurallar/kyc-ve-kayit.md, heading: Seviyeler }
+  - id: tr-kw-projeksiyon-sapmasi
+    type: keyword
+    query: LedgerProjectionDrift uyarısı
+    expected:
+      - { path: projects/defter-servisi/README.md, heading: "Çalışma kitabı: projeksiyon sapması" }
+
+  # ------------------------------------------------------------- paraphrase
+  - id: tr-pp-para-iadesi-gec
+    type: paraphrase
+    query: müşteri yedi ay önce yaptığı alışverişin parasını geri istiyor, yapabilir miyiz?
+    expected:
+      - { path: domain/kurallar/iadeler.md, heading: İade süresi }
+  - id: tr-pp-buyuk-iade-onay
+    type: paraphrase
+    query: 3000 euroluk bir iadeyi kim onaylamalı?
+    expected:
+      - { path: domain/kurallar/iadeler.md, heading: Onay eşikleri }
+  - id: tr-pp-banka-reddetti
+    type: paraphrase
+    query: üye işyerinin bankası transferi geri çevirdi, para ne olacak?
+    expected:
+      - { path: domain/kurallar/mutabakat-ve-hakedis.md, heading: Hakediş hataları }
+  - id: tr-pp-ayni-istek-iki-kez
+    type: paraphrase
+    query: istemci aynı anahtarla ama farklı gövdeyle ikinci kez ödeme oluşturursa ne dönmeli?
+    expected:
+      - { path: domain/kurallar/idempotency.md, heading: Tekrar (replay) davranışı }
+  - id: tr-pp-float-para
+    type: paraphrase
+    query: tutarı Go'da ondalıklı sayı olarak tutabilir miyim?
+    expected:
+      - { path: conventions/go-stili.md, heading: Para }
+      - { path: domain/kararlar/0012-coklu-para-birimi.md, heading: Sonuçlar }
+  - id: tr-pp-servis-cevap-vermiyor
+    type: paraphrase
+    query: dış sağlayıcı sürekli zaman aşımına düşüyor, denemeye devam mı edelim?
+    expected:
+      - { path: conventions/hata-ve-yeniden-deneme.md, heading: Devre kesici }
+      - { path: conventions/hata-ve-yeniden-deneme.md, heading: Hataların sınıflandırılması }
+  - id: tr-pp-sutun-silme
+    type: paraphrase
+    query: artık kullanılmayan bir veritabanı sütununu güvenle nasıl kaldırırım?
+    expected:
+      - { path: conventions/veritabani-migrasyonlari.md, heading: Geriye uyumluluk }
+  - id: tr-pp-cuma-deploy
+    type: paraphrase
+    query: cuma akşamı hakediş servisini canlıya alabilir miyim?
+    expected:
+      - { path: conventions/dagitim-hatti.md, heading: Dağıtım pencereleri }
+  - id: tr-pp-itirazli-odeme-iade
+    type: paraphrase
+    query: üzerinde açık itiraz olan bir ödemeyi iade edebilir miyiz?
+    expected:
+      - { path: domain/kurallar/iadeler.md, heading: İtirazlı ödemelerde iade }
+  - id: tr-pp-para-nerede-bloke
+    type: paraphrase
+    query: itiraz sürerken üye işyerinin bakiyesine ne oluyor?
+    expected:
+      - { path: domain/kurallar/itiraz-ve-ters-ibraz.md, heading: Fonların tutulması }
+  - id: tr-pp-belge-ne-kadar-surer
+    type: paraphrase
+    query: yeni üye işyerinin belgeleri kaç günde incelenir?
+    expected:
+      - { path: domain/kurallar/kyc-ve-kayit.md, heading: Belge incelemesi }
+  - id: tr-pp-kur-hangi-an
+    type: paraphrase
+    query: farklı para birimindeki bakiye hangi kurla çevriliyor?
+    expected:
+      - { path: domain/kararlar/0012-coklu-para-birimi.md, heading: Karar }
+
+  # ------------------------------------------------------------------- typo
+  - id: tr-ty-idempotensi
+    type: typo
+    query: idempotensi anahtarı hangi isteklerde zorunlu
+    expected:
+      - { path: domain/kurallar/idempotency.md, heading: Hangi istekler anahtar gerektirir }
+  - id: tr-ty-mutabakt
+    type: typo
+    query: mutabakt partisi kaçta kesiliyor
+    expected:
+      - { path: domain/kurallar/mutabakat-ve-hakedis.md, heading: Mutabakat döngüsü }
+  - id: tr-ty-provizyon
+    type: typo
+    query: provizyn kaç gün sonra düşer
+    expected:
+      - { path: domain/sozluk.md, heading: Provizyon (authorization) }
+  - id: tr-ty-migrasyon
+    type: typo
+    query: migrasyn geri alınır mı
+    expected:
+      - { path: conventions/veritabani-migrasyonlari.md, heading: Geri alma }
+
+  # ------------------------------------------------------------- mixed-lang
+  - id: tr-ml-retry-policy
+    type: mixed-lang
+    query: acquirer call için retry policy ne?
+    expected:
+      - { path: conventions/hata-ve-yeniden-deneme.md, heading: Yeniden deneme politikası }
+  - id: tr-ml-chargeback-nedir
+    type: mixed-lang
+    query: chargeback ne demek
+    expected:
+      - { path: domain/sozluk.md, heading: Ters ibraz (chargeback) }
+  - id: tr-ml-payout-failure
+    type: mixed-lang
+    query: payout fail olursa kaç denemeden sonra manual'a geçiyoruz
+    expected:
+      - { path: domain/kurallar/mutabakat-ve-hakedis.md, heading: Hakediş hataları }
+  - id: tr-ml-merchant-tanim
+    type: mixed-lang
+    query: merchant tam olarak neyi ifade ediyor
+    expected:
+      - { path: domain/sozluk.md, heading: Üye işyeri }
+  - id: tr-ml-settlement-vs-payout
+    type: mixed-lang
+    query: settlement ile payout arasındaki fark
+    expected:
+      - { path: domain/sozluk.md, heading: Mutabakat dönemi (settlement) }
+      - { path: domain/sozluk.md, heading: Hakediş (payout) }
+  - id: tr-ml-deploy-window
+    type: mixed-lang
+    query: production deploy için izin verilen saatler
+    expected:
+      - { path: conventions/dagitim-hatti.md, heading: Dağıtım pencereleri }

@@ -63,9 +63,9 @@ a static `CLAUDE.md` cannot.
 - **Git is the source of truth.** The index is a disposable cache rebuilt from a clone.
 - **Agents never write to the index.** `propose_update` opens a reviewable branch/PR; what
   briefd serves changes only when a human merges.
-- **Hybrid retrieval, no external services.** SQLite FTS5 (BM25) + `all-MiniLM-L6-v2`
-  embeddings computed by a pure-Go encoder, fused with reciprocal rank fusion. No Postgres, no
-  vector database, no ONNX runtime, no CGO.
+- **Hybrid retrieval, no external services.** SQLite FTS5 (BM25) + multilingual embeddings
+  (`multilingual-e5-small`, 100+ languages) computed by a pure-Go encoder, fused with
+  reciprocal rank fusion. No Postgres, no vector database, no ONNX runtime, no CGO.
 - **Hard token budgets.** Every API that returns context takes `max_tokens` and never exceeds it.
 
 ## Quickstart
@@ -74,7 +74,7 @@ a static `CLAUDE.md` cannot.
 # 1. build (Go >= 1.26) or grab a binary from the releases page
 git clone https://github.com/ismailperim/briefd && cd briefd && make build
 
-# 2. serve the sample knowledge repo (downloads the 87 MB embedding model once)
+# 2. serve the sample knowledge repo (downloads the 470 MB multilingual embedding model once)
 ./bin/briefd serve --source testdata/knowledge --db /tmp/briefd.db --token dev-token
 
 # 3. connect Claude Code
@@ -153,6 +153,13 @@ briefd clones the repository, follows the branch with fetch + hard reset every `
 (default 60 s), or immediately when your forge calls `POST /webhook/git` with a GitHub-style
 HMAC signature. Only changed files are re-parsed and re-embedded.
 
+**Languages.** The default embedding model, `multilingual-e5-small`, covers 100+ languages,
+so a Turkish, German or Japanese knowledge repo — or English docs queried in another language —
+works out of the box. English-only teams can set `embeddings.model: all-MiniLM-L6-v2` (87 MB,
+~2.5× faster indexing). `briefd model pull` pre-fetches a model for offline or image-build use;
+`--embeddings none` gives BM25-only mode; Ollama and OpenAI-compatible services are alternative
+providers.
+
 **Docker**
 
 ```sh
@@ -177,6 +184,7 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `git.token` | `BRIEFD_GIT_TOKEN` | — | HTTPS remotes; `git.ssh_key` for SSH |
 | `forge.type`, `forge.token` | `BRIEFD_FORGE_*` | — | `github` opens PRs for proposals |
 | `embeddings.provider` | `BRIEFD_EMBEDDINGS_PROVIDER` | `local` | `ollama`, `openai`, or `none` for BM25-only |
+| `embeddings.model` | `BRIEFD_EMBEDDINGS_MODEL` | `multilingual-e5-small` | or `all-MiniLM-L6-v2` (English, faster) |
 | `search.default_max_tokens` | `BRIEFD_DEFAULT_MAX_TOKENS` | `2000` | |
 
 `briefd model pull` pre-fetches the embedding model for offline or image-build use.
@@ -192,15 +200,16 @@ counters in Prometheus text format; `GET /api/stats` as JSON.
 
 ## Retrieval quality
 
-Retrieval is measured, not assumed. `make eval` scores 47 golden queries (keyword, paraphrase,
-typo and Turkish/mixed-language) over the sample corpus and CI fails if hybrid retrieval drops
-below [`eval/thresholds.yaml`](eval/thresholds.yaml):
+Retrieval is measured, not assumed. `make eval` scores 47 English golden queries (keyword,
+paraphrase, typo, mixed-language) over the sample corpus and 30 Turkish queries over a
+Turkish corpus; CI fails if hybrid retrieval drops below [`eval/thresholds.yaml`](eval/thresholds.yaml)
+or [`eval/thresholds-tr.yaml`](eval/thresholds-tr.yaml):
 
-| Mode | Recall@5 | Recall@10 | MRR |
-|---|---:|---:|---:|
-| BM25 only | 0.681 | 0.755 | 0.591 |
-| Vector only | 0.809 | 0.904 | 0.700 |
-| **Hybrid (default)** | **0.809** | **0.936** | **0.709** |
+| Mode | English R@5 | English R@10 | English MRR | Turkish R@5 | Turkish R@10 | Turkish MRR |
+|---|---:|---:|---:|---:|---:|---:|
+| BM25 only | 0.681 | 0.755 | 0.591 | 0.733 | 0.767 | 0.602 |
+| Vector only | 0.830 | 0.936 | 0.771 | 0.950 | 1.000 | 0.832 |
+| **Hybrid (default)** | **0.830** | **0.926** | **0.746** | **0.933** | **1.000** | **0.847** |
 
 Every change to chunking, embeddings or fusion ships with before/after numbers
 ([ADR-0004](docs/adr/0004-hybrid-fusion-tuning.md) is an example).
@@ -211,7 +220,8 @@ Every change to chunking, embeddings or fusion ships with before/after numbers
 briefd serve      # MCP + REST + dashboard
 briefd index      # index a directory into the database (--rebuild to start over)
 briefd search     # query like search_context does (--mode bm25|vector|hybrid, --json)
-briefd model pull # download the embedding model
+briefd model list # local embedding models and whether they are downloaded
+briefd model pull # download a model (--model all-MiniLM-L6-v2 for the English one)
 briefd eval       # retrieval quality against the golden set
 briefd bench      # tokens per task: static CLAUDE.md vs compile_bundle
 ```
@@ -223,7 +233,7 @@ v0.1 is feature-complete; expect rough edges before 1.0. Planned next:
 - usage-driven relevance tuning from `report_usage`
 - staleness scoring via `refs` globs (knowledge that lags the code it governs)
 - contradiction detection for proposals
-- a multilingual embedding option and glossary-alias query expansion
+- a light Turkish stemmer for the BM25 side and glossary-alias query expansion
 - multiple knowledge repositories per instance
 
 Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a guided tour with diagrams. The full

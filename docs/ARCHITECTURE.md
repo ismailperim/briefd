@@ -57,14 +57,17 @@ It is a disposable cache: `briefd index --rebuild` recreates it from git.
 
 ### Embeddings without a runtime
 
-`internal/embed/minilm` is a from-scratch implementation of the
-`all-MiniLM-L6-v2` sentence encoder: a safetensors loader, a WordPiece
-tokenizer, and the six-layer BERT forward pass with mean pooling, using gonum
-for matrix products. It reproduces onnxruntime's vectors to cosine 1.000000
-and needs no ONNX runtime and no CGO, which is what keeps the binary static and
-the container image at 34 MB. Weights (87 MB) download once into the user cache.
-Ollama and OpenAI-compatible services are alternative providers; `none` gives
-BM25-only mode. Only chunks whose content (or model) changed are re-embedded.
+`internal/embed/minilm` is a from-scratch implementation of BERT-family
+sentence encoders: a safetensors loader (memory-mapped), WordPiece and
+SentencePiece-Unigram tokenizers, and the transformer forward pass with mean
+pooling, using gonum for matrix products. Two models ship: the default
+`multilingual-e5-small` (100+ languages, 12 layers, 470 MB) and
+`all-MiniLM-L6-v2` (English, 6 layers, 87 MB, ~2.5× faster). Both reproduce
+onnxruntime's vectors to cosine 1.000000 and need no ONNX runtime and no CGO,
+which is what keeps the binary static and the container image at 34 MB.
+Weights download once into the user cache. Ollama and OpenAI-compatible
+services are alternative providers; `none` gives BM25-only mode. Only chunks
+whose content (or model) changed are re-embedded.
 
 ### Retrieval: hybrid, fused with RRF
 
@@ -80,9 +83,10 @@ BM25-only mode. Only chunks whose content (or model) changed are re-embedded.
 
 Why both? Keyword queries ("LedgerProjectionDrift alert") are perfect for BM25
 and hopeless for embeddings; paraphrased questions ("customer wants their money
-back after seven months") are the opposite. On the golden set, hybrid scores
-Recall@5 0.81 / Recall@10 0.94 / MRR 0.71 versus 0.68 / 0.76 / 0.59 for BM25
-alone (`make eval`).
+back after seven months") are the opposite. On the English golden set, hybrid
+scores Recall@5 0.83 / Recall@10 0.93 / MRR 0.75 versus 0.68 / 0.76 / 0.59 for
+BM25 alone; on the Turkish one 0.93 / 1.00 / 0.85 versus 0.73 / 0.77 / 0.60
+(`make eval`).
 
 ### Packing: a bundle that fits
 

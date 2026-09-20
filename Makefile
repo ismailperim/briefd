@@ -24,8 +24,9 @@ lint: ## Run golangci-lint (includes formatter checks)
 fmt: ## Format sources with the configured formatters
 	golangci-lint fmt ./...
 
-eval: build ## Run the retrieval quality eval against the golden set (downloads the model once)
+eval: build ## Run the retrieval quality eval on the English and Turkish golden sets (downloads the model once)
 	./$(BIN_DIR)/$(BINARY) eval --config /dev/null
+	./$(BIN_DIR)/$(BINARY) eval --config /dev/null --source testdata/knowledge-tr --golden eval/golden/queries-tr.yaml --thresholds eval/thresholds-tr.yaml
 
 bench: build ## Measure knowledge tokens per task: static CLAUDE.md vs compile_bundle
 	./$(BIN_DIR)/$(BINARY) bench --config /dev/null --markdown

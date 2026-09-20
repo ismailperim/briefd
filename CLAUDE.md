@@ -27,10 +27,11 @@ wrong, stop and propose an ADR instead of changing code.
    in SQLite** (in-memory scan in Go, see ADR-0002) fused with **RRF, k=60**. No ANN
    libraries, no vector extensions. BM25-only mode must remain available via config
    (`embeddings.enabled=false`).
-4. **Embeddings: local by default** — `all-MiniLM-L6-v2` (384-dim) run by our pure-Go
-   encoder (ADR-0003; weights downloaded once, no ONNX runtime, no CGO), pluggable
-   adapters: `ollama`, `openai-compatible`, `none`. Adapter interface first,
-   implementations behind it.
+4. **Embeddings: local by default** — `multilingual-e5-small` (384-dim, 100+ languages;
+   ADR-0006) or `all-MiniLM-L6-v2` (English, faster) run by our pure-Go encoder
+   (ADR-0003; weights downloaded once, no ONNX runtime, no CGO), pluggable adapters:
+   `ollama`, `openai-compatible`, `none`. Adapter interface first, implementations
+   behind it.
 5. **Git is the source of truth. The index is a disposable cache.** The service must be
    able to rebuild the entire index from a fresh clone. Never store knowledge that exists
    only in SQLite.

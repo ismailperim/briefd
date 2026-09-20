@@ -3,25 +3,31 @@ package minilm
 import (
 	"context"
 	"encoding/json"
-	"math"
 	"os"
 	"testing"
 	"time"
 )
 
-// Reference vectors produced by onnxruntime + the HF tokenizers library
-// (see testdata/README.md). Skipped when the model files are absent.
+type refCase struct {
+	Text      string    `json:"text"`
+	IDs       []int     `json:"ids"`
+	Embedding []float32 `json:"embedding"`
+}
+
+// Reference vectors produced by onnxruntime + the HF tokenizers library.
+// Skipped when the model files are absent:
+//
+//	BRIEFD_TEST_MODEL_DIR=<dir> BRIEFD_TEST_REF=<ref.json> [BRIEFD_TEST_MODEL=<spec name>]
 func TestAgainstReference(t *testing.T) {
-	dir := os.Getenv("BRIEFD_TEST_MODEL_DIR")
-	ref := os.Getenv("BRIEFD_TEST_REF")
+	dir, ref := os.Getenv("BRIEFD_TEST_MODEL_DIR"), os.Getenv("BRIEFD_TEST_REF")
 	if dir == "" || ref == "" {
 		t.Skip("BRIEFD_TEST_MODEL_DIR / BRIEFD_TEST_REF not set")
 	}
-	var cases []struct {
-		Text      string    `json:"text"`
-		IDs       []int     `json:"ids"`
-		Embedding []float32 `json:"embedding"`
+	spec, err := SpecFor(os.Getenv("BRIEFD_TEST_MODEL"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	var cases []refCase
 	raw, err := os.ReadFile(ref)
 	if err != nil {
 		t.Fatal(err)
@@ -29,32 +35,39 @@ func TestAgainstReference(t *testing.T) {
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatal(err)
 	}
-	m, err := Load(dir)
+	m, err := Load(spec, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer m.Close()
 	for _, c := range cases {
+		// Reference texts already carry any query:/passage: prefix, so
+		// tokenize and encode them raw.
 		ids := m.Tokenize(c.Text)
 		if len(ids) != len(c.IDs) {
-			t.Errorf("%q: %d ids, want %d\n got  %v\n want %v", c.Text, len(ids), len(c.IDs), ids, c.IDs)
+			t.Errorf("%.50q: %d ids, want %d\n got  %v\n want %v", c.Text, len(ids), len(c.IDs), ids, c.IDs)
 			continue
 		}
 		for i := range ids {
 			if ids[i] != c.IDs[i] {
-				t.Errorf("%q: id[%d] = %d, want %d", c.Text, i, ids[i], c.IDs[i])
+				t.Errorf("%.50q: id[%d] = %d, want %d\n got  %v\n want %v", c.Text, i, ids[i], c.IDs[i], ids, c.IDs)
 				break
 			}
 		}
 		start := time.Now()
-		got, err := m.Embed(context.Background(), []string{c.Text})
-		if err != nil {
-			t.Fatal(err)
-		}
-		cos := dot(got[0], c.Embedding)
+		got := m.encode(ids)
+		cos := dot(got, c.Embedding)
 		t.Logf("%.40q: %d tokens, cosine %.6f, %s", c.Text, len(ids), cos, time.Since(start))
 		if cos < 0.9995 {
-			t.Errorf("%q: cosine to reference = %.6f", c.Text, cos)
+			t.Errorf("%.50q: cosine to reference = %.6f", c.Text, cos)
 		}
+	}
+	// The public API adds the prefixes.
+	if _, err := m.Embed(context.Background(), []string{"hello"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.EmbedQuery(context.Background(), "hello"); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -66,17 +79,19 @@ func dot(a, b []float32) float64 {
 	return s
 }
 
-func BenchmarkEmbed256(b *testing.B) {
+func BenchmarkEmbed(b *testing.B) {
 	dir := os.Getenv("BRIEFD_TEST_MODEL_DIR")
 	if dir == "" {
 		b.Skip("BRIEFD_TEST_MODEL_DIR not set")
 	}
-	m, err := Load(dir)
+	spec, _ := SpecFor(os.Getenv("BRIEFD_TEST_MODEL"))
+	m, err := Load(spec, dir)
 	if err != nil {
 		b.Fatal(err)
 	}
-	text := ""
-	for len(m.Tokenize(text)) < MaxSeq {
+	defer m.Close()
+	text := "Settlement batches are cut at midnight UTC and reconciled against acquirer reports. "
+	for len(m.Tokenize(text)) < 70 {
 		text += "Settlement batches are cut at midnight UTC and reconciled against acquirer reports. "
 	}
 	b.ResetTimer()
@@ -84,5 +99,4 @@ func BenchmarkEmbed256(b *testing.B) {
 		m.encode(m.Tokenize(text))
 	}
 	b.ReportMetric(float64(b.Elapsed().Milliseconds())/float64(b.N), "ms/op")
-	_ = math.Pi
 }

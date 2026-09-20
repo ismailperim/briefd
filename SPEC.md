@@ -155,9 +155,11 @@ sync_state(source, last_commit, last_sync_at, last_error, index_fingerprint)
 
 ## 7. Embeddings
 
-- Default: `all-MiniLM-L6-v2` (384-dim) executed in-process by a pure-Go encoder
-  (ADR-0003), CPU only. Weights (`model.safetensors` + `vocab.txt`) are fetched once into
-  `embeddings.model_dir` with pinned checksums, or pre-fetched with `briefd model pull`.
+- Default: `multilingual-e5-small` (384-dim, 100+ languages, ADR-0006), alternative
+  `all-MiniLM-L6-v2` (English only, ~2.5× faster), both executed in-process by a pure-Go
+  encoder (ADR-0003), CPU only. Weights are fetched once into
+  `embeddings.model_dir` (default `<user cache>/briefd/models/<model>`) with pinned
+  checksums, or pre-fetched with `briefd model pull [--model NAME]`.
 - Adapters (config-selected): `local` (default) | `ollama` | `openai-compatible` | `none`
   (BM25-only mode; also `embeddings.enabled: false`).
 - Changing the embedding model invalidates `chunk_vectors` (model name stored alongside;
@@ -165,9 +167,11 @@ sync_state(source, last_commit, last_sync_at, last_error, index_fingerprint)
 
 ## 8. Evaluation (part of the product, not an afterthought)
 
-- Corpus: `testdata/knowledge/` (fictional payments platform, 44 docs). Queries:
-  `eval/golden/queries.yaml` (47 entries: `{id, query, type: keyword|paraphrase|typo|mixed-lang,
-  expected: [{path, heading}]}`), written in task language rather than document wording.
+- Corpora: `testdata/knowledge/` (fictional payments platform, 44 English docs) with
+  `eval/golden/queries.yaml` (47 queries), and `testdata/knowledge-tr/` (12 Turkish docs)
+  with `eval/golden/queries-tr.yaml` (30 queries). Entries are
+  `{id, query, type: keyword|paraphrase|typo|mixed-lang, expected: [{path, heading}]}`,
+  written in task language rather than document wording.
 - `briefd eval` outputs Recall@5, Recall@10, MRR — overall and per query type — and
   compares BM25-only vs hybrid.
 - CI gate: `eval/thresholds.yaml`. Target: Recall@5 ≥ 0.85 hybrid; the gate is set at the

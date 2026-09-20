@@ -19,10 +19,11 @@ RUN mkdir -p /out/data && chown 65532:65532 /out/data
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/briefd /briefd
 COPY --from=build --chown=nonroot:nonroot /out/data /data
+# Models are cached under $XDG_CACHE_HOME/briefd/models/<model>.
 ENV BRIEFD_LISTEN=:7788 \
     BRIEFD_DB=/data/briefd.db \
     BRIEFD_GIT_DIR=/data/knowledge-repo \
-    BRIEFD_EMBEDDINGS_MODEL_DIR=/data/models/all-MiniLM-L6-v2 \
+    XDG_CACHE_HOME=/data/cache \
     HOME=/data
 VOLUME ["/data"]
 EXPOSE 7788

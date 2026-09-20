@@ -230,11 +230,11 @@ func (s *Searcher) bm25Split(ctx context.Context, text string, scopes []string, 
 }
 
 func (s *Searcher) vector(ctx context.Context, text string, scopes []string, limit int) ([]store.ChunkHit, error) {
-	vecs, err := s.embedder.Embed(ctx, []string{text})
+	vec, err := s.embedder.EmbedQuery(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("embedding query: %w", err)
 	}
-	vhits := s.vectors.Search(vecs[0], scopes, limit)
+	vhits := s.vectors.Search(vec, scopes, limit)
 	ids := make([]string, len(vhits))
 	for i, h := range vhits {
 		ids[i] = h.ChunkID
@@ -261,11 +261,11 @@ func (s *Searcher) hybrid(ctx context.Context, text string, scopes []string) ([]
 	if err != nil {
 		return nil, err
 	}
-	vecs, err := s.embedder.Embed(ctx, []string{text})
+	vec, err := s.embedder.EmbedQuery(ctx, text)
 	if err != nil {
 		return bm, nil //nolint:nilerr // degrade gracefully; the caller still gets BM25 results
 	}
-	vhits := s.vectors.Search(vecs[0], scopes, fusionDepth)
+	vhits := s.vectors.Search(vec, scopes, fusionDepth)
 
 	bmIDs := make([]string, len(bm))
 	byID := make(map[string]store.ChunkHit, len(bm)+len(vhits))

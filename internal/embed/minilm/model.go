@@ -1,11 +1,12 @@
 // Package minilm is a dependency-free (no CGO, no runtime) implementation
-// of the sentence-transformers/all-MiniLM-L6-v2 encoder: a 6-layer BERT
-// with mean pooling and L2 normalisation, producing 384-dim embeddings.
-// Weights are loaded from the model's safetensors file (ADR-0003).
+// of BERT-family sentence encoders: all-MiniLM-L6-v2 (English) and
+// multilingual-e5-small (100+ languages), producing 384-dim mean-pooled,
+// L2-normalized embeddings from safetensors weights (ADR-0003, ADR-0006).
 package minilm
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -16,62 +17,64 @@ import (
 	"gonum.org/v1/gonum/blas/blas32"
 )
 
-// Model constants for all-MiniLM-L6-v2.
-const (
-	ModelName    = "all-MiniLM-L6-v2"
-	Dim          = 384
-	layers       = 6
-	heads        = 12
-	headDim      = Dim / heads
-	intermediate = 1536
-	vocabSize    = 30522
-	maxPositions = 512
-	// MaxSeq is the sequence length sentence-transformers uses for this
-	// model (the underlying BERT supports 512).
-	MaxSeq       = 256
-	layerNormEps = 1e-12
-)
+// Dim is the embedding size shared by all supported models.
+const Dim = 384
 
 type layer struct {
-	wq, bq, wk, bk, wv, bv []float32 // [Dim×Dim], [Dim]
+	wq, bq, wk, bk, wv, bv []float32
 	wo, bo                 []float32
 	ln1g, ln1b             []float32
-	wi, bi                 []float32 // [intermediate×Dim], [intermediate]
-	wo2, bo2               []float32 // [Dim×intermediate], [Dim]
+	wi, bi                 []float32
+	wo2, bo2               []float32
 	ln2g, ln2b             []float32
+}
+
+type tokenizer interface {
+	encode(text string) []int
 }
 
 // Model holds the weights and tokenizer. It is safe for concurrent use.
 type Model struct {
-	tok      *tokenizer
-	wordEmb  []float32 // [vocab×Dim]
-	posEmb   []float32 // [maxPositions×Dim]
-	typeEmb  []float32 // [2×Dim] (only row 0 is used)
+	spec     Spec
+	tok      tokenizer
+	wordEmb  []byte // mmapped [vocab×Dim] float32 LE, read row by row
+	posEmb   []float32
+	typeEmb  []float32
 	embLNg   []float32
 	embLNb   []float32
-	layers   [layers]layer
+	layers   []layer
 	parallel int
+	closeFn  func() error
 }
 
-// Load reads model.safetensors and vocab.txt from dir.
-func Load(dir string) (*Model, error) {
+// Load reads the model named by spec from dir.
+func Load(spec Spec, dir string) (*Model, error) {
 	st, err := openSafetensors(filepath.Join(dir, "model.safetensors"))
 	if err != nil {
 		return nil, err
 	}
-	vocab, err := loadVocab(filepath.Join(dir, "vocab.txt"))
-	if err != nil {
-		return nil, err
-	}
-	if len(vocab) != vocabSize {
-		return nil, fmt.Errorf("vocab.txt has %d entries, want %d", len(vocab), vocabSize)
-	}
-	tok, err := newTokenizer(vocab, MaxSeq)
-	if err != nil {
-		return nil, err
+	m := &Model{spec: spec, parallel: runtime.GOMAXPROCS(0), closeFn: st.close}
+
+	switch spec.Tokenizer {
+	case WordPiece:
+		vocab, err := loadVocab(filepath.Join(dir, "vocab.txt"))
+		if err != nil {
+			return nil, err
+		}
+		if len(vocab) != spec.VocabSize {
+			return nil, fmt.Errorf("vocab.txt has %d entries, want %d", len(vocab), spec.VocabSize)
+		}
+		if m.tok, err = newTokenizer(vocab, spec.MaxSeq); err != nil {
+			return nil, err
+		}
+	case Unigram:
+		if m.tok, err = loadUnigram(filepath.Join(dir, "tokenizer.json"), spec.MaxSeq); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported tokenizer %q", spec.Tokenizer)
 	}
 
-	m := &Model{tok: tok, parallel: runtime.GOMAXPROCS(0)}
 	var firstErr error
 	get := func(name string, shape ...int) []float32 {
 		if firstErr != nil {
@@ -83,12 +86,15 @@ func Load(dir string) (*Model, error) {
 		}
 		return v
 	}
-	m.wordEmb = get("embeddings.word_embeddings.weight", vocabSize, Dim)
-	m.posEmb = get("embeddings.position_embeddings.weight", maxPositions, Dim)
+	if m.wordEmb, err = st.raw("embeddings.word_embeddings.weight", spec.VocabSize, Dim); err != nil {
+		return nil, fmt.Errorf("loading %s: %w", dir, err)
+	}
+	m.posEmb = get("embeddings.position_embeddings.weight", spec.MaxPositions, Dim)
 	m.typeEmb = get("embeddings.token_type_embeddings.weight", 2, Dim)
 	m.embLNg = get("embeddings.LayerNorm.weight", Dim)
 	m.embLNb = get("embeddings.LayerNorm.bias", Dim)
-	for i := range layers {
+	m.layers = make([]layer, spec.Layers)
+	for i := range spec.Layers {
 		p := fmt.Sprintf("encoder.layer.%d.", i)
 		l := &m.layers[i]
 		l.wq, l.bq = get(p+"attention.self.query.weight", Dim, Dim), get(p+"attention.self.query.bias", Dim)
@@ -96,8 +102,8 @@ func Load(dir string) (*Model, error) {
 		l.wv, l.bv = get(p+"attention.self.value.weight", Dim, Dim), get(p+"attention.self.value.bias", Dim)
 		l.wo, l.bo = get(p+"attention.output.dense.weight", Dim, Dim), get(p+"attention.output.dense.bias", Dim)
 		l.ln1g, l.ln1b = get(p+"attention.output.LayerNorm.weight", Dim), get(p+"attention.output.LayerNorm.bias", Dim)
-		l.wi, l.bi = get(p+"intermediate.dense.weight", intermediate, Dim), get(p+"intermediate.dense.bias", intermediate)
-		l.wo2, l.bo2 = get(p+"output.dense.weight", Dim, intermediate), get(p+"output.dense.bias", Dim)
+		l.wi, l.bi = get(p+"intermediate.dense.weight", spec.Intermediate, Dim), get(p+"intermediate.dense.bias", spec.Intermediate)
+		l.wo2, l.bo2 = get(p+"output.dense.weight", Dim, spec.Intermediate), get(p+"output.dense.bias", Dim)
 		l.ln2g, l.ln2b = get(p+"output.LayerNorm.weight", Dim), get(p+"output.LayerNorm.bias", Dim)
 	}
 	if firstErr != nil {
@@ -106,11 +112,36 @@ func Load(dir string) (*Model, error) {
 	return m, nil
 }
 
-// Tokenize exposes the tokenizer for tests and diagnostics.
+// Spec returns the model's specification.
+func (m *Model) Spec() Spec { return m.spec }
+
+// Close releases the mapped weights.
+func (m *Model) Close() error {
+	if m.closeFn != nil {
+		return m.closeFn()
+	}
+	return nil
+}
+
+// Tokenize exposes the tokenizer for tests and diagnostics (no prefix added).
 func (m *Model) Tokenize(text string) []int { return m.tok.encode(text) }
 
-// Embed encodes texts concurrently and returns L2-normalised vectors.
+// Embed encodes documents (passages) concurrently and returns L2-normalized
+// vectors.
 func (m *Model) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return m.embedAll(ctx, texts, m.spec.PassagePrefix)
+}
+
+// EmbedQuery encodes a search query, applying the model's query prefix.
+func (m *Model) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	out, err := m.embedAll(ctx, []string{text}, m.spec.QueryPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return out[0], nil
+}
+
+func (m *Model) embedAll(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
 	out := make([][]float32, len(texts))
 	sem := make(chan struct{}, m.parallel)
 	var wg sync.WaitGroup
@@ -123,35 +154,48 @@ func (m *Model) Embed(ctx context.Context, texts []string) ([][]float32, error) 
 		go func(i int, t string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			out[i] = m.encode(m.tok.encode(t))
+			out[i] = m.encode(m.tok.encode(prefix + t))
 		}(i, t)
 	}
 	wg.Wait()
 	return out, ctx.Err()
 }
 
+func (m *Model) wordRow(id int) []float32 {
+	row := make([]float32, Dim)
+	b := m.wordEmb[id*Dim*4 : (id+1)*Dim*4]
+	for j := range row {
+		row[j] = math.Float32frombits(binary.LittleEndian.Uint32(b[j*4:]))
+	}
+	return row
+}
+
 // encode runs the transformer over one token sequence and mean-pools.
 func (m *Model) encode(ids []int) []float32 {
 	n := len(ids)
+	heads := m.spec.Heads
+	headDim := Dim / heads
+	inter := m.spec.Intermediate
+	eps := m.spec.LayerNormEps
+
 	x := make([]float32, n*Dim)
 	for t, id := range ids {
 		row := x[t*Dim : (t+1)*Dim]
-		w := m.wordEmb[id*Dim : (id+1)*Dim]
+		w := m.wordRow(id)
 		p := m.posEmb[t*Dim : (t+1)*Dim]
 		for j := range row {
 			row[j] = w[j] + p[j] + m.typeEmb[j]
 		}
 	}
-	layerNorm(x, n, m.embLNg, m.embLNb)
+	layerNorm(x, n, m.embLNg, m.embLNb, eps)
 
-	// Scratch buffers reused across layers.
 	q, k, v := make([]float32, n*Dim), make([]float32, n*Dim), make([]float32, n*Dim)
 	ctxb := make([]float32, n*Dim)
 	attn := make([]float32, n*Dim)
 	scores := make([]float32, n*n)
-	inter := make([]float32, n*intermediate)
+	interBuf := make([]float32, n*inter)
 	ffn := make([]float32, n*Dim)
-	scale := float32(1 / math.Sqrt(headDim))
+	scale := float32(1 / math.Sqrt(float64(headDim)))
 
 	for li := range m.layers {
 		l := &m.layers[li]
@@ -173,16 +217,15 @@ func (m *Model) encode(ids []int) []float32 {
 
 		linear(ctxb, n, Dim, l.wo, l.bo, Dim, attn)
 		addInPlace(x, attn)
-		layerNorm(x, n, l.ln1g, l.ln1b)
+		layerNorm(x, n, l.ln1g, l.ln1b, eps)
 
-		linear(x, n, Dim, l.wi, l.bi, intermediate, inter)
-		gelu(inter)
-		linear(inter, n, intermediate, l.wo2, l.bo2, Dim, ffn)
+		linear(x, n, Dim, l.wi, l.bi, inter, interBuf)
+		gelu(interBuf)
+		linear(interBuf, n, inter, l.wo2, l.bo2, Dim, ffn)
 		addInPlace(x, ffn)
-		layerNorm(x, n, l.ln2g, l.ln2b)
+		layerNorm(x, n, l.ln2g, l.ln2b, eps)
 	}
 
-	// Mean pooling over all tokens (no padding is ever present) and L2 norm.
 	out := make([]float32, Dim)
 	for t := range n {
 		row := x[t*Dim : (t+1)*Dim]
@@ -240,7 +283,7 @@ func softmaxRows(s []float32, n int) {
 	}
 }
 
-func layerNorm(x []float32, n int, g, b []float32) {
+func layerNorm(x []float32, n int, g, b []float32, eps float64) {
 	for t := range n {
 		row := x[t*Dim : (t+1)*Dim]
 		var mean float64
@@ -254,7 +297,7 @@ func layerNorm(x []float32, n int, g, b []float32) {
 			variance += d * d
 		}
 		variance /= Dim
-		inv := float32(1 / math.Sqrt(variance+layerNormEps))
+		inv := float32(1 / math.Sqrt(variance+eps))
 		for j, v := range row {
 			row[j] = (v-float32(mean))*inv*g[j] + b[j]
 		}
