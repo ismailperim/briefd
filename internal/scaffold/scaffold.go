@@ -39,7 +39,7 @@ func Write(dir string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(dst, data, 0o644); err != nil {
+		if err := os.WriteFile(dst, data, 0o644); err != nil { //nolint:gosec // documentation files are meant to be world-readable
 			return fmt.Errorf("writing %s: %w", dst, err)
 		}
 		created = append(created, rel)
