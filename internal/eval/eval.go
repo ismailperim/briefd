@@ -5,6 +5,7 @@ package eval
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -88,6 +89,10 @@ type Metrics struct {
 	Recall5  float64 `json:"recall_at_5"`
 	Recall10 float64 `json:"recall_at_10"`
 	MRR      float64 `json:"mrr"`
+	// NDCG10 is normalized discounted cumulative gain at 10 with binary
+	// relevance — the metric BEIR reports, for comparison with published
+	// numbers.
+	NDCG10 float64 `json:"ndcg_at_10"`
 }
 
 // QueryResult is the outcome for one query in one mode.
@@ -98,6 +103,7 @@ type QueryResult struct {
 	FirstRank int      `json:"first_rank"` // 0 when no expected chunk was retrieved
 	Recall5   float64  `json:"recall_at_5"`
 	Recall10  float64  `json:"recall_at_10"`
+	NDCG10    float64  `json:"ndcg_at_10"`
 	Top       []string `json:"top"` // "path — heading" of the top results
 	Missed    []string `json:"missed,omitempty"`
 }
@@ -174,12 +180,16 @@ func Matches(hit store.ChunkHit, exp Expected) bool {
 func score(q Query, mode string, hits []store.ChunkHit) QueryResult {
 	qr := QueryResult{ID: q.ID, Type: q.Type, Mode: mode}
 	found := make([]bool, len(q.Expected))
+	var dcg float64
 	for rank, h := range hits {
 		for i, exp := range q.Expected {
 			if !found[i] && Matches(h, exp) {
 				found[i] = true
 				if qr.FirstRank == 0 {
 					qr.FirstRank = rank + 1
+				}
+				if rank < 10 {
+					dcg += 1 / math.Log2(float64(rank+2))
 				}
 			}
 		}
@@ -197,6 +207,13 @@ func score(q Query, mode string, hits []store.ChunkHit) QueryResult {
 		if !found[i] {
 			qr.Missed = append(qr.Missed, exp.Path+" — "+exp.Heading)
 		}
+	}
+	var idcg float64
+	for i := 0; i < len(q.Expected) && i < 10; i++ {
+		idcg += 1 / math.Log2(float64(i+2))
+	}
+	if idcg > 0 {
+		qr.NDCG10 = dcg / idcg
 	}
 	return qr
 }
@@ -220,6 +237,7 @@ func aggregate(results []QueryResult, typ string) Metrics {
 		m.Queries++
 		m.Recall5 += r.Recall5
 		m.Recall10 += r.Recall10
+		m.NDCG10 += r.NDCG10
 		if r.FirstRank > 0 {
 			m.MRR += 1 / float64(r.FirstRank)
 		}
@@ -228,6 +246,7 @@ func aggregate(results []QueryResult, typ string) Metrics {
 		m.Recall5 /= float64(m.Queries)
 		m.Recall10 /= float64(m.Queries)
 		m.MRR /= float64(m.Queries)
+		m.NDCG10 /= float64(m.Queries)
 	}
 	return m
 }
@@ -269,6 +288,8 @@ func Check(rep *Report, th Thresholds) []string {
 				got = mr.Overall.Recall10
 			case "mrr":
 				got = mr.Overall.MRR
+			case "ndcg_at_10":
+				got = mr.Overall.NDCG10
 			default:
 				failures = append(failures, fmt.Sprintf("%s: unknown metric %q", mode, metric))
 				continue

@@ -24,6 +24,10 @@ func TestScoreAndAggregate(t *testing.T) {
 	if r.FirstRank != 2 || r.Recall5 != 0.5 || r.Recall10 != 1 || len(r.Missed) != 0 || len(r.Top) != 5 {
 		t.Errorf("result = %+v", r)
 	}
+	// nDCG@10 with hits at ranks 2 and 7: (1/log2(3) + 1/log2(8)) / (1/log2(2) + 1/log2(3))
+	if want := (1/1.5849625 + 1/3.0) / (1 + 1/1.5849625); r.NDCG10 < want-1e-6 || r.NDCG10 > want+1e-6 {
+		t.Errorf("ndcg@10 = %v, want %v", r.NDCG10, want)
+	}
 	none := score(q, "bm25", nil)
 	if none.FirstRank != 0 || none.Recall5 != 0 || len(none.Missed) != 2 {
 		t.Errorf("empty result = %+v", none)

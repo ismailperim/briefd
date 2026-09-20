@@ -123,12 +123,12 @@ func runEval(ctx context.Context, args []string, stdout, stderr io.Writer, logge
 
 func printReport(w io.Writer, rep *eval.Report, verbose bool) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "mode\ttype\tqueries\tRecall@5\tRecall@10\tMRR")
+	fmt.Fprintln(tw, "mode\ttype\tqueries\tRecall@5\tRecall@10\tMRR\tnDCG@10")
 	for _, m := range rep.Modes {
-		fmt.Fprintf(tw, "%s\tall\t%d\t%.3f\t%.3f\t%.3f\n", m.Mode, m.Overall.Queries, m.Overall.Recall5, m.Overall.Recall10, m.Overall.MRR)
+		fmt.Fprintf(tw, "%s\tall\t%d\t%.3f\t%.3f\t%.3f\t%.3f\n", m.Mode, m.Overall.Queries, m.Overall.Recall5, m.Overall.Recall10, m.Overall.MRR, m.Overall.NDCG10)
 		for _, t := range sortedKeys(m.ByType) {
 			bt := m.ByType[t]
-			fmt.Fprintf(tw, "\t%s\t%d\t%.3f\t%.3f\t%.3f\n", t, bt.Queries, bt.Recall5, bt.Recall10, bt.MRR)
+			fmt.Fprintf(tw, "\t%s\t%d\t%.3f\t%.3f\t%.3f\t%.3f\n", t, bt.Queries, bt.Recall5, bt.Recall10, bt.MRR, bt.NDCG10)
 		}
 	}
 	_ = tw.Flush()
