@@ -21,7 +21,7 @@
 ---
 
 <p align="center">
-  <a href="docs/assets/briefd-explainer.mp4"><img src="docs/assets/diagram-comparison.png" alt="Watch the 90-second explainer: CLAUDE.md today vs briefd" width="100%"></a><br>
+  <img src="docs/assets/briefd-demo.gif" alt="Today: CLAUDE.md is re-sent on every turn. With briefd: one compile_bundle call returns 1,791 tokens. Result: 86% fewer knowledge tokens per task." width="100%"><br>
   <a href="docs/assets/briefd-explainer.mp4">▶ Watch the 90-second explainer</a> · <a href="docs/ARCHITECTURE.md">How it works</a> · <a href="#quickstart">Quickstart</a>
 </p>
 
