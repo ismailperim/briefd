@@ -56,7 +56,8 @@ briefd/
 │   ├── embed/           # Embedder interface + onnx/ollama/openai adapters
 │   ├── bundle/          # compile_bundle: selection + token packing + cache
 │   ├── mcpserver/       # MCP tools (streamable HTTP)
-│   ├── httpapi/         # REST + health + metrics
+│   ├── httpapi/         # REST + health + /metrics + embedded dashboard
+│   ├── metrics/         # in-process counters/histograms (Prometheus text exposition)
 │   └── tokenizer/       # token counting (tiktoken-compatible approximation)
 ├── eval/                # golden dataset + eval harness (see Testing)
 ├── docs/adr/            # ADRs — one file per decision, NNNN-title.md

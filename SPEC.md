@@ -79,6 +79,17 @@ refs: ["services/payment/**"]  # code paths this doc governs (staleness input, v
 `GET /api/health`, `GET /api/stats` (chunk counts, index freshness, cache hit rate,
 token-served counters). Auth: single bearer token (`BRIEFD_API_TOKEN`); MCP uses the same.
 
+`GET /metrics` — Prometheus text format, no auth by default (configurable):
+request counts and latency histograms per tool/endpoint, tokens served, cache hits/misses,
+index size, last sync time/status, embedding calls.
+
+### 3.4 Web dashboard (read-only)
+
+`GET /` serves a single-page status dashboard embedded in the binary (no build step,
+no JS framework): request volume and latency per tool, tokens served, cache hit rate,
+index contents per scope, sync status, and a search box that calls `/api/search` for
+manual inspection. Read-only; it never mutates state. Same bearer token as the API.
+
 ### 3.3 CLI
 
 `briefd serve` · `briefd index --rebuild` · `briefd eval` · `briefd version`
@@ -149,12 +160,13 @@ sync_state(repo_url, last_commit, last_sync_at, last_error)
 
 **In:** git sync (clone/pull/poll/webhook) · chunking · FTS5+vec+RRF hybrid ·
 `search_context`, `compile_bundle`, `get_document`, `list_scopes`, `propose_update`
-(branch+commit; PR URL if forge token given) · ONNX default + Ollama adapter · bundle
-cache · REST + bearer auth · eval harness + golden set · docker compose + binary release.
+(branch+commit; PR URL if forge token given) · `report_usage` (store only) · ONNX default
++ Ollama adapter · bundle cache · REST + bearer auth · Prometheus `/metrics` + embedded
+read-only web dashboard · eval harness + golden set · docker compose + binary release.
 
-**Out (v0.2+):** web UI · usage-based relevance tuning · staleness scoring via `refs`
-globs · contradiction detection for proposals · multi-repo knowledge sources ·
-`report_usage`-driven ranking · metrics endpoint (Prometheus).
+**Out (v0.2+):** usage-based relevance tuning · staleness scoring via `refs` globs ·
+contradiction detection for proposals · multi-repo knowledge sources ·
+`report_usage`-driven ranking · dashboard write actions (trigger sync, manage proposals).
 
 ## 11. Milestones
 
@@ -162,6 +174,7 @@ globs · contradiction detection for proposals · multi-repo knowledge sources �
 |---|---|---|
 | M1 | ingest + FTS5, CLI search | `briefd index && briefd search "retry policy"` |
 | M2 | MCP server with `search_context` (BM25) | Claude Code queries it live |
+| M2b | Metrics + embedded web dashboard | open `/`, see live request/token counters |
 | M3 | ONNX embeddings + sqlite-vec + RRF | eval shows hybrid > BM25 |
 | M4 | `compile_bundle` + budget packer + cache | deterministic bundle, budget respected |
 | M5 | git sync loop + `propose_update` + docker/goreleaser | end-to-end team flow |

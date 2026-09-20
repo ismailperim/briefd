@@ -37,6 +37,16 @@ session prompt. Keep sessions scoped — don't let a session bleed into the next
 > returns chunks from the sample repo within the token budget. Document the Claude Code
 > connection snippet in README.
 
+## Session 2b — M2b: Metrics + web dashboard
+
+> Implement `internal/metrics` (in-process counters/histograms, no external service):
+> requests and latency per MCP tool and REST endpoint, tokens served, cache hits/misses,
+> index size per scope, last sync status. Expose `GET /metrics` in Prometheus text format
+> and feed `GET /api/stats`. Implement the read-only dashboard from SPEC §3.4: one HTML
+> page embedded via `embed`, vanilla JS polling `/api/stats`, a search box hitting
+> `/api/search`. Acceptance: run `briefd serve`, open `http://localhost:8080/`, fire a few
+> MCP calls from Claude Code and watch the counters move; `/metrics` scrapes cleanly.
+
 ## Session 3 — M3: Embeddings + hybrid + eval
 
 > Implement the Embedder interface with the ONNX all-MiniLM-L6-v2 adapter (CGO confined
