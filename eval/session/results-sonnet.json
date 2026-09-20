@@ -1,0 +1,311 @@
+{
+  "model": "sonnet",
+  "tasks": 10,
+  "a_claudemd": {
+    "context_tokens_mean": 51739,
+    "prompt_tokens_mean": 51739,
+    "output_tokens_mean": 80.6,
+    "cost_usd_mean": 0.119847,
+    "turns_mean": 1,
+    "correct": 10
+  },
+  "b_briefd": {
+    "context_tokens_mean": 33613.6,
+    "prompt_tokens_mean": 138224,
+    "output_tokens_mean": 458.9,
+    "cost_usd_mean": 0.07206614,
+    "turns_mean": 4.4,
+    "correct": 10
+  },
+  "rows": [
+    {
+      "id": "refund-window",
+      "expect": [
+        "180"
+      ],
+      "a": {
+        "context_tokens": 51740,
+        "prompt_tokens": 51740,
+        "output_tokens": 112,
+        "cost_usd": 0.1386552,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 7.8,
+        "result": "No \u2014 refunds are only allowed within 180 days of the capture date, and 7 months (~210 days) exceeds that window, so the request must be rejected with `refund_window_expired`. This limit exists because card networks allow disputes up to 180 days after capture, and refunding beyond that would leave the payment unreconcilable against a later chargeback.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33750,
+        "prompt_tokens": 158400,
+        "output_tokens": 536,
+        "cost_usd": 0.09587459999999999,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 17.1,
+        "result": "Yes \u2014 refunds are allowed up to **180 days** after the capture date, so a payment captured 7 months (~210 days) ago is past the window and must be rejected with `refund_window_expired`. (If the payment also has an open dispute, refunds would be blocked regardless.)",
+        "correct": true
+      }
+    },
+    {
+      "id": "refund-approval",
+      "expect": [
+        "refunds:approve",
+        "second"
+      ],
+      "a": {
+        "context_tokens": 51737,
+        "prompt_tokens": 51737,
+        "output_tokens": 106,
+        "cost_usd": 0.11803720000000001,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 7.1,
+        "result": "A refund of 3,000 EUR falls in the 500\u20135,000 EUR band, so it needs approval from a second merchant user holding the `refunds:approve` role \u2014 an operator alone can't self-approve it. No Kestrel Pay risk team approval is required at this amount; that only kicks in above 5,000 EUR.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33119,
+        "prompt_tokens": 90939,
+        "output_tokens": 296,
+        "cost_usd": 0.057030199999999996,
+        "turns": 3,
+        "tool_calls": 2,
+        "seconds": 12.7,
+        "result": "A 3,000 EUR refund falls in the 500\u20135,000 EUR band, so it needs approval from a second merchant user with the `refunds:approve` role. No Kestrel Pay risk team involvement is required, since that only kicks in above 5,000 EUR.",
+        "correct": true
+      }
+    },
+    {
+      "id": "payout-failure",
+      "expect": [
+        "available",
+        "three"
+      ],
+      "a": {
+        "context_tokens": 51745,
+        "prompt_tokens": 51745,
+        "output_tokens": 71,
+        "cost_usd": 0.1177202,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 8.7,
+        "result": "If a bank rejects a payout, the funds return to the merchant's available balance and the merchant is notified. After three consecutive failures, the payout schedule is switched to `manual` and the account is flagged for KYC review.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33757,
+        "prompt_tokens": 158406,
+        "output_tokens": 485,
+        "cost_usd": 0.07485620000000001,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 15.4,
+        "result": "If a bank rejects a payout, the funds return to the merchant's available balance and the merchant is notified. After three consecutive failures, the payout schedule is switched to `manual` and the account is flagged for KYC review.",
+        "correct": true
+      }
+    },
+    {
+      "id": "idempotency-replay",
+      "expect": [
+        "422",
+        "idempotency_key_reused"
+      ],
+      "a": {
+        "context_tokens": 51742,
+        "prompt_tokens": 51742,
+        "output_tokens": 36,
+        "cost_usd": 0.11738819999999998,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 10.0,
+        "result": "HTTP 422 with `{\"error\": {\"code\": \"idempotency_key_reused\", ...}}`.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33725,
+        "prompt_tokens": 158252,
+        "output_tokens": 485,
+        "cost_usd": 0.0747338,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 11.9,
+        "result": "The API should reject it with HTTP 422 `idempotency_key_reused`, since replaying the same key with a different body would otherwise silently mask a client bug.\nAnswered above: HTTP 422 `idempotency_key_reused`.",
+        "correct": true
+      }
+    },
+    {
+      "id": "float-money",
+      "expect": [
+        "Minor",
+        "int64"
+      ],
+      "a": {
+        "context_tokens": 51739,
+        "prompt_tokens": 51739,
+        "output_tokens": 53,
+        "cost_usd": 0.1175092,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 7.2,
+        "result": "No \u2014 money must be `money.Amount{Minor int64, Currency string}` from `platform/money`; `float64` is never used or used to construct an `Amount`.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33866,
+        "prompt_tokens": 158733,
+        "output_tokens": 524,
+        "cost_usd": 0.07571879999999999,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 17.2,
+        "result": "No \u2014 the convention is to represent money as `money.Amount{Minor int64, Currency string}` (integer minor units + ISO 4217 code) from `platform/money`, and never use `float64` or construct an `Amount` from a float.",
+        "correct": true
+      }
+    },
+    {
+      "id": "retry-acquirer",
+      "expect": [
+        "3",
+        "10"
+      ],
+      "a": {
+        "context_tokens": 51734,
+        "prompt_tokens": 51734,
+        "output_tokens": 41,
+        "cost_usd": 0.1173692,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 10.1,
+        "result": "Money-moving calls to acquirers use 3 attempts with a 10 second total budget, and always with an idempotency key.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33210,
+        "prompt_tokens": 91068,
+        "output_tokens": 297,
+        "cost_usd": 0.0574158,
+        "turns": 3,
+        "tool_calls": 2,
+        "seconds": 9.6,
+        "result": "Acquirer calls (money-moving) use a stricter retry policy: **3 attempts** with a **10-second total budget**, always with an idempotency key.",
+        "correct": true
+      }
+    },
+    {
+      "id": "drop-column",
+      "expect": [
+        "three",
+        "stop writing"
+      ],
+      "a": {
+        "context_tokens": 51733,
+        "prompt_tokens": 51733,
+        "output_tokens": 132,
+        "cost_usd": 0.1182642,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 9.7,
+        "result": "Per the database migrations rule, dropping a column isn't a single-step migration but a three-release process: first stop writing to it, then stop reading from it, then drop it in a third release \u2014 each release stays backward-compatible with the previous one still running. Since column removal encodes no business meaning here (just schema cleanup, not a data/balance change), a plain migration file is fine; you don't need a compensating ledger event for this.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33721,
+        "prompt_tokens": 158213,
+        "output_tokens": 554,
+        "cost_usd": 0.07535280000000001,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 12.7,
+        "result": "Per team convention, removing a column takes three releases: first stop writing to it, then stop reading from it, then drop it in a third release. Each release must remain backward-compatible with the previous one still running (never drop or rename in the same release that stops using it).\nDone \u2014 answer above reflects your team's `conventions/database-migrations.md` rule.",
+        "correct": true
+      }
+    },
+    {
+      "id": "chargeback-ratio",
+      "expect": [
+        "10%",
+        "monitoring"
+      ],
+      "a": {
+        "context_tokens": 51738,
+        "prompt_tokens": 51738,
+        "output_tokens": 95,
+        "cost_usd": 0.1179332,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 7.1,
+        "result": "At 1.2% (above the 0.9% threshold but below 1.5%), the merchant is placed in the monitoring program: reserve rises to 10% and the risk team reviews the account weekly. Suspension only triggers if the ratio exceeds 1.5% for two consecutive months.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33712,
+        "prompt_tokens": 158179,
+        "output_tokens": 603,
+        "cost_usd": 0.0758408,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 13.1,
+        "result": "At 1.2%, the merchant is already past the 0.9% monitoring threshold, so their reserve rises to 10% and the risk team reviews the account weekly. Suspension only kicks in above 1.5% for two consecutive months, so a single month at 1.2% doesn't trigger suspension.\nThat's the full answer above \u2014 monitoring program with 10% reserve and weekly risk review, but no suspension unless it exceeds 1.5% for two consecutive months.",
+        "correct": true
+      }
+    },
+    {
+      "id": "deploy-window",
+      "expect": [
+        "Monday",
+        "Thursday"
+      ],
+      "a": {
+        "context_tokens": 51737,
+        "prompt_tokens": 51737,
+        "output_tokens": 88,
+        "cost_usd": 0.1178522,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 9.8,
+        "result": "No \u2014 production deploys of money-moving services are only allowed Monday\u2013Thursday, 09:00\u201316:00 (team timezone), so a Friday 18:00 deploy of the payouts service isn't permitted (emergency fixes with incident commander approval are the only exception).",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33348,
+        "prompt_tokens": 91190,
+        "output_tokens": 299,
+        "cost_usd": 0.058005600000000004,
+        "turns": 3,
+        "tool_calls": 2,
+        "seconds": 9.6,
+        "result": "No \u2014 production deploys of money-moving services like payouts are only allowed Monday\u2013Thursday, 09:00\u201316:00 (team timezone), so Friday 18:00 is outside the deployment window.",
+        "correct": true
+      }
+    },
+    {
+      "id": "webhook-retry",
+      "expect": [
+        "3 days",
+        "7"
+      ],
+      "a": {
+        "context_tokens": 51745,
+        "prompt_tokens": 51745,
+        "output_tokens": 72,
+        "cost_usd": 0.11774119999999999,
+        "turns": 1,
+        "tool_calls": 0,
+        "seconds": 7.0,
+        "result": "Failed webhook deliveries are retried with exponential backoff (1 minute doubling up to 12 hours) for up to 3 days, and the endpoint is automatically disabled after 7 consecutive days of failure.",
+        "correct": true
+      },
+      "b": {
+        "context_tokens": 33928,
+        "prompt_tokens": 158860,
+        "output_tokens": 510,
+        "cost_usd": 0.0758328,
+        "turns": 5,
+        "tool_calls": 4,
+        "seconds": 12.5,
+        "result": "Failed webhook deliveries are retried with exponential backoff (1 min doubling up to 12 hours) for up to 3 days before being marked `undeliverable`, and the endpoint itself is disabled after 7 consecutive days of failures.\nAnswered above.",
+        "correct": true
+      }
+    }
+  ]
+}

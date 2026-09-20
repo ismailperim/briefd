@@ -1,0 +1,12 @@
+[
+  {"id": "refund-window", "task": "A merchant asks whether they can refund a payment captured 7 months ago. Answer in two sentences with the rule.", "expect": ["180"]},
+  {"id": "refund-approval", "task": "A merchant operator wants to refund 3,000 EUR. Who has to approve it? Two sentences.", "expect": ["refunds:approve", "second"]},
+  {"id": "payout-failure", "task": "A merchant's bank rejected our payout. What happens to the funds and after how many failures do we switch them to manual? Two sentences.", "expect": ["available", "three"]},
+  {"id": "idempotency-replay", "task": "A client re-sends a create-payment request with the same Idempotency-Key but a different body. What should the API return? One sentence.", "expect": ["422", "idempotency_key_reused"]},
+  {"id": "float-money", "task": "In Go, can I represent a payment amount as float64 in our codebase? Answer with the convention in one sentence.", "expect": ["Minor", "int64"]},
+  {"id": "retry-acquirer", "task": "How many attempts and what total time budget do we allow when retrying an acquirer call? One sentence.", "expect": ["3", "10"]},
+  {"id": "drop-column", "task": "I want to drop an unused column from the payments database. What is the safe procedure? Two sentences.", "expect": ["three", "stop writing"]},
+  {"id": "chargeback-ratio", "task": "A merchant's chargeback ratio hit 1.2% this month. What happens to their account? Two sentences.", "expect": ["10%", "monitoring"]},
+  {"id": "deploy-window", "task": "Can I deploy the payouts service on Friday at 18:00? Answer with the rule in one sentence.", "expect": ["Monday", "Thursday"]},
+  {"id": "webhook-retry", "task": "For how long do we retry a failing merchant webhook endpoint before giving up, and when is the endpoint disabled? One sentence.", "expect": ["3 days", "7"]}
+]

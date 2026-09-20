@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `eval/session/run.py`: real Claude Code session benchmark (CLAUDE.md vs
+  briefd over MCP) with results.
 - `briefd bench`: measures knowledge tokens per task and answer coverage for
   "everything in CLAUDE.md", a curated CLAUDE.md, and `compile_bundle` at
   several budgets, over the golden tasks.
