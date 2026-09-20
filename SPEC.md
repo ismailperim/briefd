@@ -1,0 +1,167 @@
+# SPEC — briefd
+
+Self-hosted context compiler for AI coding teams. Git-backed domain knowledge, served to
+coding agents as token-budgeted context bundles via MCP.
+
+Status: draft v0.1 · License: Apache-2.0 · Deployment target: single container, 2–4 GB VPS
+
+---
+
+## 1. Problem & positioning
+
+- `CLAUDE.md` / `AGENTS.md` files load 5–10K tokens of static context into every session;
+  the task usually needs a fraction of it, and the files are trapped in one repo.
+- Teams building **many projects in one domain** have no home for cross-repo knowledge:
+  terminology, business rules, ADRs, integration conventions.
+- briefd inverts the model: **context on demand, not up front.** Agents query; the service
+  compiles only what the task needs, within an explicit token budget.
+
+Non-goals (v0.x): per-user/agent personal memory (Mem0 territory), code indexing
+(Cursor/Continue territory), multi-node clustering, SaaS hosting.
+
+## 2. Core concepts
+
+| Term | Definition |
+|---|---|
+| Knowledge repo | A git repo of Markdown files. Single source of truth. |
+| Scope | A visibility unit derived from folder layout (`domain`, `conventions`, `projects/<name>`). |
+| Chunk | A retrievable unit (~heading-bounded section) with stable ID, metadata, embedding. |
+| Bundle | A compiled, token-budgeted package of chunks answering a task description. |
+| Proposal | An agent-suggested knowledge change, materialized as a git branch/PR. |
+
+### Knowledge repo layout (convention over configuration)
+
+```
+knowledge-repo/
+├── domain/          # shared: terminology, business rules, cross-project decisions
+├── conventions/     # shared: coding standards, infra patterns
+└── projects/
+    ├── <project-a>/ # only visible to scope=projects/<project-a>
+    └── <project-b>/
+```
+
+Scope resolution: a client requesting `scopes=["domain","conventions","projects/a"]`
+sees those folders only. Default when unspecified: `domain` + `conventions`.
+
+Optional front-matter per file:
+
+```yaml
+---
+title: Retry policy            # defaults to first H1
+tags: [payments, resilience]
+refs: ["services/payment/**"]  # code paths this doc governs (staleness input, v0.2)
+---
+```
+
+## 3. Interfaces
+
+### 3.1 MCP tools (primary interface, streamable HTTP)
+
+1. `search_context(query, max_tokens?=2000, scopes?, top_k?=8)`
+   → ranked chunks: `[{chunk_id, doc_path, heading, content, score, tokens}]`,
+   total ≤ `max_tokens`.
+2. `compile_bundle(task_description, max_tokens?=2000, scopes?)`
+   → single assembled context block: deduplicated, ordered (domain → conventions →
+   project), with per-chunk source attribution and `bundle_id`. Deterministic: same
+   task + same knowledge state (repo commit hash) ⇒ byte-identical bundle (cacheable,
+   prompt-cache friendly).
+3. `get_document(doc_path)` → full document (subject to scope).
+4. `list_scopes()` → available scopes + doc counts.
+5. `propose_update(doc_path, change_description, new_content, scopes?)`
+   → creates branch `briefd/proposal-<id>`, commits, returns branch name + (if forge API
+   configured) PR URL. Never touches the index.
+6. `report_usage(bundle_id, useful_chunk_ids)` — optional feedback signal (v0.2 uses it
+   for relevance tuning; v0.1 only stores it).
+
+### 3.2 REST (secondary)
+
+`GET /api/search`, `POST /api/bundle`, `GET /api/docs/{path}`, `POST /api/proposals`,
+`GET /api/health`, `GET /api/stats` (chunk counts, index freshness, cache hit rate,
+token-served counters). Auth: single bearer token (`BRIEFD_API_TOKEN`); MCP uses the same.
+
+### 3.3 CLI
+
+`briefd serve` · `briefd index --rebuild` · `briefd eval` · `briefd version`
+
+## 4. Ingestion & indexing
+
+1. **Startup:** clone (or open) knowledge repo → compare HEAD with `sync_state.last_commit`
+   → incremental reindex of changed/deleted files only. Empty DB ⇒ full build. The DB is
+   disposable; `--rebuild` recreates it from git alone.
+2. **Runtime freshness:** polling every `sync.interval` (default 60s) and/or
+   `POST /webhook/git` (HMAC-verified). Both supported; polling is the default because
+   homelab setups often can't receive webhooks.
+3. **Chunking:** split on headings (H2/H3), keep heading breadcrumb in chunk metadata,
+   target 200–500 tokens per chunk, hard max 800 (split on paragraph boundary). Chunk ID =
+   `hash(doc_path + heading_path)` — stable across re-indexing unless content moves.
+4. **Embedding:** compute per chunk on index; content-hash skip for unchanged chunks.
+
+## 5. Search & bundle compilation
+
+- **Hybrid retrieval:** FTS5 BM25 top-50 + sqlite-vec cosine top-50 → **RRF (k=60)**.
+- **Budget packer (`compile_bundle`):** greedy fill in fused-rank order → dedupe
+  near-identical chunks → order by scope priority (domain > conventions > project) then
+  rank → stop before exceeding budget; if the top chunk alone exceeds budget, return its
+  head with a truncation marker. Token counting via tiktoken-compatible approximation
+  (documented margin of error; budget enforced with 5% safety headroom).
+- **Bundle cache:** key = `hash(task_description + scopes + max_tokens + repo_commit)`,
+  stored in SQLite, in-process LRU in front. Invalidation is automatic (commit hash in key).
+
+## 6. Data model (SQLite, WAL)
+
+```sql
+documents(id, path, scope, title, tags, front_matter, content_hash, updated_commit, indexed_at)
+chunks(id, doc_id, heading_path, content, tokens, content_hash, position)
+chunks_fts        -- FTS5 virtual table over chunks.content (+ heading_path, title)
+chunk_vectors     -- sqlite-vec virtual table: chunk_id, embedding float[384]
+bundles(id, cache_key, task_hash, repo_commit, content, tokens, created_at, hits)
+usage_events(id, bundle_id, chunk_id, useful, client, created_at)
+proposals(id, branch, doc_path, description, status, created_at)
+sync_state(repo_url, last_commit, last_sync_at, last_error)
+```
+
+## 7. Embeddings
+
+- Default: bundled ONNX `all-MiniLM-L6-v2` (384-dim), CPU, no network.
+- Adapters (config-selected): `onnx` (default) | `ollama` | `openai-compatible` | `none`
+  (BM25-only mode).
+- Changing the embedding model invalidates `chunk_vectors` (model name stored alongside;
+  mismatch triggers re-embed).
+
+## 8. Evaluation (part of the product, not an afterthought)
+
+- `eval/golden/`: corpus (real ADRs/conventions, anonymized) + `queries.yaml`
+  (30–50 entries: `{query, expected_chunk_ids, type: keyword|paraphrase|typo|mixed-lang}`).
+- `briefd eval` outputs Recall@5, Recall@10, MRR — overall and per query type — and
+  compares BM25-only vs hybrid.
+- CI gate: `eval/thresholds.yaml` (initial: Recall@5 ≥ 0.85 hybrid). Chunking/embedding/
+  fusion changes must include before/after eval numbers.
+
+## 9. Non-functional requirements
+
+- Single container; `docker compose up` with one service. Also distributed as a single
+  binary (goreleaser: linux/amd64, linux/arm64, darwin/arm64).
+- Resource target: idle < 300 MB RAM; 50K chunks searchable < 100 ms p95 on 2 vCPU.
+- No telemetry. No outbound network except git remote and configured embedding adapter.
+- Config: `briefd.yaml` + `BRIEFD_*` env overrides.
+
+## 10. v0.1 scope
+
+**In:** git sync (clone/pull/poll/webhook) · chunking · FTS5+vec+RRF hybrid ·
+`search_context`, `compile_bundle`, `get_document`, `list_scopes`, `propose_update`
+(branch+commit; PR URL if forge token given) · ONNX default + Ollama adapter · bundle
+cache · REST + bearer auth · eval harness + golden set · docker compose + binary release.
+
+**Out (v0.2+):** web UI · usage-based relevance tuning · staleness scoring via `refs`
+globs · contradiction detection for proposals · multi-repo knowledge sources ·
+`report_usage`-driven ranking · metrics endpoint (Prometheus).
+
+## 11. Milestones
+
+| M | Deliverable | Demo |
+|---|---|---|
+| M1 | ingest + FTS5, CLI search | `briefd index && briefd search "retry policy"` |
+| M2 | MCP server with `search_context` (BM25) | Claude Code queries it live |
+| M3 | ONNX embeddings + sqlite-vec + RRF | eval shows hybrid > BM25 |
+| M4 | `compile_bundle` + budget packer + cache | deterministic bundle, budget respected |
+| M5 | git sync loop + `propose_update` + docker/goreleaser | end-to-end team flow |
