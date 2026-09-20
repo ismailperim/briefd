@@ -98,12 +98,12 @@ func ToolDefinitionsJSON() string {
 	if err != nil {
 		return ""
 	}
-	defer ss.Close()
+	defer ss.Close() //nolint:errcheck // in-memory session
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "briefd-bench", Version: "0"}, nil).Connect(ctx, ct, nil)
 	if err != nil {
 		return ""
 	}
-	defer cs.Close()
+	defer cs.Close() //nolint:errcheck // in-memory session
 	list, err := cs.ListTools(ctx, nil)
 	if err != nil {
 		return ""
