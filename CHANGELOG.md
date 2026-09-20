@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-09-20
+
+### Changed
+
+- Container image carries OCI labels/annotations (`io.modelcontextprotocol.server.name`)
+  so it can be listed in the MCP Registry.
+
 ## [0.2.0] — 2026-09-20
 
 ### Added
@@ -94,6 +101,7 @@ First release: everything below.
 - Project skeleton: Go module, `briefd version` command, Makefile, lint config,
   CI, ADR-0001 (core architecture) and ADR-0002 (SQLite driver, vector search).
 
-[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ismailperim/briefd/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ismailperim/briefd/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ismailperim/briefd/releases/tag/v0.1.0

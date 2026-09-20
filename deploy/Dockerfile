@@ -17,6 +17,10 @@ RUN mkdir -p /out/data && chown 65532:65532 /out/data
 
 # briefd is pure Go: no libc, no git binary, no ONNX runtime needed.
 FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.source="https://github.com/ismailperim/briefd" \
+      org.opencontainers.image.description="briefd: git-backed team knowledge served to coding agents as token-budgeted bundles over MCP" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      io.modelcontextprotocol.server.name="io.github.ismailperim/briefd"
 COPY --from=build /out/briefd /briefd
 COPY --from=build --chown=nonroot:nonroot /out/data /data
 # Models are cached under $XDG_CACHE_HOME/briefd/models/<model>.

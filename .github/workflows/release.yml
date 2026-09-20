@@ -55,6 +55,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: |
+            io.modelcontextprotocol.server.name=io.github.ismailperim/briefd
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
