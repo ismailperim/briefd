@@ -62,3 +62,25 @@ func (s *Store) SearchFTS(ctx context.Context, match string, scopes []string, li
 	}
 	return hits, rows.Err()
 }
+
+// AllChunks returns every chunk with its document metadata, ordered by
+// document path and position. Used by evaluation tooling.
+func (s *Store) AllChunks(ctx context.Context) ([]ChunkHit, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens
+		FROM chunks c JOIN documents d ON d.id = c.doc_id
+		ORDER BY d.path, c.position`)
+	if err != nil {
+		return nil, fmt.Errorf("listing chunks: %w", err)
+	}
+	defer rows.Close()
+	var out []ChunkHit
+	for rows.Next() {
+		var h ChunkHit
+		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens); err != nil {
+			return nil, fmt.Errorf("listing chunks: %w", err)
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}

@@ -2,7 +2,8 @@
 # named mode drops below its threshold. Raise these as retrieval improves;
 # never lower them to make a change pass without an ADR-level discussion.
 #
-# Baseline on 2026-09-20 (47 queries, 44 docs / 221 chunks, local MiniLM):
+# Baseline on 2026-09-20 (47 queries, 44 docs / 221 chunks, local MiniLM,
+# tokenizer calibrated to o200k +4.6%):
 #   bm25   R@5 0.681  R@10 0.755  MRR 0.591
 #   vector R@5 0.809  R@10 0.904  MRR 0.700
 #   hybrid R@5 0.809  R@10 0.936  MRR 0.709

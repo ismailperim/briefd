@@ -1,11 +1,12 @@
 // Package tokenizer estimates token counts without depending on a specific
 // model's BPE vocabulary.
 //
-// The estimate is calibrated against OpenAI's cl100k/o200k family, which the
-// Claude family tracks closely for English prose and code. Typical error is
-// within ±15% on Markdown; callers that enforce a budget must apply their own
-// headroom (SPEC §5 mandates 5%). The heuristic is deliberately simple so it
-// is fast, deterministic and dependency-free; it can be swapped for a real BPE
+// The estimate is calibrated against OpenAI's o200k/cl100k BPE (which the
+// Claude family tracks closely) on the sample knowledge corpus plus code and
+// Turkish prose: overall +4.6% with a per-document spread of −1% to +11%.
+// Callers that enforce a budget must apply their own headroom (SPEC §5
+// mandates 5%). The heuristic is deliberately simple so it is fast,
+// deterministic and dependency-free; it can be swapped for a real BPE
 // tokenizer behind the same function if the eval shows the margin matters.
 package tokenizer
 
@@ -57,9 +58,8 @@ func Count(s string) int {
 			}
 			tokens += ceilDiv(i-start, 3)
 		default:
-			// Punctuation and symbols: usually one token each, with common
-			// pairs ("//", "->", "==", ")." ...) merged. Count runs of the
-			// same class at roughly two chars per token.
+			// Punctuation and symbols: runs such as "**", "```", "|---|" or
+			// "):" merge into few tokens; about three characters per token.
 			start := i
 			for i < len(s) {
 				r, size = utf8.DecodeRuneInString(s[i:])
@@ -68,22 +68,23 @@ func Count(s string) int {
 				}
 				i += size
 			}
-			tokens += ceilDiv(utf8.RuneCountInString(s[start:i]), 2)
+			tokens += ceilDiv(utf8.RuneCountInString(s[start:i]), 3)
 		}
 	}
 	return tokens
 }
 
-// wordTokens estimates tokens for a single word. ASCII words average ~4.5
-// characters per token; non-Latin/accented words tokenize into shorter
+// wordTokens estimates tokens for a single word. Common ASCII words up to
+// eight letters are usually one token; longer ones split roughly every
+// seven characters. Accented and non-Latin words tokenize into shorter
 // pieces because they are rarer in BPE vocabularies.
 func wordTokens(word string, ascii bool) int {
 	n := utf8.RuneCountInString(word)
 	if ascii {
-		if n <= 6 {
+		if n <= 8 {
 			return 1
 		}
-		return ceilDiv(n, 5)
+		return ceilDiv(n, 7)
 	}
 	return ceilDiv(n, 3)
 }

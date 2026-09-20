@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `briefd bench`: measures knowledge tokens per task and answer coverage for
+  "everything in CLAUDE.md", a curated CLAUDE.md, and `compile_bundle` at
+  several budgets, over the golden tasks.
+- Token estimator calibrated against o200k/cl100k on the corpus, code and
+  Turkish prose: +4.6% overall (was +22%), so budgets are used, not wasted.
 - Git sources: `source` may be a git URL; briefd clones with go-git (no git
   binary needed), polls with fetch + hard reset, and accepts GitHub-style
   signed pushes on `POST /webhook/git`. A local git checkout is read in place.

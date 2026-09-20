@@ -4,6 +4,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -85,6 +86,30 @@ func New(d Deps) *mcp.Server {
 	}, t.listScopes)
 
 	return srv
+}
+
+// ToolDefinitionsJSON returns the tool list as a client would receive it,
+// for estimating the per-session token cost of exposing briefd's tools.
+func ToolDefinitionsJSON() string {
+	ctx := context.Background()
+	srv := New(Deps{})
+	ct, stt := mcp.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, stt, nil)
+	if err != nil {
+		return ""
+	}
+	defer ss.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "briefd-bench", Version: "0"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		return ""
+	}
+	defer cs.Close()
+	list, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		return ""
+	}
+	b, _ := json.Marshal(list.Tools)
+	return string(b)
 }
 
 // Handler returns the streamable-HTTP handler for srv. Sessions are

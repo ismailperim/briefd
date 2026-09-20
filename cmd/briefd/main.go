@@ -34,6 +34,7 @@ Commands:
   search    Query the index from the command line
   model     Manage the local embedding model (model pull)
   eval      Run the retrieval quality evaluation
+  bench     Measure knowledge tokens per task: static CLAUDE.md vs compile_bundle
   version   Print version information
 
 Run "briefd <command> -h" for command flags. Flags can also be set through
@@ -78,6 +79,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runServe(ctx, args[1:], stdout, stderr)
 	case "eval":
 		err = runEval(ctx, args[1:], stdout, stderr, logger)
+	case "bench":
+		err = runBench(ctx, args[1:], stdout, stderr, logger)
 	default:
 		fmt.Fprintf(stderr, "briefd: unknown command %q\n\n%s", cmd, usageText)
 		return 2
