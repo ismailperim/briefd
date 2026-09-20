@@ -21,5 +21,5 @@
 <text x="370.63097365762684" y="231.0" fill="#57606a">tokens · answer present 96%</text>
 <line x1="310" y1="90" x2="310" y2="244" stroke="#d0d7de" stroke-width="1"/>
 <rect x="310" y="264" width="12" height="12" rx="2" fill="#2a78d6"/><text x="328" y="274" fill="#57606a">static file, loaded into every session</text>
-<rect x="310" y="284" width="12" height="12" rx="2" fill="#0ca30c"/><text x="328" y="294" fill="#57606a">briefd, compiled per task (plus ~1.7k tokens of tool definitions, once per session)</text>
+<rect x="310" y="284" width="12" height="12" rx="2" fill="#0ca30c"/><text x="328" y="294" fill="#57606a">briefd, compiled per task (tool schemas ~1.7k tokens once per session; Claude Code loads them lazily)</text>
 </svg>

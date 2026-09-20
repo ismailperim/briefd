@@ -32,7 +32,10 @@ system prompt and tool schemas are ~33k tokens on this model; the knowledge
 repo added ~18k on top in A and ~2k (a bundle plus briefd's tool schemas) in B.
 The price of that is round trips: B makes 3–4 extra API calls per task
 (`ToolSearch`, `compile_bundle`, `report_usage`), so the *cumulative* token
-count is higher even though most of it is cheap cache reads. One-shot questions
+count is higher even though most of it is cheap cache reads. Claude Code loads
+MCP tool schemas lazily through `ToolSearch`, so briefd's ~1.7k tokens of tool
+definitions are not paid up front there; clients that send every schema with
+every request pay them once per session. One-shot questions
 are the worst case for briefd; the per-turn saving compounds over a long
 session, and it grows with the size of the knowledge repo, which a static
 `CLAUDE.md` cannot scale with at all.
