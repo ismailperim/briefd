@@ -3,7 +3,7 @@
   "name": "io.github.ismailperim/briefd",
   "title": "briefd",
   "description": "Git-backed team knowledge compiled into token-budgeted context bundles for coding agents",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "websiteUrl": "https://github.com/ismailperim/briefd",
   "repository": {
     "url": "https://github.com/ismailperim/briefd",
@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/ismailperim/briefd:0.3.0",
+      "identifier": "ghcr.io/ismailperim/briefd:0.4.0",
       "runtimeHint": "docker",
       "transport": {
         "type": "streamable-http",
