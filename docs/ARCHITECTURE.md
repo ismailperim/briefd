@@ -32,7 +32,9 @@ it set.
 
 - **Sync** (`internal/gitsync`) clones the knowledge repo and follows a branch
   with *fetch + hard reset* every 60 s or on a signed webhook. A plain directory
-  works too. The checkout is read-only from briefd's point of view.
+  works too. The checkout is read-only from briefd's point of view. When GitHub
+  is configured, each sync also refreshes the status of open proposal pull
+  requests. A forge error leaves proposal status unchanged and does not fail indexing.
 - **Chunker** (`internal/ingest`) parses each Markdown file with goldmark and
   splits it on `##` / `###` headings. Each section becomes a *chunk* with a
   breadcrumb (`Refund rules > Refund window`), a token estimate, and a **stable
@@ -117,7 +119,7 @@ mounts it at `/mcp` next to the REST equivalents under `/api`, all behind one
 bearer token, and serves the dashboard at `/` and Prometheus metrics at
 `/metrics`. Everything is instrumented in `internal/metrics`: requests, tokens
 served, sections omitted by the budget, latency percentiles, cache hits, index
-size, sync state.
+size, sync state, and proposal counts by status.
 
 ## 3. The write path
 
@@ -129,7 +131,8 @@ branch's current head and pushes it as `briefd/proposal-<id>` (and opens a pull
 request when a forge token is configured). The worktree is never switched, so
 an in-flight sync can't observe a half-written state, and the index does not
 change until a human merges and the next sync picks it up. Every change to what
-agents are told therefore has a diff, a reviewer and a name on it.
+agents are told therefore has a diff, a reviewer and a name on it. Proposal
+records move from open to merged or closed when GitHub reports a terminal state.
 
 ## 4. Where things live
 

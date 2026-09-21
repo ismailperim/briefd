@@ -79,7 +79,8 @@ refs: ["services/payment/**"]  # code paths this doc governs (staleness input, v
 (`{bundle_id, useful_chunk_ids?, client?}`), `GET /api/docs/{path}`, `GET /api/scopes`,
 `POST /api/proposals` (`{doc_path, change_description, new_content, client?}`),
 `GET /api/proposals`, `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
-cache hit rate, token-served counters). `POST /webhook/git` (GitHub-style
+cache hit rate, token-served counters, and proposal counts grouped by open, merged, and
+closed status). `POST /webhook/git` (GitHub-style
 `X-Hub-Signature-256` HMAC over the body with `sync.webhook_secret`) triggers a sync.
 Auth: single bearer token (`BRIEFD_API_TOKEN`); MCP uses the same.
 
@@ -91,8 +92,9 @@ index size, last sync time/status, embedding calls.
 
 `GET /` serves a single-page status dashboard embedded in the binary (no build step,
 no JS framework): request volume and latency per tool, tokens served, cache hit rate,
-index contents per scope, sync status, and a search box that calls `/api/search` for
-manual inspection. Read-only; it never mutates state. Same bearer token as the API.
+index contents per scope, sync status, proposal counts by forge status, and a search box
+that calls `/api/search` for manual inspection. Read-only; it never mutates state. Same
+bearer token as the API.
 
 ### 3.3 CLI
 
@@ -109,7 +111,9 @@ inspection of the index, same ranking as the API) · `briefd model pull` · `bri
    remote branch (ADR-0005).
 2. **Runtime freshness:** polling every `sync.interval` (default 60s) and/or
    `POST /webhook/git` (HMAC-verified). Both supported; polling is the default because
-   homelab setups often can't receive webhooks.
+   homelab setups often can't receive webhooks. Each sync also refreshes stored open pull
+   request statuses when a GitHub forge is configured. A forge error leaves the stored
+   status unchanged and does not fail document indexing.
 3. **Chunking:** split on headings (H2/H3), keep heading breadcrumb in chunk metadata,
    target 200–500 tokens per chunk, hard max 800 (split on paragraph boundary). Chunk ID =
    `hash(doc_path + heading_path)` — stable across re-indexing unless content moves.

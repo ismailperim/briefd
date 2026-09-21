@@ -96,6 +96,32 @@ func (s *Service) Create(ctx context.Context, req Request) (*Result, error) {
 	return res, nil
 }
 
+// SyncStatuses refreshes open proposals that have a forge pull request.
+func (s *Service) SyncStatuses(ctx context.Context) error {
+	if s == nil || s.Forge == nil || s.Store == nil {
+		return nil
+	}
+	proposals, err := s.Store.ListOpenProposals(ctx)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, p := range proposals {
+		status, err := s.Forge.PullRequestStatus(ctx, p.PRURL)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+			continue
+		}
+		if status == "open" {
+			continue
+		}
+		if err := s.Store.UpdateProposalStatus(ctx, p.ID, status); err != nil {
+			failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+		}
+	}
+	return errors.Join(failures...)
+}
+
 func (s *Service) log() *slog.Logger {
 	if s.Logger == nil {
 		return slog.New(slog.DiscardHandler)

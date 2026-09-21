@@ -6,7 +6,7 @@ CREATE TABLE proposals (
     description TEXT NOT NULL,
     commit_hash TEXT NOT NULL DEFAULT '',
     pr_url      TEXT NOT NULL DEFAULT '',
-    status      TEXT NOT NULL DEFAULT 'open',   -- open | merged | closed (updated by future sync work)
+    status      TEXT NOT NULL DEFAULT 'open',   -- open | merged | closed
     client      TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL
 );

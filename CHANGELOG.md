@@ -9,25 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Proposal status sync: open proposals with a GitHub pull request are refreshed
+  during source sync and marked `merged` / `closed`; counts appear in
+  `/api/stats` and on the dashboard (#13, thanks @Voyagerroc-Lab).
 - `deploy/README.md`: deployment guide (Compose, systemd, forges, offline model,
   proxies/CAs, security, operations).
 - BEIR runner (`eval/beir/run.py`) with SciFact and NFCorpus results: vector-only
   matches the published model quality, hybrid beats BM25 and vector-only.
 - `PORT` environment variable (when `BRIEFD_LISTEN` is unset) and `GET /healthz`
   alias, for PaaS and directory runners.
+- `briefd init [DIR]`: scaffolds a knowledge repository with the expected layout
+  and example documents.
+- `deploy/local/`: localhost-only config, macOS launchd service, `.mcp.json` and
+  `CLAUDE.md` templates for private, on-machine use.
 
 ### Changed
 
 - Releases are cut with `make release VERSION=X.Y.Z`; the release workflow
   verifies changelog/server.json consistency and publishes to the MCP Registry
   automatically (GitHub OIDC).
-
-### Added
-
-- `briefd init [DIR]`: scaffolds a knowledge repository with the expected layout
-  and example documents.
-- `deploy/local/`: localhost-only config, macOS launchd service, `.mcp.json` and
-  `CLAUDE.md` templates for private, on-machine use.
 
 ## [0.2.1] — 2026-09-20
 
