@@ -101,9 +101,9 @@ def comparison():
     s.rect(X + 290, 110, 190, 100, "briefd\nindex · retrieve · pack", fill=YELLOW, size=17)
     s.rect(X + 640, 110, 200, 100, "coding agent", fill=GRAY, size=20)
     s.arrow(X + 636, 135, X + 485, 135, label='compile_bundle(task)', label_dy=-26)
-    s.arrow(X + 485, 185, X + 636, 185, label="bundle · 1,791 tokens", label_dy=8)
+    s.arrow(X + 485, 185, X + 636, 185, label="bundle · ~1,800 tokens", label_dy=8)
     s.text(X + 290, 230, "only the sections that matter,\nordered domain → conventions → project,\nnever above max_tokens", size=16, color=MUTED)
-    s.rect(X, 330, 840, 70, "✓ 86% fewer knowledge tokens per task · answer present 98% of the time\n✓ scales with the repo; agents propose changes as reviewable PRs", fill=GREEN, size=16)
+    s.rect(X, 330, 840, 70, "✓ 86% fewer knowledge tokens per task · answer present 96% of the time\n✓ scales with the repo; agents propose changes as reviewable PRs", fill=GREEN, size=16)
     return s
 
 
