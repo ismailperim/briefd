@@ -131,6 +131,7 @@
   td.dim { color: var(--muted); }
   td.err-n { color: var(--err); font-weight: 600; }
   .q { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q.narrow { max-width: 280px; }
   tr.clickable { cursor: pointer; }
   .bar { position: relative; height: 6px; background: var(--chip); border-radius: 999px; overflow: hidden; min-width: 80px; }
   .bar > i { position: absolute; inset: 0 auto 0 0; background: var(--accent-2); border-radius: 999px; transition: width .3s ease; }
@@ -276,7 +277,7 @@
       <div class="head"><h2 id="h-drift">Behind the code</h2><span class="hint">governed code changed after the document</span></div>
       <div class="body flush wrap">
         <table>
-          <thead><tr><th>Document</th><th class="num">Commits since</th><th class="num">Last change</th></tr></thead>
+          <thead><tr><th>Document</th><th class="num">Commits</th><th class="num">Last change</th></tr></thead>
           <tbody id="drift"></tbody>
         </table>
       </div>
@@ -503,13 +504,13 @@
 
     const drift = x.code_drift;
     $('drift').innerHTML = !drift ? '<tr><td colspan="3" class="dim">Unavailable</td></tr>' : drift.length ? drift.map((d) => `<tr>
-      <td class="q" title="${esc(d.repo)}: ${esc(d.last_path)}"><span class="mono">${esc(d.doc_path)}</span></td>
+      <td class="q narrow" title="${esc(d.repo)}: ${esc(d.last_path)}"><span class="mono">${esc(d.doc_path)}</span></td>
       <td class="num">${num(d.commits)}</td><td class="num" title="${esc(full(d.last_change_at))}">${age(d.last_change_at)}</td></tr>`).join('')
       : '<tr><td colspan="3" class="dim">Nothing behind — or no <code>code.repos</code> configured / no <code>refs</code> in documents</td></tr>';
 
     const stalest = x.stalest || [];
     $('stalest').innerHTML = stalest.length ? stalest.map((d) => `<tr>
-      <td class="q" title="${esc(d.title)}"><span class="mono">${esc(d.path)}</span></td><td class="mono dim">${esc(d.scope)}</td>
+      <td class="q narrow" title="${esc(d.title)}"><span class="mono">${esc(d.path)}</span></td><td class="mono dim">${esc(d.scope)}</td>
       <td class="num" title="${esc(full(d.updated_at))}">${age(d.updated_at)}</td></tr>`).join('')
       : '<tr><td colspan="3" class="dim">No document ages yet — they are resolved on the next sync</td></tr>';
 
@@ -589,7 +590,7 @@
     try {
       const s = await api('/api/stats');
       pushHistory(s); render(s);
-      try { renderGaps(await api('/api/gaps')); } catch (_) {}
+      try { renderGaps(await api('/api/gaps?limit=8')); } catch (_) {}
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {
       if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -25,16 +26,20 @@ type QueryRecord struct {
 	Client   string    `json:"client,omitempty"`
 }
 
-// LogQuery appends a record to the query log.
+// LogQuery appends a record to the query log. Scopes are stored sorted so
+// the same question with the same scopes groups together in Gaps
+// regardless of the order a client listed them.
 func (s *Store) LogQuery(ctx context.Context, r QueryRecord) error {
 	at := r.At
 	if at.IsZero() {
 		at = time.Now()
 	}
+	scopes := append([]string(nil), r.Scopes...)
+	sort.Strings(scopes)
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO query_log (at, surface, name, query, scopes, mode, results, top_score, margin, tokens, bundle_id, client)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		at.UTC().Format(time.RFC3339Nano), r.Surface, r.Name, r.Query, strings.Join(r.Scopes, ","), r.Mode,
+		at.UTC().Format(time.RFC3339Nano), r.Surface, r.Name, r.Query, strings.Join(scopes, ","), r.Mode,
 		r.Results, r.TopScore, r.Margin, r.Tokens, r.BundleID, r.Client)
 	if err != nil {
 		return fmt.Errorf("logging query: %w", err)
@@ -73,12 +78,13 @@ type Gap struct {
 }
 
 // Gaps returns recent questions that produced no useful section — by the
-// agent's own feedback or because nothing matched — grouped by query text,
-// most frequent first; then the lowest-confidence recent queries.
+// agent's own feedback or because nothing matched — grouped by query text
+// and scopes (the same question over search_context and compile_bundle is
+// one gap), most frequent first; then the lowest-confidence recent queries.
 func (s *Store) Gaps(ctx context.Context, since time.Time, limit int) (noUseful, lowConfidence []Gap, err error) {
 	cutoff := since.UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT q.query, q.scopes, q.name, MAX(q.at), COUNT(*),
+		SELECT q.query, q.scopes, MAX(q.name), MAX(q.at), COUNT(*),
 		       MAX(q.results), MAX(q.top_score), MAX(q.margin),
 		       CASE WHEN MAX(q.results) = 0 THEN 'no_results' ELSE 'no_useful_sections' END
 		FROM query_log q
@@ -87,7 +93,7 @@ func (s *Store) Gaps(ctx context.Context, since time.Time, limit int) (noUseful,
 			OR (q.bundle_id != '' AND EXISTS (SELECT 1 FROM usage_events u WHERE u.bundle_id = q.bundle_id)
 			    AND NOT EXISTS (SELECT 1 FROM usage_events u WHERE u.bundle_id = q.bundle_id AND u.useful = 1))
 		)
-		GROUP BY q.query, q.scopes, q.name
+		GROUP BY q.query, q.scopes
 		ORDER BY COUNT(*) DESC, MAX(q.at) DESC
 		LIMIT ?`, cutoff, limit)
 	if err != nil {
@@ -98,11 +104,11 @@ func (s *Store) Gaps(ctx context.Context, since time.Time, limit int) (noUseful,
 		return nil, nil, err
 	}
 	rows, err = s.db.QueryContext(ctx, `
-		SELECT q.query, q.scopes, q.name, MAX(q.at), COUNT(*),
+		SELECT q.query, q.scopes, MAX(q.name), MAX(q.at), COUNT(*),
 		       MAX(q.results), MAX(q.top_score), MAX(q.margin), 'low_confidence'
 		FROM query_log q
 		WHERE q.at >= ? AND q.results > 0 AND q.top_score > 0
-		GROUP BY q.query, q.scopes, q.name
+		GROUP BY q.query, q.scopes
 		ORDER BY MAX(q.margin) ASC, MAX(q.at) DESC
 		LIMIT ?`, cutoff, limit)
 	if err != nil {

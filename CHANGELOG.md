@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `briefd_documents_behind_code`. Cached bundles are invalidated when drift
   changes.
 
+### Fixed
+
+- Knowledge gaps: the same question asked over `search_context` and
+  `compile_bundle`, or with scopes listed in a different order, is one row.
+- Dashboard: the gap lists show eight rows each; long document paths no
+  longer push the "Behind the code" columns out of the panel.
+
 ## [0.4.0] — 2026-09-21
 
 ### Added

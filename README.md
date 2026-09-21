@@ -202,7 +202,7 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 
 ## Dashboard and metrics
 
-<img src="docs/assets/dashboard.png" alt="briefd dashboard: request tiles with sparklines, per-tool latency table, index by scope" width="100%">
+<img src="docs/assets/dashboard.png" alt="briefd dashboard: request and token tiles, knowledge gaps and low-confidence questions, oldest documents, documents behind the code" width="100%">
 
 `GET /` is a read-only status page embedded in the binary: requests and tokens served, p50/p95
 latency per tool, budget pressure, bundle cache hit rate, index size per scope, the oldest
