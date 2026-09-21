@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/search"
@@ -62,6 +63,14 @@ func TestPackDedupesOrdersAndTruncates(t *testing.T) {
 }
 
 func TestBody(t *testing.T) {
+	dated := store.ChunkHit{DocPath: "domain/x.md", HeadingPath: "X > Y", UpdatedAt: time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)}
+	if got := sectionHeader(dated); got != "## domain/x.md — X > Y (updated 2026-03-04)" {
+		t.Errorf("dated header = %q", got)
+	}
+	dated.UpdatedAt = time.Time{}
+	if got := sectionHeader(dated); got != "## domain/x.md — X > Y" {
+		t.Errorf("undated header = %q", got)
+	}
 	if got := Body("## Heading\n\ntext\nmore"); got != "text\nmore" {
 		t.Errorf("Body = %q", got)
 	}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
 	"time"
 
@@ -32,6 +33,10 @@ type Options struct {
 	// OnProgress, if set, is called after every embedded batch with the
 	// number of vectors written so far and the number still pending.
 	OnProgress func(done, pending int)
+	// LastModified resolves when each repository-relative path last changed
+	// (git history for a git source). Nil falls back to file mtimes, which
+	// are meaningless right after a clone but fine for a plain directory.
+	LastModified func(ctx context.Context, paths []string) (map[string]time.Time, error)
 }
 
 // Stats summarizes an indexing run.
@@ -68,12 +73,15 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 
 	var stats Stats
 	present := make(map[string]bool, len(files))
+	abs := make(map[string]string, len(files))
+	var changed []string
 	for _, f := range files {
 		if err := ctx.Err(); err != nil {
 			return stats, err
 		}
 		stats.Scanned++
 		present[f.RelPath] = true
+		abs[f.RelPath] = f.AbsPath
 
 		doc, err := ingest.Load(f)
 		if err != nil {
@@ -88,6 +96,7 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		}
 		stats.Indexed++
 		stats.Chunks += len(doc.Chunks)
+		changed = append(changed, f.RelPath)
 		log.Debug("indexed", "path", f.RelPath, "scope", doc.Scope, "chunks", len(doc.Chunks))
 	}
 
@@ -105,6 +114,10 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		}
 		stats.Deleted++
 		log.Debug("deleted", "path", p)
+	}
+
+	if err := resolveAges(ctx, st, opts, changed, abs); err != nil {
+		return stats, err
 	}
 
 	if opts.Embedder != nil {
@@ -196,4 +209,42 @@ func embedPending(ctx context.Context, st *store.Store, opts Options, log *slog.
 		}
 	}
 	return done, nil
+}
+
+// resolveAges records updated_at for the documents indexed in this run and
+// for any that still lack one (first run after upgrading).
+func resolveAges(ctx context.Context, st *store.Store, opts Options, changed []string, abs map[string]string) error {
+	missing, err := st.DocumentsWithoutAge(ctx)
+	if err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(changed)+len(missing))
+	var paths []string
+	for _, p := range append(changed, missing...) {
+		if !seen[p] && abs[p] != "" {
+			seen[p] = true
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	sort.Strings(paths)
+	times := map[string]time.Time{}
+	if opts.LastModified != nil {
+		if times, err = opts.LastModified(ctx, paths); err != nil {
+			return fmt.Errorf("resolving document ages: %w", err)
+		}
+	}
+	// Files git does not know about yet (uncommitted, or a plain directory)
+	// fall back to their mtime.
+	for _, p := range paths {
+		if _, ok := times[p]; ok {
+			continue
+		}
+		if fi, err := os.Stat(abs[p]); err == nil {
+			times[p] = fi.ModTime()
+		}
+	}
+	return st.SetDocumentUpdatedAt(ctx, times)
 }

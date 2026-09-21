@@ -155,3 +155,37 @@ func TestIsGitURL(t *testing.T) {
 		}
 	}
 }
+
+func TestLastModified(t *testing.T) {
+	ctx := context.Background()
+	bare, commit := newRemote(t)
+	commit("domain/a.md", "# A\n\n## One\n\nalpha\n")
+	commit("domain/b.md", "# B\n\n## Two\n\nbeta\n")
+	time.Sleep(1100 * time.Millisecond) // commit times have second resolution
+	commit("domain/b.md", "# B\n\n## Two\n\nbeta again\n")
+
+	repo, err := Open(ctx, Config{URL: bare, Dir: filepath.Join(t.TempDir(), "checkout"), Branch: "main"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.LastModified(ctx, []string{"domain/a.md", "domain/b.md", "domain/missing.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["domain/missing.md"]; ok {
+		t.Error("missing file should not be resolved")
+	}
+	a, b := got["domain/a.md"], got["domain/b.md"]
+	if a.IsZero() || b.IsZero() {
+		t.Fatalf("unresolved: %v", got)
+	}
+	if !b.After(a) {
+		t.Errorf("b (%v) should be newer than a (%v)", b, a)
+	}
+	// The walk stops early: asking only for the file changed at HEAD must
+	// still return the right time.
+	got, err = repo.LastModified(ctx, []string{"domain/b.md"})
+	if err != nil || !got["domain/b.md"].Equal(b) {
+		t.Errorf("head-only lookup = %v, %v", got, err)
+	}
+}

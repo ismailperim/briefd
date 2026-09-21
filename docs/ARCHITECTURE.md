@@ -102,8 +102,11 @@ BM25 alone; on the Turkish one 0.93 / 1.00 / 0.85 versus 0.73 / 0.77 / 0.60
    with a marker.
 3. **Order by scope** — domain first, then conventions, then project notes —
    so general rules come before specifics.
-4. **Render** deterministically: one comment header, then `## path — breadcrumb`
-   plus the section body.
+4. **Render** deterministically: one comment header, then `## path — breadcrumb
+   (updated YYYY-MM-DD)` plus the section body. The date is the committer
+   time of the last commit that touched the document (a newest-first history
+   walk in go-git that stops once every asked path is resolved; file mtime
+   for a plain directory), stored per document at index time.
 
 The result is **byte-identical** for the same task, scopes, budget, knowledge
 state and embedding model, which is exactly the cache key. Bundles are stored in
@@ -173,9 +176,10 @@ records move from open to merged or closed when GitHub reports a terminal state.
   laptop (50–80 ms per section), incrementally after that.
 - Query: a `search_context` or `compile_bundle` call takes ~10–20 ms end to end
   on the sample corpus, dominated by embedding the query.
-- Budget: `compile_bundle` at `max_tokens=2000` returns ~1,790 tokens on average
-  and contains the section that answers the task 98% of the time on the golden
-  set; the whole corpus would cost 12,869 tokens per turn.
+- Budget: `compile_bundle` at `max_tokens=2000` returns ~1,800 tokens on average
+  and contains the section that answers the task 96% of the time on the golden
+  set (default multilingual model; `make bench`); the whole corpus would cost
+  12,869 tokens per turn.
 - In real Claude Code sessions (`eval/session/`): context per turn −35%, cost
   per task −40%, same answers, 3–4 extra tool-call round trips.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ChunkHit is one ranked chunk returned by a search.
@@ -16,6 +17,8 @@ type ChunkHit struct {
 	Content     string  `json:"content"`
 	Tokens      int     `json:"tokens"`
 	Score       float64 `json:"score"`
+	// UpdatedAt is when the owning document last changed; zero if unknown.
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
 }
 
 // BM25 column weights for (title, heading_path, content). A heading match is
@@ -40,7 +43,7 @@ func (s *Store) SearchFTS(ctx context.Context, match string, scopes []string, li
 	args = append(args, limit)
 
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens,
+		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens, d.updated_at,
 		       -bm25(chunks_fts, %s) AS score
 		FROM chunks_fts
 		JOIN chunks c ON c.rowid = chunks_fts.rowid
@@ -55,9 +58,11 @@ func (s *Store) SearchFTS(ctx context.Context, match string, scopes []string, li
 	var hits []ChunkHit
 	for rows.Next() {
 		var h ChunkHit
-		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens, &h.Score); err != nil {
+		var updated string
+		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens, &updated, &h.Score); err != nil {
 			return nil, fmt.Errorf("fts search: %w", err)
 		}
+		h.UpdatedAt = parseTime(updated)
 		hits = append(hits, h)
 	}
 	return hits, rows.Err()
@@ -67,7 +72,7 @@ func (s *Store) SearchFTS(ctx context.Context, match string, scopes []string, li
 // document path and position. Used by evaluation tooling.
 func (s *Store) AllChunks(ctx context.Context) ([]ChunkHit, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens
+		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens, d.updated_at
 		FROM chunks c JOIN documents d ON d.id = c.doc_id
 		ORDER BY d.path, c.position`)
 	if err != nil {
@@ -77,9 +82,11 @@ func (s *Store) AllChunks(ctx context.Context) ([]ChunkHit, error) {
 	var out []ChunkHit
 	for rows.Next() {
 		var h ChunkHit
-		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens); err != nil {
+		var updated string
+		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens, &updated); err != nil {
 			return nil, fmt.Errorf("listing chunks: %w", err)
 		}
+		h.UpdatedAt = parseTime(updated)
 		out = append(out, h)
 	}
 	return out, rows.Err()

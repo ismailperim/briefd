@@ -153,6 +153,7 @@ func (c *Compiler) compile(ctx context.Context, task string, scopes []string, ma
 	for _, ch := range Order(selected) {
 		sections = append(sections, store.BundleSection{
 			ChunkID: ch.ChunkID, DocPath: ch.DocPath, Scope: ch.Scope, Heading: ch.HeadingPath, Tokens: ch.Tokens,
+			UpdatedAt: ch.UpdatedAt,
 		})
 	}
 	return &store.Bundle{
@@ -222,8 +223,13 @@ func sectionOverhead(ch store.ChunkHit) int {
 	return tokenizer.Count(sectionHeader(ch)) + 2
 }
 
+// sectionHeader is the attribution line. The date lets the agent (and a
+// reader) weigh a rule by its age; it costs about five tokens per section.
 func sectionHeader(ch store.ChunkHit) string {
-	return fmt.Sprintf("## %s — %s", ch.DocPath, ch.HeadingPath)
+	if ch.UpdatedAt.IsZero() {
+		return fmt.Sprintf("## %s — %s", ch.DocPath, ch.HeadingPath)
+	}
+	return fmt.Sprintf("## %s — %s (updated %s)", ch.DocPath, ch.HeadingPath, ch.UpdatedAt.UTC().Format("2006-01-02"))
 }
 
 // Render produces the bundle text. It is the only place that decides the

@@ -20,6 +20,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
@@ -463,4 +464,105 @@ func short(h string) string {
 		return h[:10]
 	}
 	return h
+}
+
+// LastModified returns, for each repository-relative path, the committer
+// time of the most recent commit that changed it. The walk runs newest
+// first and stops once every path is resolved, so asking about files that
+// changed recently is cheap; paths untouched since the first commit cost a
+// full history walk. Paths not found in history are absent from the result.
+// A file changed in a merge commit counts only if it differs from every
+// parent, matching what `git log -- path` reports.
+func (r *Repo) LastModified(ctx context.Context, paths []string) (map[string]time.Time, error) {
+	want := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		want[p] = true
+	}
+	out := make(map[string]time.Time, len(paths))
+	if len(want) == 0 {
+		return out, nil
+	}
+	ref, err := r.repo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: reading HEAD: %w", err)
+	}
+	iter, err := r.repo.Log(&git.LogOptions{From: ref.Hash(), Order: git.LogOrderCommitterTime})
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: reading history: %w", err)
+	}
+	defer iter.Close()
+	err = iter.ForEach(func(c *object.Commit) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		changed, err := changedPaths(c, want)
+		if err != nil {
+			return err
+		}
+		for p := range changed {
+			if want[p] {
+				out[p] = c.Committer.When
+				delete(want, p)
+			}
+		}
+		if len(want) == 0 {
+			return storer.ErrStop
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: walking history: %w", err)
+	}
+	return out, nil
+}
+
+// changedPaths lists the wanted paths whose blob in c differs from every
+// parent (all files for a root commit).
+func changedPaths(c *object.Commit, want map[string]bool) (map[string]bool, error) {
+	tree, err := c.Tree()
+	if err != nil {
+		return nil, err
+	}
+	if c.NumParents() == 0 {
+		out := map[string]bool{}
+		for p := range want {
+			if _, err := tree.File(p); err == nil {
+				out[p] = true
+			}
+		}
+		return out, nil
+	}
+	var out map[string]bool
+	for i := 0; i < c.NumParents(); i++ {
+		parent, err := c.Parent(i)
+		if err != nil {
+			return nil, err
+		}
+		ptree, err := parent.Tree()
+		if err != nil {
+			return nil, err
+		}
+		changes, err := ptree.Diff(tree)
+		if err != nil {
+			return nil, err
+		}
+		cur := map[string]bool{}
+		for _, ch := range changes {
+			for _, name := range []string{ch.From.Name, ch.To.Name} {
+				if name != "" && want[name] {
+					cur[name] = true
+				}
+			}
+		}
+		if out == nil {
+			out = cur
+			continue
+		}
+		for p := range out {
+			if !cur[p] {
+				delete(out, p)
+			}
+		}
+	}
+	return out, nil
 }

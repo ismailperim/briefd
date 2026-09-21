@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   questions whose top result barely stood out. Config: `query_log.enabled`,
   `query_log.retention_days`.
 - `search.Result` and bundles carry `top_score` and `margin`.
+- Document age: each document records when its content last changed (last
+  commit that touched it, via a newest-first go-git history walk; file mtime
+  for plain directories). Bundle attribution lines now read
+  `## path — heading (updated YYYY-MM-DD)`, search results and bundle
+  sections carry `updated_at`, `/api/docs/{path}` returns it, and the
+  dashboard shows the oldest documents.
+
+### Changed
+
+- README benchmark figures re-measured with the default multilingual model
+  and the dated attribution lines: 889 tokens / 96% at `max_tokens=1000`,
+  1,800 tokens / 96% at 2000 (was 885 / 96% and 1,791 / 98%, measured with
+  `all-MiniLM-L6-v2`). Savings versus a full `CLAUDE.md` are unchanged
+  (−93% / −86%).
 
 ## [0.3.0] — 2026-09-21
 

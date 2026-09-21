@@ -246,6 +246,9 @@ func (s *syncer) run(ctx context.Context, embeddings bool) error {
 		commit = head
 	}
 	opts := indexer.Options{Root: s.root, Commit: commit, Logger: s.logger}
+	if s.repo != nil {
+		opts.LastModified = s.repo.LastModified
+	}
 	if embeddings && s.embedder != nil {
 		opts.Embedder = s.embedder
 		opts.BatchSize = s.batch

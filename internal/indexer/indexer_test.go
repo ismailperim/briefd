@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -38,6 +39,26 @@ func TestRunIncremental(t *testing.T) {
 	}
 	if stats.Scanned != 3 || stats.Indexed != 3 || stats.Skipped != 0 || stats.Deleted != 0 || stats.Chunks != 3 {
 		t.Fatalf("first run stats = %+v", stats)
+	}
+
+	// Without a git resolver, document ages come from file mtimes.
+	ages, err := st.StalestDocuments(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ages) != 3 || ages[0].UpdatedAt.IsZero() {
+		t.Fatalf("ages after first run = %+v", ages)
+	}
+	// A resolver overrides mtimes; paths it does not know keep the fallback.
+	old := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+	if _, err := Run(ctx, st, Options{Root: root, Commit: "c1", Force: true,
+		LastModified: func(_ context.Context, _ []string) (map[string]time.Time, error) {
+			return map[string]time.Time{"conventions/c.md": old}, nil
+		}}); err != nil {
+		t.Fatal(err)
+	}
+	if ages, _ = st.StalestDocuments(ctx, 1); len(ages) != 1 || ages[0].Path != "conventions/c.md" || !ages[0].UpdatedAt.Equal(old) {
+		t.Fatalf("stalest = %+v, want conventions/c.md @ %v", ages, old)
 	}
 
 	// Nothing changed: everything is skipped.

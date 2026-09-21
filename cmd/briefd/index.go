@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -62,7 +63,7 @@ func runIndex(ctx context.Context, args []string, stdout, stderr io.Writer, logg
 	if err != nil {
 		return err
 	}
-	stats, err := indexer.Run(ctx, st, indexer.Options{
+	opts := indexer.Options{
 		Root: cfg.Source, Logger: logger, Embedder: embedder, BatchSize: cfg.Embeddings.BatchSize,
 		OnProgress: func(done, pending int) {
 			if pending == 0 || done%64 == 0 {
@@ -72,7 +73,15 @@ func runIndex(ctx context.Context, args []string, stdout, stderr io.Writer, logg
 				fmt.Fprintln(stderr)
 			}
 		},
-	})
+	}
+	// A directory that is a git checkout gets commit-based document ages;
+	// anything else falls back to file mtimes.
+	if !gitsync.IsGitURL(cfg.Source) {
+		if repo, err := gitsync.OpenLocal(cfg.Source, gitsync.Config{}, logger); err == nil {
+			opts.LastModified = repo.LastModified
+		}
+	}
+	stats, err := indexer.Run(ctx, st, opts)
 	if err != nil {
 		return err
 	}

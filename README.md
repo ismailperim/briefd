@@ -24,7 +24,7 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/briefd-demo.gif" alt="Today: CLAUDE.md is re-sent on every turn. With briefd: one compile_bundle call returns 1,791 tokens. Result: 86% fewer knowledge tokens per task." width="100%"><br>
+  <img src="docs/assets/briefd-demo.gif" alt="Today: CLAUDE.md is re-sent on every turn. With briefd: one compile_bundle call returns ~1,800 tokens. Result: 86% fewer knowledge tokens per task." width="100%"><br>
   <a href="docs/assets/briefd-explainer.mp4">▶ Watch the 90-second explainer</a> · <a href="docs/ARCHITECTURE.md">How it works</a> · <a href="#quickstart">Quickstart</a>
 </p>
 
@@ -42,12 +42,12 @@ exceeds the token budget you set.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/bench-dark.svg">
-  <img alt="Bar chart: knowledge tokens per task. Everything in CLAUDE.md 12,869 tokens, answer present 100%. Curated CLAUDE.md 4,946 tokens, 43%. briefd compile_bundle at 2000 max tokens: 1,791 tokens, 98%. At 1000: 885 tokens, 96%." src="docs/assets/bench-light.svg">
+  <img alt="Bar chart: knowledge tokens per task. Everything in CLAUDE.md 12,869 tokens, answer present 100%. Curated CLAUDE.md 4,946 tokens, 43%. briefd compile_bundle at 2000 max tokens: 1,800 tokens, 96%. At 1000: 889 tokens, 96%." src="docs/assets/bench-light.svg">
 </picture>
 
 On the sample knowledge repo in this repository (44 documents, 47 realistic developer tasks),
 `compile_bundle` spends **86% fewer tokens per task than pasting everything into `CLAUDE.md`**
-while still containing the section that answers the task **98% of the time**. The realistic
+while still containing the section that answers the task **96% of the time**. The realistic
 middle ground — a hand-curated `CLAUDE.md` with just conventions and the glossary — costs
 2.8× more than a bundle and has the answer less than half the time.
 
@@ -204,8 +204,8 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 <img src="docs/assets/dashboard.png" alt="briefd dashboard: request tiles with sparklines, per-tool latency table, index by scope" width="100%">
 
 `GET /` is a read-only status page embedded in the binary: requests and tokens served, p50/p95
-latency per tool, budget pressure, bundle cache hit rate, index size per scope, sync state, the
-last 100 requests, and a search box for manual inspection. `GET /metrics` exposes the same
+latency per tool, budget pressure, bundle cache hit rate, index size per scope, the oldest
+documents, sync state, the last 100 requests, and a search box for manual inspection. `GET /metrics` exposes the same
 counters in Prometheus text format; `GET /api/stats` as JSON.
 
 **Knowledge gaps.** Every `search_context` / `compile_bundle` call is logged with its retrieval
@@ -214,6 +214,11 @@ days that the knowledge base did not answer — nothing matched, or the agent's 
 no section helped — grouped by question and ranked by how often they were asked, plus the answered
 questions whose top result barely stood out from the rest. That list is the backlog for whoever
 maintains the repository; `GET /api/gaps?days=7&limit=20` returns it as JSON.
+
+**Document age.** Every section in a bundle carries the date its document last changed
+(`## path — heading (updated 2026-03-04)`, from git history, or the file mtime for a plain
+directory), so an agent can weigh a rule by its age. The dashboard lists the documents that
+changed longest ago — the ones to re-read first.
 
 ## Retrieval quality
 
@@ -253,7 +258,6 @@ briefd bench      # tokens per task: static CLAUDE.md vs compile_bundle
 v0.1 is feature-complete; expect rough edges before 1.0. Planned next:
 
 - usage-driven relevance tuning from `report_usage`
-- document age in bundles and a "stalest documents" view
 - staleness scoring via `refs` globs (knowledge that lags the code it governs)
 - contradiction detection for proposals
 - a light Turkish stemmer for the BM25 side and glossary-alias query expansion

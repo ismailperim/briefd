@@ -26,6 +26,9 @@ type Document struct {
 	ContentHash   string
 	UpdatedCommit string
 	IndexedAt     time.Time
+	// UpdatedAt is when the content last changed (git commit time, or file
+	// mtime for plain directories); zero when not yet known.
+	UpdatedAt time.Time
 }
 
 // UpsertDocument stores a parsed document and replaces all of its chunks in
@@ -121,11 +124,11 @@ func (s *Store) ContentHashes(ctx context.Context) (map[string]string, error) {
 // (reassembled from its chunks in order). Returns ErrNotFound if absent.
 func (s *Store) GetDocument(ctx context.Context, path string) (*Document, string, error) {
 	var d Document
-	var tags, refs, indexedAt string
+	var tags, refs, indexedAt, updatedAt string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, path, scope, title, tags, refs, front_matter, content_hash, updated_commit, indexed_at
+		SELECT id, path, scope, title, tags, refs, front_matter, content_hash, updated_commit, indexed_at, updated_at
 		FROM documents WHERE path = ?`, path).Scan(
-		&d.ID, &d.Path, &d.Scope, &d.Title, &tags, &refs, &d.FrontMatter, &d.ContentHash, &d.UpdatedCommit, &indexedAt)
+		&d.ID, &d.Path, &d.Scope, &d.Title, &tags, &refs, &d.FrontMatter, &d.ContentHash, &d.UpdatedCommit, &indexedAt, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}
@@ -139,6 +142,7 @@ func (s *Store) GetDocument(ctx context.Context, path string) (*Document, string
 		return nil, "", fmt.Errorf("decoding refs of %s: %w", path, err)
 	}
 	d.IndexedAt, _ = time.Parse(time.RFC3339, indexedAt)
+	d.UpdatedAt = parseTime(updatedAt)
 
 	rows, err := s.db.QueryContext(ctx, `SELECT content FROM chunks WHERE doc_id = ? ORDER BY position`, d.ID)
 	if err != nil {

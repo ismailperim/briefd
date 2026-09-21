@@ -150,7 +150,7 @@ func (s *Store) GetChunks(ctx context.Context, ids []string) ([]ChunkHit, error)
 		ph[i] = "?"
 	}
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens
+		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens, d.updated_at
 		FROM chunks c JOIN documents d ON d.id = c.doc_id
 		WHERE c.id IN (%s)`, strings.Join(ph, ",")), args...)
 	if err != nil {
@@ -160,9 +160,11 @@ func (s *Store) GetChunks(ctx context.Context, ids []string) ([]ChunkHit, error)
 	var out []ChunkHit
 	for rows.Next() {
 		var h ChunkHit
-		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens); err != nil {
+		var updated string
+		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens, &updated); err != nil {
 			return nil, fmt.Errorf("loading chunks: %w", err)
 		}
+		h.UpdatedAt = parseTime(updated)
 		out = append(out, h)
 	}
 	return out, rows.Err()

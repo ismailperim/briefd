@@ -78,6 +78,8 @@ type BundleSection struct {
 	Scope   string `json:"scope"`
 	Heading string `json:"heading"`
 	Tokens  int    `json:"tokens"`
+	// UpdatedAt is when the source document last changed; zero if unknown.
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
 }
 
 // GetBundleByKey returns a cached bundle and bumps its hit counter.

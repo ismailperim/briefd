@@ -262,7 +262,16 @@
     </section>
   </div>
 
-  <div class="grid">
+  <div class="grid split">
+    <section class="panel" aria-labelledby="h-stalest">
+      <div class="head"><h2 id="h-stalest">Oldest documents</h2><span class="hint">content last changed longest ago</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Document</th><th>Scope</th><th class="num">Last changed</th></tr></thead>
+          <tbody id="stalest"></tbody>
+        </table>
+      </div>
+    </section>
     <section class="panel" aria-labelledby="h-proposals">
       <div class="head"><h2 id="h-proposals">Proposals</h2><span class="hint">forge pull request status</span></div>
       <div class="body flush wrap">
@@ -371,6 +380,12 @@
     const s = Math.max(0, (Date.now() - new Date(iso).getTime())/1000);
     return s < 5 ? 'just now' : s < 60 ? Math.round(s)+'s ago' : s < 3600 ? Math.round(s/60)+'m ago' : s < 86400 ? (s/3600).toFixed(1)+'h ago' : (s/86400).toFixed(1)+'d ago';
   };
+  // Document ages span months; coarser units than ago().
+  const age = (iso) => {
+    if (!iso) return 'unknown';
+    const d = Math.max(0, (Date.now() - new Date(iso).getTime())/86400000);
+    return d < 1 ? 'today' : d < 30 ? Math.round(d)+'d ago' : d < 365 ? Math.round(d/30)+'mo ago' : (d/365).toFixed(1)+'y ago';
+  };
   const dur = (s) => { const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m ${Math.floor(s%60)}s` : `${Math.floor(s)}s`; };
   const clock = (iso) => new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
   const full = (iso) => new Date(iso).toLocaleString();
@@ -476,6 +491,12 @@
       : '<tr><td colspan="2" class="dim">Counts unavailable</td></tr>';
 
     renderByName(s.by_name);
+
+    const stalest = x.stalest || [];
+    $('stalest').innerHTML = stalest.length ? stalest.map((d) => `<tr>
+      <td class="q" title="${esc(d.title)}"><span class="mono">${esc(d.path)}</span></td><td class="mono dim">${esc(d.scope)}</td>
+      <td class="num" title="${esc(full(d.updated_at))}">${age(d.updated_at)}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="dim">No document ages yet — they are resolved on the next sync</td></tr>';
 
     const totalChunks = Math.max(1, t.chunks);
     $('scopes').innerHTML = s.index.length ? s.index.map((i) => `<tr>

@@ -160,6 +160,12 @@ func (a *api) stats(w http.ResponseWriter, r *http.Request) {
 	if a.deps.Searcher != nil {
 		snap.Extra["hybrid"] = a.deps.Searcher.Hybrid()
 	}
+	if docs, err := a.deps.Store.StalestDocuments(r.Context(), 8); err == nil {
+		if docs == nil {
+			docs = []store.DocumentAge{}
+		}
+		snap.Extra["stalest"] = docs
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, snap)
 }
@@ -464,6 +470,7 @@ func (a *api) document(w http.ResponseWriter, r *http.Request) {
 		"tags":       doc.Tags,
 		"content":    content,
 		"indexed_at": doc.IndexedAt,
+		"updated_at": nullableTime(doc.UpdatedAt),
 	})
 }
 
