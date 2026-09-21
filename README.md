@@ -174,9 +174,10 @@ The image is distroless and pure Go (~34 MB, linux/amd64 + arm64). Database, che
 live in the `briefd-data` volume. Mount a directory and set `BRIEFD_SOURCE=/knowledge` to serve
 local files instead.
 
-**On your own machine** (private knowledge, company network): see
-[`deploy/local/`](deploy/local/) for a localhost-only config, a launchd service, and the
-`.mcp.json` / `CLAUDE.md` templates for your projects.
+**Deployment guide:** [`deploy/README.md`](deploy/README.md) covers Compose and systemd
+setups, git forges (GitHub, GitLab, Azure DevOps, Bitbucket, SSH), installing the embedding model
+offline, proxies and private CAs, exposure/security, upgrades and monitoring. For a laptop-only
+setup see [`deploy/local/`](deploy/local/).
 
 **Configuration** — `briefd.yaml` (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml))
 or `BRIEFD_*` environment variables; flags override both. The ones you will actually touch:
