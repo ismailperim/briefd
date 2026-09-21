@@ -3,29 +3,69 @@
   "name": "io.github.ismailperim/briefd",
   "title": "briefd",
   "description": "Git-backed team knowledge compiled into token-budgeted context bundles for coding agents",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "websiteUrl": "https://github.com/ismailperim/briefd",
-  "repository": { "url": "https://github.com/ismailperim/briefd", "source": "github" },
+  "repository": {
+    "url": "https://github.com/ismailperim/briefd",
+    "source": "github"
+  },
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/ismailperim/briefd:0.2.1",
+      "identifier": "ghcr.io/ismailperim/briefd:0.3.0",
       "runtimeHint": "docker",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:7788/mcp",
         "headers": [
-          { "name": "Authorization", "value": "Bearer {api_token}", "variables": { "api_token": { "description": "The value of BRIEFD_API_TOKEN configured on the server", "isSecret": true, "isRequired": true } } }
+          {
+            "name": "Authorization",
+            "value": "Bearer {api_token}",
+            "variables": {
+              "api_token": {
+                "description": "The value of BRIEFD_API_TOKEN configured on the server",
+                "isSecret": true,
+                "isRequired": true
+              }
+            }
+          }
         ]
       },
       "runtimeArguments": [
-        { "type": "named", "name": "-p", "value": "7788:7788", "description": "Expose the MCP/REST/dashboard port" },
-        { "type": "named", "name": "-v", "value": "briefd-data:/data", "description": "Persist the index, git checkout and embedding model" }
+        {
+          "type": "named",
+          "name": "-p",
+          "value": "7788:7788",
+          "description": "Expose the MCP/REST/dashboard port"
+        },
+        {
+          "type": "named",
+          "name": "-v",
+          "value": "briefd-data:/data",
+          "description": "Persist the index, git checkout and embedding model"
+        }
       ],
       "environmentVariables": [
-        { "name": "BRIEFD_SOURCE", "description": "Knowledge repository: a git URL (https://…, git@…) or a mounted directory with domain/, conventions/, projects/<name>/", "isRequired": true, "format": "string" },
-        { "name": "BRIEFD_API_TOKEN", "description": "Bearer token clients must send to /mcp and /api", "isRequired": true, "isSecret": true, "format": "string" },
-        { "name": "BRIEFD_GIT_TOKEN", "description": "Token for private HTTPS git remotes", "isRequired": false, "isSecret": true, "format": "string" }
+        {
+          "name": "BRIEFD_SOURCE",
+          "description": "Knowledge repository: a git URL (https://…, git@…) or a mounted directory with domain/, conventions/, projects/<name>/",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "BRIEFD_API_TOKEN",
+          "description": "Bearer token clients must send to /mcp and /api",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "BRIEFD_GIT_TOKEN",
+          "description": "Token for private HTTPS git remotes",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
       ]
     }
   ]
