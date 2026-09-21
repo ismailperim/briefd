@@ -57,7 +57,8 @@ mount it read-only and point `BRIEFD_SOURCE` at the mount:
 ```
 
 Every setting has a `BRIEFD_*` variable; see [`briefd.example.yaml`](briefd.example.yaml)
-for the full list. `PORT` is honored when `BRIEFD_LISTEN` is unset, so PaaS
+for the full list. `PORT` is honored when `BRIEFD_LISTEN` is unset (the image
+leaves it unset), so PaaS
 platforms (Render, Railway, Fly) work with their defaults.
 
 ## Binary as a service (systemd)

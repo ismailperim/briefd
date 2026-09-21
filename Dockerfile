@@ -24,8 +24,9 @@ LABEL org.opencontainers.image.source="https://github.com/ismailperim/briefd" \
 COPY --from=build /out/briefd /briefd
 COPY --from=build --chown=nonroot:nonroot /out/data /data
 # Models are cached under $XDG_CACHE_HOME/briefd/models/<model>.
-ENV BRIEFD_LISTEN=:7788 \
-    BRIEFD_DB=/data/briefd.db \
+# The listen address is left unset so a platform-provided PORT is honored;
+# the default is :7788 either way.
+ENV BRIEFD_DB=/data/briefd.db \
     BRIEFD_GIT_DIR=/data/knowledge-repo \
     XDG_CACHE_HOME=/data/cache \
     HOME=/data

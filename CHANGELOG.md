@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Container image: `BRIEFD_LISTEN` is no longer baked into the image, so a
+  platform-provided `PORT` (Glama, Render, Fly, …) is honored as documented.
+- `briefd serve` starts BM25-only, with an error in the log, when the local
+  embedding model cannot be loaded or downloaded, instead of exiting; remote
+  providers still fail hard.
 - Knowledge gaps: the same question asked over `search_context` and
   `compile_bundle`, or with scopes listed in a different order, is one row.
 - Dashboard: the gap lists show eight rows each; long document paths no

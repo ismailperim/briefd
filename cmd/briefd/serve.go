@@ -114,7 +114,15 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	})
 	embedder, err := openEmbedder(ctx, cfg, logger, stderr)
 	if err != nil {
-		return err
+		// A local model that cannot be loaded or downloaded (no network, a
+		// read-only cache) should not keep the server from coming up: BM25
+		// still answers, and the dashboard shows "bm25" instead of "hybrid".
+		// Remote providers fail hard, since that is a configuration error.
+		if cfg.Embeddings.Provider != "local" {
+			return err
+		}
+		logger.Error("embeddings unavailable; serving BM25-only until restart (run `briefd model pull` or set --embeddings none to silence)", "err", err)
+		embedder = nil
 	}
 	if embedder != nil {
 		searcher.WithEmbedder(embedder)
