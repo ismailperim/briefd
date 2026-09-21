@@ -272,6 +272,15 @@
         </table>
       </div>
     </section>
+    <section class="panel" aria-labelledby="h-drift">
+      <div class="head"><h2 id="h-drift">Behind the code</h2><span class="hint">governed code changed after the document</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Document</th><th class="num">Commits since</th><th class="num">Last change</th></tr></thead>
+          <tbody id="drift"></tbody>
+        </table>
+      </div>
+    </section>
     <section class="panel" aria-labelledby="h-proposals">
       <div class="head"><h2 id="h-proposals">Proposals</h2><span class="hint">forge pull request status</span></div>
       <div class="body flush wrap">
@@ -491,6 +500,12 @@
       : '<tr><td colspan="2" class="dim">Counts unavailable</td></tr>';
 
     renderByName(s.by_name);
+
+    const drift = x.code_drift;
+    $('drift').innerHTML = !drift ? '<tr><td colspan="3" class="dim">Unavailable</td></tr>' : drift.length ? drift.map((d) => `<tr>
+      <td class="q" title="${esc(d.repo)}: ${esc(d.last_path)}"><span class="mono">${esc(d.doc_path)}</span></td>
+      <td class="num">${num(d.commits)}</td><td class="num" title="${esc(full(d.last_change_at))}">${age(d.last_change_at)}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="dim">Nothing behind — or no <code>code.repos</code> configured / no <code>refs</code> in documents</td></tr>';
 
     const stalest = x.stalest || [];
     $('stalest').innerHTML = stalest.length ? stalest.map((d) => `<tr>

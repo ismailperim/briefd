@@ -166,6 +166,12 @@ func (a *api) stats(w http.ResponseWriter, r *http.Request) {
 		}
 		snap.Extra["stalest"] = docs
 	}
+	if drift, err := a.deps.Store.ListDrift(r.Context(), 8); err == nil {
+		if drift == nil {
+			drift = []store.Drift{}
+		}
+		snap.Extra["code_drift"] = drift
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, snap)
 }

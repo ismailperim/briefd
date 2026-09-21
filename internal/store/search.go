@@ -19,6 +19,10 @@ type ChunkHit struct {
 	Score       float64 `json:"score"`
 	// UpdatedAt is when the owning document last changed; zero if unknown.
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
+	// CodeChanges counts commits that touched code governed by the document
+	// (its refs) after UpdatedAt; CodeChangedAt is the latest of them.
+	CodeChanges   int       `json:"code_changes,omitempty"`
+	CodeChangedAt time.Time `json:"code_changed_at,omitzero"`
 }
 
 // BM25 column weights for (title, heading_path, content). A heading match is

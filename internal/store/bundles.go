@@ -80,6 +80,9 @@ type BundleSection struct {
 	Tokens  int    `json:"tokens"`
 	// UpdatedAt is when the source document last changed; zero if unknown.
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
+	// CodeChanges / CodeChangedAt: commits to governed code after UpdatedAt.
+	CodeChanges   int       `json:"code_changes,omitempty"`
+	CodeChangedAt time.Time `json:"code_changed_at,omitzero"`
 }
 
 // GetBundleByKey returns a cached bundle and bumps its hit counter.

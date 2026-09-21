@@ -31,6 +31,12 @@ git:                       # used when source is a git URL, and for proposal com
   author_name: briefd      # BRIEFD_GIT_AUTHOR_NAME
   author_email: briefd@localhost   # BRIEFD_GIT_AUTHOR_EMAIL
 
+code:                      # optional: detect knowledge that lags the code it governs (ADR-0007)
+  repos: []                # e.g. - {name: payments, source: https://github.com/org/payments.git, branch: main}
+                           #      - {name: portal, source: /srv/checkouts/portal}   (local checkout, read in place)
+  max_commits: 5000        # history walked per repository per sync
+                           # git URLs are cloned bare under <db dir>/code-repos/ with the `git` credentials
+
 query_log:                 # feeds GET /api/gaps and the dashboard's "Knowledge gaps" panel
   enabled: true            # BRIEFD_QUERY_LOG_ENABLED; query text is stored in the database
   retention_days: 30       # BRIEFD_QUERY_LOG_RETENTION_DAYS; pruned during sync, 0 = keep forever

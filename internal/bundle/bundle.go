@@ -153,7 +153,7 @@ func (c *Compiler) compile(ctx context.Context, task string, scopes []string, ma
 	for _, ch := range Order(selected) {
 		sections = append(sections, store.BundleSection{
 			ChunkID: ch.ChunkID, DocPath: ch.DocPath, Scope: ch.Scope, Heading: ch.HeadingPath, Tokens: ch.Tokens,
-			UpdatedAt: ch.UpdatedAt,
+			UpdatedAt: ch.UpdatedAt, CodeChanges: ch.CodeChanges, CodeChangedAt: ch.CodeChangedAt,
 		})
 	}
 	return &store.Bundle{
@@ -225,11 +225,36 @@ func sectionOverhead(ch store.ChunkHit) int {
 
 // sectionHeader is the attribution line. The date lets the agent (and a
 // reader) weigh a rule by its age; it costs about five tokens per section.
+// When the code a document governs changed after the document did, the
+// line says so; the agent should treat the section with suspicion and may
+// be the one to fix it with propose_update.
 func sectionHeader(ch store.ChunkHit) string {
 	if ch.UpdatedAt.IsZero() {
 		return fmt.Sprintf("## %s — %s", ch.DocPath, ch.HeadingPath)
 	}
-	return fmt.Sprintf("## %s — %s (updated %s)", ch.DocPath, ch.HeadingPath, ch.UpdatedAt.UTC().Format("2006-01-02"))
+	h := fmt.Sprintf("## %s — %s (updated %s", ch.DocPath, ch.HeadingPath, ch.UpdatedAt.UTC().Format("2006-01-02"))
+	if ch.CodeChanges > 0 {
+		h += fmt.Sprintf("; code changed since: %d commit%s, last %s", ch.CodeChanges, plural(ch.CodeChanges), ch.CodeChangedAt.UTC().Format("2006-01-02"))
+	}
+	return h + ")"
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// Invalidate drops every cached bundle, in memory and in the store. Used
+// when rendered content depends on state outside the index fingerprint
+// (code drift).
+func (c *Compiler) Invalidate(ctx context.Context) error {
+	c.mu.Lock()
+	c.lru = map[string]*lruEntry{}
+	c.order = c.order[:0]
+	c.mu.Unlock()
+	return c.store.DeleteAllBundles(ctx)
 }
 
 // Render produces the bundle text. It is the only place that decides the

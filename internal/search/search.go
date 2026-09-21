@@ -190,6 +190,9 @@ func (s *Searcher) Search(ctx context.Context, q Query) (Result, error) {
 		return res, err
 	}
 	res.TopScore, res.Margin = conf.top, conf.margin
+	if err := s.store.AttachDrift(ctx, hits); err != nil {
+		return res, err
+	}
 	for _, h := range hits {
 		if len(res.Chunks) == topK {
 			break

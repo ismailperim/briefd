@@ -196,6 +196,7 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `embeddings.model` | `BRIEFD_EMBEDDINGS_MODEL` | `multilingual-e5-small` | or `all-MiniLM-L6-v2` (English, faster) |
 | `search.default_max_tokens` | `BRIEFD_DEFAULT_MAX_TOKENS` | `2000` | |
 | `query_log.retention_days` | `BRIEFD_QUERY_LOG_RETENTION_DAYS` | `30` | feeds the knowledge-gap report; `query_log.enabled: false` turns it off |
+| `code.repos` | — | *(none)* | code repositories (URL or path) compared against documents' `refs` for drift |
 
 `briefd model pull` pre-fetches the embedding model for offline or image-build use.
 
@@ -219,6 +220,14 @@ maintains the repository; `GET /api/gaps?days=7&limit=20` returns it as JSON.
 (`## path — heading (updated 2026-03-04)`, from git history, or the file mtime for a plain
 directory), so an agent can weigh a rule by its age. The dashboard lists the documents that
 changed longest ago — the ones to re-read first.
+
+**Behind the code.** Give a document `refs: ["services/payment/**"]` in its front matter and
+list the code repositories in `code.repos`; briefd follows their history (bare clones, never the
+files) and counts the commits that touched a governed path *after* the document last changed.
+The attribution line then reads `(updated 2026-03-01; code changed since: 3 commits, last
+2026-06-01)`, the dashboard lists the documents most behind, and `briefd_documents_behind_code`
+is exported. The agent reading a stale rule is often the right one to fix it with
+`propose_update`. Design in [ADR-0007](docs/adr/0007-code-drift-via-refs.md).
 
 ## Retrieval quality
 
@@ -258,7 +267,6 @@ briefd bench      # tokens per task: static CLAUDE.md vs compile_bundle
 v0.1 is feature-complete; expect rough edges before 1.0. Planned next:
 
 - usage-driven relevance tuning from `report_usage`
-- staleness scoring via `refs` globs (knowledge that lags the code it governs)
 - contradiction detection for proposals
 - a light Turkish stemmer for the BM25 side and glossary-alias query expansion
 - multiple knowledge repositories per instance

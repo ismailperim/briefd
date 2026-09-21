@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Code drift (ADR-0007): `code.repos` lists code repositories (git URL,
+  cloned bare next to the database, or a local checkout) whose history is
+  compared against documents' `refs` globs. Commits that touched governed
+  code after a document's last change are counted per document; bundle
+  attribution lines say `code changed since: N commits, last YYYY-MM-DD`,
+  search results and bundle sections carry `code_changes` /
+  `code_changed_at`, `/api/stats` lists the documents most behind, the
+  dashboard shows them as "Behind the code", and Prometheus exposes
+  `briefd_documents_behind_code`. Cached bundles are invalidated when drift
+  changes.
+
 ## [0.4.0] — 2026-09-21
 
 ### Added

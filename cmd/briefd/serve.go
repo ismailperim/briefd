@@ -21,6 +21,7 @@ import (
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
+	"github.com/ismailperim/briefd/internal/staleness"
 	"github.com/ismailperim/briefd/internal/store"
 )
 
@@ -123,8 +124,34 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	} else {
 		logger.Warn("embeddings disabled; search is BM25-only")
 	}
+	compiler := bundle.New(st, searcher, bundle.Options{
+		DefaultScopes:    cfg.Search.DefaultScopes,
+		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
+		OnCache:          reg.RecordCache,
+	})
+
+	// Code repositories are followed history-only; their working files are
+	// never read. Drift is computed after every index run (ADR-0007).
+	var code []codeRepo
+	for _, cr := range cfg.Code.Repos {
+		var r *gitsync.Repo
+		if gitsync.IsGitURL(cr.Source) {
+			r, err = gitsync.Open(ctx, gitsync.Config{
+				URL: cr.Source, Branch: cr.Branch, Dir: cfg.CodeDir(cr), Bare: true,
+				Token: cfg.Git.Token, Username: cfg.Git.Username, SSHKeyPath: cfg.Git.SSHKey,
+			}, logger)
+		} else {
+			r, err = gitsync.OpenLocal(cr.Source, gitsync.Config{}, logger)
+		}
+		if err != nil {
+			return fmt.Errorf("code repository %s: %w", cr.DisplayName(), err)
+		}
+		code = append(code, codeRepo{name: cr.DisplayName(), repo: r})
+	}
+
 	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize, repo: repo, root: root, proposals: proposals,
-		queryLogRetention: time.Duration(cfg.QueryLog.RetentionDays) * 24 * time.Hour}
+		queryLogRetention: time.Duration(cfg.QueryLog.RetentionDays) * 24 * time.Hour,
+		compiler:          compiler, code: code, maxCommits: cfg.Code.MaxCommits}
 
 	if cfg.Source != "" {
 		// Documents are indexed before we listen so BM25 works immediately;
@@ -145,11 +172,6 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if cfg.LogLevel == "debug" {
 		mcpLogger = logger
 	}
-	compiler := bundle.New(st, searcher, bundle.Options{
-		DefaultScopes:    cfg.Search.DefaultScopes,
-		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
-		OnCache:          reg.RecordCache,
-	})
 	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Proposals: proposals, Metrics: reg, QueryLog: cfg.QueryLog.Enabled, Version: version, Logger: mcpLogger})
 	handler := httpapi.New(httpapi.Deps{
 		Store:         st,
@@ -227,7 +249,17 @@ type syncer struct {
 	root      string // directory that is indexed
 	// queryLogRetention prunes the query log during sync; 0 keeps everything.
 	queryLogRetention time.Duration
+	compiler          *bundle.Compiler
+	code              []codeRepo
+	maxCommits        int
+	driftChecked      bool
 	mu                sync.Mutex
+}
+
+// codeRepo is a followed code repository for drift detection.
+type codeRepo struct {
+	name string
+	repo *gitsync.Repo
 }
 
 // run pulls the git source (if any) and indexes the checkout. With
@@ -278,6 +310,9 @@ func (s *syncer) run(ctx context.Context, embeddings bool) error {
 	if err := s.proposals.SyncStatuses(ctx); err != nil {
 		s.logger.Warn("proposal status sync failed", "err", err)
 	}
+	if err := s.checkDrift(ctx, stats.Indexed > 0 || stats.Deleted > 0); err != nil {
+		s.logger.Warn("code drift check failed", "err", err)
+	}
 	if s.queryLogRetention > 0 {
 		if n, err := s.st.PruneQueryLog(ctx, s.queryLogRetention); err != nil {
 			s.logger.Warn("query log prune failed", "err", err)
@@ -286,6 +321,71 @@ func (s *syncer) run(ctx context.Context, embeddings bool) error {
 		}
 	}
 	s.refreshGauges(ctx)
+	return nil
+}
+
+// checkDrift fetches every code repository and recomputes which documents
+// lag the code their refs name. The history walk runs only when a code
+// head moved, the index changed, or nothing has been computed yet.
+func (s *syncer) checkDrift(ctx context.Context, indexChanged bool) error {
+	if len(s.code) == 0 {
+		return nil
+	}
+	moved := indexChanged || !s.driftChecked
+	for _, cr := range s.code {
+		if _, changed, err := cr.repo.Sync(ctx); err != nil {
+			return fmt.Errorf("%s: %w", cr.name, err)
+		} else if changed {
+			moved = true
+		}
+	}
+	if !moved {
+		return nil
+	}
+	docs, err := s.st.DocumentsWithRefs(ctx)
+	if err != nil {
+		return err
+	}
+	since := staleness.Since(docs)
+	var all []store.Drift
+	now := time.Now()
+	if !since.IsZero() {
+		for _, cr := range s.code {
+			changes, truncated, err := cr.repo.ChangesSince(ctx, since, s.maxCommits)
+			if err != nil {
+				return fmt.Errorf("%s: %w", cr.name, err)
+			}
+			if truncated {
+				s.logger.Warn("code history walk capped; older drift is not counted", "repo", cr.name, "max_commits", s.maxCommits)
+			}
+			all = append(all, staleness.Compute(docs, cr.name, changes, now)...)
+		}
+	}
+	// A document can match several repositories; keep the row with the
+	// most commits so the report has one line per document.
+	byDoc := map[string]store.Drift{}
+	for _, d := range all {
+		if prev, ok := byDoc[d.DocPath]; !ok || d.Commits > prev.Commits {
+			byDoc[d.DocPath] = d
+		}
+	}
+	rows := make([]store.Drift, 0, len(byDoc))
+	for _, d := range byDoc {
+		rows = append(rows, d)
+	}
+	changed, err := s.st.ReplaceDrift(ctx, rows)
+	if err != nil {
+		return err
+	}
+	s.driftChecked = true
+	s.reg.SetDrift(len(rows))
+	if changed {
+		s.logger.Info("code drift updated", "documents_behind", len(rows))
+		// Drift is rendered into bundles, so cached ones are now wrong.
+		if err := s.compiler.Invalidate(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,6 +45,9 @@ type Config struct {
 	// Author identity for proposal commits.
 	AuthorName  string
 	AuthorEmail string
+	// Bare clones without a worktree: history only, for code repositories
+	// whose files briefd never reads.
+	Bare bool
 }
 
 // IsGitURL reports whether source names a git remote rather than a directory.
@@ -94,15 +98,15 @@ func Open(ctx context.Context, cfg Config, logger *slog.Logger) (*Repo, error) {
 		return nil, fmt.Errorf("gitsync: opening %s: %w", cfg.Dir, err)
 	}
 
-	logger.Info("cloning knowledge repository", "url", redact(cfg.URL), "dir", cfg.Dir)
-	opts := &git.CloneOptions{URL: cfg.URL, Auth: auth, SingleBranch: true, Depth: 0}
+	logger.Info("cloning repository", "url", redact(cfg.URL), "dir", cfg.Dir, "bare", cfg.Bare)
+	opts := &git.CloneOptions{URL: cfg.URL, Auth: auth, SingleBranch: true, Depth: 0, NoCheckout: cfg.Bare}
 	if cfg.Branch != "" {
 		opts.ReferenceName = plumbing.NewBranchReferenceName(cfg.Branch)
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.Dir), 0o750); err != nil {
 		return nil, fmt.Errorf("gitsync: %w", err)
 	}
-	repo, err = git.PlainCloneContext(ctx, cfg.Dir, false, opts)
+	repo, err = git.PlainCloneContext(ctx, cfg.Dir, cfg.Bare, opts)
 	if err != nil {
 		return nil, fmt.Errorf("gitsync: cloning %s: %w", redact(cfg.URL), err)
 	}
@@ -189,13 +193,23 @@ func (r *Repo) Sync(ctx context.Context) (head string, changed bool, err error) 
 	if remote.Hash().String() == before {
 		return before, false, nil
 	}
+	branchRef := plumbing.NewBranchReferenceName(r.cfg.Branch)
+	if r.cfg.Bare {
+		if err := r.repo.Storer.SetReference(plumbing.NewHashReference(branchRef, remote.Hash())); err != nil {
+			return before, false, fmt.Errorf("gitsync: updating %s: %w", r.cfg.Branch, err)
+		}
+		if err := r.repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, branchRef)); err != nil {
+			return before, false, fmt.Errorf("gitsync: updating HEAD: %w", err)
+		}
+		r.logger.Info("repository updated", "dir", r.cfg.Dir, "from", short(before), "to", short(remote.Hash().String()))
+		return remote.Hash().String(), true, nil
+	}
 	wt, err := r.repo.Worktree()
 	if err != nil {
 		return before, false, fmt.Errorf("gitsync: %w", err)
 	}
 	// Make sure the local branch exists and points at the remote head, then
 	// reset the worktree to it so local artifacts never leak into the index.
-	branchRef := plumbing.NewBranchReferenceName(r.cfg.Branch)
 	if err := r.repo.Storer.SetReference(plumbing.NewHashReference(branchRef, remote.Hash())); err != nil {
 		return before, false, fmt.Errorf("gitsync: updating %s: %w", r.cfg.Branch, err)
 	}
@@ -564,5 +578,106 @@ func changedPaths(c *object.Commit, want map[string]bool) (map[string]bool, erro
 			}
 		}
 	}
+	return out, nil
+}
+
+// Change is one commit and the paths it touched (relative to every parent;
+// for a merge only paths that differ from all parents count, as in git log).
+type Change struct {
+	Hash  string
+	When  time.Time
+	Paths []string
+}
+
+// ChangesSince lists commits newer than since, newest first, with the paths
+// each one changed. The walk stops at the first commit at or before since
+// (history is visited in committer-time order) or after maxCommits (<= 0
+// means no cap), whichever comes first; truncated reports the latter.
+func (r *Repo) ChangesSince(ctx context.Context, since time.Time, maxCommits int) (changes []Change, truncated bool, err error) {
+	ref, err := r.repo.Head()
+	if err != nil {
+		return nil, false, fmt.Errorf("gitsync: reading HEAD: %w", err)
+	}
+	iter, err := r.repo.Log(&git.LogOptions{From: ref.Hash(), Order: git.LogOrderCommitterTime})
+	if err != nil {
+		return nil, false, fmt.Errorf("gitsync: reading history: %w", err)
+	}
+	defer iter.Close()
+	err = iter.ForEach(func(c *object.Commit) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !c.Committer.When.After(since) {
+			return storer.ErrStop
+		}
+		if maxCommits > 0 && len(changes) >= maxCommits {
+			truncated = true
+			return storer.ErrStop
+		}
+		paths, err := allChangedPaths(c)
+		if err != nil {
+			return err
+		}
+		changes = append(changes, Change{Hash: c.Hash.String(), When: c.Committer.When, Paths: paths})
+		return nil
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("gitsync: walking history: %w", err)
+	}
+	return changes, truncated, nil
+}
+
+// allChangedPaths is changedPaths without a filter: every path that differs
+// from all parents (every file for a root commit).
+func allChangedPaths(c *object.Commit) ([]string, error) {
+	tree, err := c.Tree()
+	if err != nil {
+		return nil, err
+	}
+	if c.NumParents() == 0 {
+		var out []string
+		err := tree.Files().ForEach(func(f *object.File) error {
+			out = append(out, f.Name)
+			return nil
+		})
+		return out, err
+	}
+	var set map[string]bool
+	for i := 0; i < c.NumParents(); i++ {
+		parent, err := c.Parent(i)
+		if err != nil {
+			return nil, err
+		}
+		ptree, err := parent.Tree()
+		if err != nil {
+			return nil, err
+		}
+		diff, err := ptree.Diff(tree)
+		if err != nil {
+			return nil, err
+		}
+		cur := map[string]bool{}
+		for _, ch := range diff {
+			for _, name := range []string{ch.From.Name, ch.To.Name} {
+				if name != "" {
+					cur[name] = true
+				}
+			}
+		}
+		if set == nil {
+			set = cur
+			continue
+		}
+		for p := range set {
+			if !cur[p] {
+				delete(set, p)
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for p := range set {
+		out = append(out, p)
+	}
+	sort.Strings(out)
 	return out, nil
 }

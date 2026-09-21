@@ -138,6 +138,20 @@ ranked by margin — a flat top ten means nothing specific was found — as a
 group both by question text and count repeats; the log is pruned during sync
 after `query_log.retention_days`.
 
+### Behind the code: drift between knowledge and what it governs
+
+A document's `refs` globs name the code it governs. With `code.repos`
+configured, each sync fetches those repositories (bare clones — briefd never
+reads their files) and walks their history newest-first from the oldest
+document age, collecting the paths each commit changed (paths that differ
+from every parent, as `git log` treats merges). `internal/staleness` matches
+them against every document's globs and counts, per document, the commits
+that came *after* the document's last change. The result lands in
+`code_drift`, is rendered into the attribution line (`code changed since: 3
+commits, last 2026-06-01`), invalidates the bundle cache when it changes, and
+feeds the dashboard's "Behind the code" panel and the
+`briefd_documents_behind_code` gauge. ADR-0007 has the reasoning.
+
 ## 3. The write path
 
 ![Write path](assets/diagram-write-path.png)
@@ -164,6 +178,7 @@ records move from open to merged or closed when GitHub reports a terminal state.
 | `internal/embed` | `Embedder` interface; `minilm` (pure Go), `remote` (Ollama/OpenAI) |
 | `internal/search` | FTS query building, vector index, RRF, budgeted results |
 | `internal/bundle` | dedupe, packing, rendering, caching |
+| `internal/staleness` | `refs` glob matching and drift computation over code history |
 | `internal/mcpserver` | MCP tools |
 | `internal/httpapi` | REST, auth, webhook, dashboard, metrics endpoints |
 | `internal/metrics` | in-process counters, histograms, Prometheus exposition |

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,5 +188,50 @@ func TestLastModified(t *testing.T) {
 	got, err = repo.LastModified(ctx, []string{"domain/b.md"})
 	if err != nil || !got["domain/b.md"].Equal(b) {
 		t.Errorf("head-only lookup = %v, %v", got, err)
+	}
+}
+
+func TestBareCloneChangesSince(t *testing.T) {
+	ctx := context.Background()
+	bare, commit := newRemote(t)
+	commit("services/payment/refund.go", "package payment\n")
+	time.Sleep(1100 * time.Millisecond)
+	cut := time.Now()
+	time.Sleep(1100 * time.Millisecond)
+	commit("services/payment/partial.go", "package payment // partial\n")
+	commit("README.md", "# readme\n")
+
+	dir := filepath.Join(t.TempDir(), "code.git")
+	repo, err := Open(ctx, Config{URL: bare, Dir: dir, Branch: "main", Bare: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "README.md")); err == nil {
+		t.Error("bare clone should not have a worktree")
+	}
+	changes, truncated, err := repo.ChangesSince(ctx, cut, 0)
+	if err != nil || truncated {
+		t.Fatalf("ChangesSince: %v truncated=%v", err, truncated)
+	}
+	var paths []string
+	for _, c := range changes {
+		paths = append(paths, c.Paths...)
+	}
+	if strings.Join(paths, ",") != "README.md,services/payment/partial.go" {
+		t.Errorf("changed paths since cut = %v", paths)
+	}
+	if got, tr, _ := repo.ChangesSince(ctx, cut, 1); len(got) != 1 || !tr {
+		t.Errorf("cap: got %d changes, truncated=%v", len(got), tr)
+	}
+
+	// A new commit upstream is picked up by Sync without a worktree.
+	time.Sleep(1100 * time.Millisecond)
+	head := commit("services/payment/refund.go", "package payment // v2\n")
+	got, changed, err := repo.Sync(ctx)
+	if err != nil || !changed || got != head {
+		t.Fatalf("Sync = %s changed=%v err=%v, want %s", got, changed, err, head)
+	}
+	if changes, _, _ = repo.ChangesSince(ctx, cut, 0); len(changes) != 3 {
+		t.Errorf("after sync: %d changes, want 3", len(changes))
 	}
 }

@@ -49,7 +49,8 @@ Optional front-matter per file:
 ---
 title: Retry policy            # defaults to first H1
 tags: [payments, resilience]
-refs: ["services/payment/**"]  # code paths this doc governs (staleness input, v0.2)
+refs: ["services/payment/**"]  # code paths this doc governs; commits to them after the
+                               # doc's last change are reported as drift (ADR-0007)
 ---
 ```
 
@@ -198,9 +199,13 @@ sync_state(source, last_commit, last_sync_at, last_error, index_fingerprint)
 + Ollama adapter · bundle cache · REST + bearer auth · Prometheus `/metrics` + embedded
 read-only web dashboard · eval harness + golden set · docker compose + binary release.
 
-**Out (v0.2+):** usage-based relevance tuning · staleness scoring via `refs` globs ·
-contradiction detection for proposals · multi-repo knowledge sources ·
-`report_usage`-driven ranking · dashboard write actions (trigger sync, manage proposals).
+**Added since (v0.2–v0.5):** multilingual default model (ADR-0006) · document age
+(`updated_at`) in attribution lines · knowledge-gap report from a query log ·
+code drift via `refs` globs against `code.repos` history (ADR-0007).
+
+**Out:** usage-based relevance tuning · contradiction detection for proposals ·
+multi-repo knowledge sources · `report_usage`-driven ranking · dashboard write
+actions (trigger sync, manage proposals).
 
 ## 11. Milestones
 

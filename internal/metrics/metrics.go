@@ -66,6 +66,8 @@ type Registry struct {
 
 	vectors        int
 	vectorsPending int
+	drift          int
+	driftOn        bool
 	embeddingsOn   bool
 
 	cacheHits, cacheMisses int64
@@ -189,6 +191,13 @@ func (r *Registry) SetVectors(indexed, pending int) {
 	r.vectors, r.vectorsPending, r.embeddingsOn = indexed, pending, true
 }
 
+// SetDrift records how many documents lag the code they govern.
+func (r *Registry) SetDrift(n int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.drift, r.driftOn = n, true
+}
+
 // RecordSync records the outcome of one sync/index run.
 func (r *Registry) RecordSync(err error) {
 	r.mu.Lock()
@@ -273,6 +282,9 @@ func (r *Registry) WritePrometheus(w io.Writer) {
 	if r.embeddingsOn {
 		fmt.Fprintf(w, "# HELP briefd_vectors Chunks with an up-to-date embedding.\n# TYPE briefd_vectors gauge\nbriefd_vectors %d\n", r.vectors)
 		fmt.Fprintf(w, "# HELP briefd_vectors_pending Chunks still waiting to be embedded.\n# TYPE briefd_vectors_pending gauge\nbriefd_vectors_pending %d\n", r.vectorsPending)
+	}
+	if r.driftOn {
+		fmt.Fprintf(w, "# HELP briefd_documents_behind_code Documents whose governed code changed after the document did.\n# TYPE briefd_documents_behind_code gauge\nbriefd_documents_behind_code %d\n", r.drift)
 	}
 	fmt.Fprint(w, "# HELP briefd_sync_runs_total Source sync runs by outcome.\n# TYPE briefd_sync_runs_total counter\n")
 	for _, st := range []string{"ok", "error"} {

@@ -43,6 +43,29 @@ type Config struct {
 	Git Git `yaml:"git"`
 	// Forge enables pull requests for proposals.
 	Forge gitsync.ForgeConfig `yaml:"forge"`
+	// Code lists the code repositories whose history is compared against
+	// documents' `refs` globs to detect knowledge that lags the code.
+	Code Code `yaml:"code"`
+}
+
+// Code configures code-drift detection (ADR-0007).
+type Code struct {
+	Repos []CodeRepo `yaml:"repos"`
+	// MaxCommits caps how far back one sync walks each repository's history
+	// (default 5000). Older drift is simply not counted.
+	MaxCommits int `yaml:"max_commits"`
+}
+
+// CodeRepo is one repository briefd follows read-only, history only.
+type CodeRepo struct {
+	// Name labels the repository in reports; defaults to the last path
+	// segment of Source.
+	Name string `yaml:"name"`
+	// Source is a git URL (cloned bare next to the database, using the
+	// `git` credentials) or a local checkout read in place.
+	Source string `yaml:"source"`
+	// Branch to follow; "" = the remote's default branch.
+	Branch string `yaml:"branch"`
 }
 
 // Git holds git-source settings.
@@ -106,6 +129,7 @@ func Default() Config {
 		LogLevel: "info",
 		Sync:     Sync{Interval: 60 * time.Second},
 		QueryLog: QueryLog{Enabled: true, RetentionDays: 30},
+		Code:     Code{MaxCommits: 5000},
 		Search: Search{
 			DefaultScopes:    []string{"domain", "conventions"},
 			DefaultMaxTokens: 2000,
@@ -122,6 +146,23 @@ func (c *Config) GitDir() string {
 		return c.Git.Dir
 	}
 	return filepath.Join(filepath.Dir(c.DB), "knowledge-repo")
+}
+
+// CodeDir is where a code repository given by URL is cloned (bare).
+func (c *Config) CodeDir(repo CodeRepo) string {
+	return filepath.Join(filepath.Dir(c.DB), "code-repos", repo.DisplayName())
+}
+
+// DisplayName is Name, or the repository's last path segment without ".git".
+func (r CodeRepo) DisplayName() string {
+	if r.Name != "" {
+		return r.Name
+	}
+	s := strings.TrimSuffix(strings.TrimRight(r.Source, "/"), ".git")
+	if i := strings.LastIndexAny(s, "/:"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
 }
 
 // DefaultFile is the config file looked up when none is given.
@@ -246,6 +287,20 @@ func (c *Config) Validate() error {
 	}
 	if c.Sync.Interval < 0 {
 		return errors.New("config: sync.interval must be >= 0")
+	}
+	seen := map[string]bool{}
+	for _, r := range c.Code.Repos {
+		if r.Source == "" {
+			return errors.New("config: code.repos[].source must not be empty")
+		}
+		name := r.DisplayName()
+		if name == "" || seen[name] {
+			return fmt.Errorf("config: code.repos: duplicate or empty name %q", name)
+		}
+		seen[name] = true
+	}
+	if c.Code.MaxCommits < 0 {
+		return errors.New("config: code.max_commits must be >= 0")
 	}
 	if c.QueryLog.RetentionDays < 0 {
 		return errors.New("config: query_log.retention_days must be >= 0")
