@@ -174,9 +174,10 @@ The image is distroless and pure Go (~34 MB, linux/amd64 + arm64). Database, che
 live in the `briefd-data` volume. Mount a directory and set `BRIEFD_SOURCE=/knowledge` to serve
 local files instead.
 
-**On your own machine** (private knowledge, company network): see
-[`deploy/local/`](deploy/local/) for a localhost-only config, a launchd service, and the
-`.mcp.json` / `CLAUDE.md` templates for your projects.
+**Deployment guide:** [`deploy/README.md`](deploy/README.md) covers Compose and systemd
+setups, git forges (GitHub, GitLab, Azure DevOps, Bitbucket, SSH), installing the embedding model
+offline, proxies and private CAs, exposure/security, upgrades and monitoring. For a laptop-only
+setup see [`deploy/local/`](deploy/local/).
 
 **Configuration** — `briefd.yaml` (see [`deploy/briefd.example.yaml`](deploy/briefd.example.yaml))
 or `BRIEFD_*` environment variables; flags override both. The ones you will actually touch:
@@ -217,6 +218,10 @@ or [`eval/thresholds-tr.yaml`](eval/thresholds-tr.yaml):
 | BM25 only | 0.681 | 0.755 | 0.591 | 0.733 | 0.767 | 0.602 |
 | Vector only | 0.830 | 0.936 | 0.771 | 0.950 | 1.000 | 0.832 |
 | **Hybrid (default)** | **0.830** | **0.926** | **0.746** | **0.933** | **1.000** | **0.847** |
+
+On public BEIR datasets briefd's vector-only mode reproduces the published quality of both
+embedding models and hybrid mode beats BM25 and vector-only on each — SciFact nDCG@10 0.714
+vs 0.665 for the BEIR BM25 baseline; see [`eval/beir/`](eval/beir/) to reproduce.
 
 Every change to chunking, embeddings or fusion ships with before/after numbers
 ([ADR-0004](docs/adr/0004-hybrid-fusion-tuning.md) is an example).
