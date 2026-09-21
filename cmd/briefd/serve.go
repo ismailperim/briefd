@@ -12,7 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/ismailperim/briefd/internal/bundle"
+	"github.com/ismailperim/briefd/internal/config"
 	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/httpapi"
@@ -62,13 +65,98 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	rt, err := buildProcess(ctx, cfg, stderr)
+	if err != nil {
+		return err
+	}
+	defer rt.close()
+	logger, st, repo, proposals, syncer := rt.logger, rt.st, rt.repo, rt.proposals, rt.syncer
+	if cfg.APIToken == "" {
+		logger.Warn("BRIEFD_API_TOKEN is not set; /mcp and /api are unauthenticated")
+	}
+	mcpSrv := rt.mcpServer(cfg)
+	handler := httpapi.New(httpapi.Deps{
+		Store:         st,
+		Searcher:      rt.searcher,
+		Compiler:      rt.compiler,
+		Proposals:     proposals,
+		WebhookSecret: cfg.Sync.WebhookSecret,
+		OnWebhook: func() {
+			if err := syncer.run(ctx, true); err != nil && ctx.Err() == nil {
+				logger.Error("webhook sync failed", "err", err)
+			}
+		},
+		MCP:                mcpserver.Handler(mcpSrv, rt.mcpLogger(cfg)),
+		APIToken:           cfg.APIToken,
+		Metrics:            rt.reg,
+		MetricsRequireAuth: cfg.Metrics.RequireAuth,
+		QueryLog:           cfg.QueryLog.Enabled,
+		Version:            version,
+		Logger:             logger,
+	})
+
+	srv := &http.Server{
+		Addr:              cfg.Listen,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w (pick another address with --listen, e.g. --listen :7789)", cfg.Listen, err)
+	}
+	logger.Info("briefd listening", "addr", ln.Addr().String(), "mcp", "/mcp", "api", "/api", "db", cfg.DB, "source", cfg.Source,
+		"git", repo != nil, "proposals", proposals.Available(), "webhook", cfg.Sync.WebhookSecret != "")
+	fmt.Fprintf(stdout, "briefd %s listening on http://%s  (dashboard: /  MCP: /mcp  metrics: /metrics)\n", version, displayAddr(ln.Addr()))
+
+	errc := make(chan error, 1)
+	go func() { errc <- srv.Serve(ln) }()
+
+	rt.startSync(ctx, cfg)
+
+	select {
+	case err := <-errc:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("http server: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		logger.Info("shutting down")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	}
+}
+
+// process is everything a briefd process needs behind a transport: the
+// store, the followed repositories, retrieval, the bundle compiler and the
+// syncer. Both `serve` (HTTP) and `mcp` (stdio) are thin wrappers over it.
+type process struct {
+	logger    *slog.Logger
+	st        *store.Store
+	reg       *metrics.Registry
+	repo      *gitsync.Repo
+	proposals *proposal.Service
+	searcher  *search.Searcher
+	compiler  *bundle.Compiler
+	syncer    *syncer
+}
+
+// buildProcess opens the store and the source, wires retrieval and runs
+// the initial (BM25) index so the first request has something to answer.
+func buildProcess(ctx context.Context, cfg config.Config, stderr io.Writer) (rt *process, err error) {
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}))
 
 	st, err := store.Open(cfg.DB)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer st.Close()
+	// Closed by the caller through process.close; on error, below.
+	defer func() {
+		if err != nil {
+			st.Close()
+		}
+	}()
 	reg := metrics.New(version)
 
 	// Resolve the source: a git URL is cloned and followed; a directory that
@@ -83,7 +171,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			SSHKeyPath: cfg.Git.SSHKey, AuthorName: cfg.Git.AuthorName, AuthorEmail: cfg.Git.AuthorEmail,
 		}, logger)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	default:
 		if r, err := gitsync.OpenLocal(cfg.Source, gitsync.Config{
@@ -102,7 +190,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	var forge *gitsync.Forge
 	if repo != nil {
 		if forge, err = gitsync.NewForge(cfg.Forge, repo.URL()); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	proposals := &proposal.Service{Repo: repo, Forge: forge, Store: st, Logger: logger}
@@ -119,7 +207,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		// still answers, and the dashboard shows "bm25" instead of "hybrid".
 		// Remote providers fail hard, since that is a configuration error.
 		if cfg.Embeddings.Provider != "local" {
-			return err
+			return nil, err
 		}
 		logger.Error("embeddings unavailable; serving BM25-only until restart (run `briefd model pull` or set --embeddings none to silence)", "err", err)
 		embedder = nil
@@ -127,7 +215,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if embedder != nil {
 		searcher.WithEmbedder(embedder)
 		if err := searcher.Reload(ctx); err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		logger.Warn("embeddings disabled; search is BM25-only")
@@ -152,7 +240,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			r, err = gitsync.OpenLocal(cr.Source, gitsync.Config{}, logger)
 		}
 		if err != nil {
-			return fmt.Errorf("code repository %s: %w", cr.DisplayName(), err)
+			return nil, fmt.Errorf("code repository %s: %w", cr.DisplayName(), err)
 		}
 		code = append(code, codeRepo{name: cr.DisplayName(), repo: r})
 	}
@@ -165,82 +253,49 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		// Documents are indexed before we listen so BM25 works immediately;
 		// embeddings can take minutes and run in the background.
 		if err := syncer.run(ctx, false); err != nil {
-			return fmt.Errorf("initial index: %w", err)
+			return nil, fmt.Errorf("initial index: %w", err)
 		}
 	} else {
 		logger.Warn("no source configured; serving the existing index only")
 		syncer.refreshGauges(ctx)
 	}
-	if cfg.APIToken == "" {
-		logger.Warn("BRIEFD_API_TOKEN is not set; /mcp and /api are unauthenticated")
+	return &process{logger: logger, st: st, reg: reg, repo: repo, proposals: proposals, searcher: searcher, compiler: compiler, syncer: syncer}, nil
+}
+
+func (rt *process) close() { rt.st.Close() }
+
+// startSync embeds in the background and, when configured, keeps the
+// source in sync on an interval.
+func (rt *process) startSync(ctx context.Context, cfg config.Config) {
+	if cfg.Source == "" {
+		return
 	}
-	// The MCP SDK logs every session at info level, which in stateless mode
-	// means every request; only surface that when debugging.
-	var mcpLogger *slog.Logger
+	go func() {
+		if err := rt.syncer.run(ctx, true); err != nil && ctx.Err() == nil {
+			rt.logger.Error("background embedding failed", "err", err)
+		}
+	}()
+	if cfg.Sync.Interval > 0 {
+		go rt.syncer.loop(ctx, cfg.Sync.Interval)
+	}
+}
+
+// mcpLogger returns the logger for the MCP SDK. It logs every session at
+// info level, which in stateless HTTP mode means every request, so it is
+// only enabled when debugging.
+func (rt *process) mcpLogger(cfg config.Config) *slog.Logger {
 	if cfg.LogLevel == "debug" {
-		mcpLogger = logger
+		return rt.logger
 	}
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Proposals: proposals, Metrics: reg, QueryLog: cfg.QueryLog.Enabled, Version: version, Logger: mcpLogger})
-	handler := httpapi.New(httpapi.Deps{
-		Store:         st,
-		Searcher:      searcher,
-		Compiler:      compiler,
-		Proposals:     proposals,
-		WebhookSecret: cfg.Sync.WebhookSecret,
-		OnWebhook: func() {
-			if err := syncer.run(ctx, true); err != nil && ctx.Err() == nil {
-				logger.Error("webhook sync failed", "err", err)
-			}
-		},
-		MCP:                mcpserver.Handler(mcpSrv, mcpLogger),
-		APIToken:           cfg.APIToken,
-		Metrics:            reg,
-		MetricsRequireAuth: cfg.Metrics.RequireAuth,
-		QueryLog:           cfg.QueryLog.Enabled,
-		Version:            version,
-		Logger:             logger,
+	return nil
+}
+
+// mcpServer builds the MCP server over this process.
+func (rt *process) mcpServer(cfg config.Config) *mcp.Server {
+	return mcpserver.New(mcpserver.Deps{
+		Store: rt.st, Searcher: rt.searcher, Compiler: rt.compiler, Proposals: rt.proposals, Metrics: rt.reg,
+		QueryLog: cfg.QueryLog.Enabled, Version: version, Logger: rt.mcpLogger(cfg),
 	})
-
-	srv := &http.Server{
-		Addr:              cfg.Listen,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		BaseContext:       func(net.Listener) context.Context { return ctx },
-	}
-	ln, err := net.Listen("tcp", cfg.Listen)
-	if err != nil {
-		return fmt.Errorf("listening on %s: %w (pick another address with --listen, e.g. --listen :7789)", cfg.Listen, err)
-	}
-	logger.Info("briefd listening", "addr", ln.Addr().String(), "mcp", "/mcp", "api", "/api", "db", cfg.DB, "source", cfg.Source,
-		"git", repo != nil, "proposals", proposals.Available(), "webhook", cfg.Sync.WebhookSecret != "")
-	fmt.Fprintf(stdout, "briefd %s listening on http://%s  (dashboard: /  MCP: /mcp  metrics: /metrics)\n", version, displayAddr(ln.Addr()))
-
-	errc := make(chan error, 1)
-	go func() { errc <- srv.Serve(ln) }()
-
-	if cfg.Source != "" {
-		go func() {
-			if err := syncer.run(ctx, true); err != nil && ctx.Err() == nil {
-				logger.Error("background embedding failed", "err", err)
-			}
-		}()
-		if cfg.Sync.Interval > 0 {
-			go syncer.loop(ctx, cfg.Sync.Interval)
-		}
-	}
-
-	select {
-	case err := <-errc:
-		if !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("http server: %w", err)
-		}
-		return nil
-	case <-ctx.Done():
-		logger.Info("shutting down")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutdownCtx)
-	}
 }
 
 // syncer runs the indexer (documents, then embeddings) and keeps metrics

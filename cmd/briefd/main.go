@@ -31,6 +31,7 @@ Usage:
 Commands:
   init      Create a starter knowledge repository layout
   serve     Start the MCP + REST server
+  mcp       serve the MCP tools over stdio (Claude Desktop, Cursor, directory inspectors)
   index     Build or update the knowledge index from a directory
   search    Query the index from the command line
   model     Manage local embedding models (model list | model pull)
@@ -80,6 +81,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runModel(ctx, args[1:], stdout, stderr, logger)
 	case "serve":
 		err = runServe(ctx, args[1:], stdout, stderr)
+	case "mcp":
+		err = runMCP(ctx, args[1:], stdout, stderr)
 	case "eval":
 		err = runEval(ctx, args[1:], stdout, stderr, logger)
 	case "bench":

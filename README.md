@@ -103,6 +103,24 @@ Any MCP client that speaks streamable HTTP works. For a project-level `.mcp.json
 }
 ```
 
+**Single-user, no server?** `briefd mcp` speaks MCP over stdio — the same tools, the same
+index, no port and no token. Claude Desktop, Cursor's stdio config and MCP directory
+inspectors launch it directly:
+
+```json
+{
+  "mcpServers": {
+    "briefd": {
+      "command": "briefd",
+      "args": ["mcp", "--source", "/path/to/knowledge", "--db", "~/.briefd/knowledge.db"]
+    }
+  }
+}
+```
+
+Use `serve` when a team shares one instance (dashboard, metrics, webhook, REST); use `mcp`
+when the agent runs on the machine that holds the checkout.
+
 ## Tools
 
 | Tool | What it does |
@@ -253,7 +271,8 @@ Every change to chunking, embeddings or fusion ships with before/after numbers
 
 ```sh
 briefd init       # scaffold a knowledge repo (domain/, conventions/, projects/)
-briefd serve      # MCP + REST + dashboard
+briefd serve      # MCP over HTTP + REST + dashboard, for a shared instance
+briefd mcp        # MCP over stdio, for one agent on this machine (Claude Desktop, Cursor)
 briefd index      # index a directory into the database (--rebuild to start over)
 briefd search     # query like search_context does (--mode bm25|vector|hybrid, --json)
 briefd model list # local embedding models and whether they are downloaded

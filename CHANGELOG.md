@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `briefd_documents_behind_code`. Cached bundles are invalidated when drift
   changes.
 
+- `briefd mcp`: the MCP tools over stdio (JSON-RPC on stdin/stdout, logs on
+  stderr) for Claude Desktop, Cursor's stdio config and directory inspectors
+  such as Glama and Smithery. Same index, sync and tools as `serve`; no port,
+  no token. `serve` and `mcp` now share one process setup.
+
 ### Fixed
 
 - Container image: `BRIEFD_LISTEN` is no longer baked into the image, so a
