@@ -20,7 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable   # latest patch release: security fixes land in the stdlib
+          check-latest: true
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13
@@ -49,7 +50,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable   # latest patch release: security fixes land in the stdlib
+          check-latest: true
       - name: Cache embedding model
         uses: actions/cache@v4
         with:

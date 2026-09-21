@@ -2,6 +2,8 @@ module github.com/ismailperim/briefd
 
 go 1.26.0
 
+toolchain go1.27.1
+
 require (
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
