@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/store"
@@ -25,6 +27,9 @@ type Service struct {
 	Forge  *gitsync.Forge
 	Store  *store.Store
 	Logger *slog.Logger
+
+	mu             sync.Mutex
+	lastStatusSync time.Time
 }
 
 // Request is what an agent submits.
@@ -96,11 +101,25 @@ func (s *Service) Create(ctx context.Context, req Request) (*Result, error) {
 	return res, nil
 }
 
-// SyncStatuses refreshes open proposals that have a forge pull request.
+// StatusSyncInterval is the minimum time between forge status lookups, so
+// the (default 60 s) source sync does not spend one API call per open
+// proposal every minute.
+const StatusSyncInterval = 10 * time.Minute
+
+// SyncStatuses refreshes open proposals that have a forge pull request. It
+// is rate-limited to once per StatusSyncInterval; calls in between return
+// nil immediately.
 func (s *Service) SyncStatuses(ctx context.Context) error {
 	if s == nil || s.Forge == nil || s.Store == nil {
 		return nil
 	}
+	s.mu.Lock()
+	if time.Since(s.lastStatusSync) < StatusSyncInterval {
+		s.mu.Unlock()
+		return nil
+	}
+	s.lastStatusSync = time.Now()
+	s.mu.Unlock()
 	proposals, err := s.Store.ListOpenProposals(ctx)
 	if err != nil {
 		return err
