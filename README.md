@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/ismailperim/briefd/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ismailperim/briefd/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/ismailperim/briefd/actions/workflows/security.yml"><img alt="Security" src="https://github.com/ismailperim/briefd/actions/workflows/security.yml/badge.svg"></a>
   <a href="https://github.com/ismailperim/briefd/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ismailperim/briefd?include_prereleases&sort=semver"></a>
   <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/ismailperim/briefd"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Security workflow: govulncheck, CodeQL (Go + JavaScript), dependency review on
+  PRs, Trivy image scan; releases include a CycloneDX SBOM per archive.
 - Releases are cut with `make release VERSION=X.Y.Z`; the release workflow
   verifies changelog/server.json consistency and publishes to the MCP Registry
   automatically (GitHub OIDC).

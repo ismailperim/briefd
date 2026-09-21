@@ -38,6 +38,10 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Software bill of materials per archive (CycloneDX via syft), attached to the release.
+sboms:
+  - artifacts: archive
+
 changelog:
   use: github
   sort: asc
