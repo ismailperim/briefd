@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>briefd social preview</title>
+<style>
+  /* 1280×640 — GitHub's recommended social-preview size (2:1). */
+  html,body{margin:0;width:1280px;height:640px;overflow:hidden}
+  body{background:#0f172a;color:#e6edf3;font-family:-apple-system,"SF Pro Display","Inter","Segoe UI",Helvetica,Arial,sans-serif;position:relative}
+  .glow{position:absolute;right:-120px;top:-160px;width:640px;height:640px;border-radius:50%;
+        background:radial-gradient(closest-side,rgba(250,204,21,.18),rgba(250,204,21,0))}
+  .wrap{position:absolute;inset:0;padding:72px 80px;display:flex;justify-content:space-between}
+  .left{width:640px;display:flex;flex-direction:column}
+  .name{font-size:96px;font-weight:800;letter-spacing:-3px;line-height:1;margin:0}
+  .name span{color:#facc15}
+  .tag{font-size:38px;font-weight:600;letter-spacing:-.5px;margin:22px 0 0;line-height:1.15}
+  .desc{font-size:24px;color:#94a3b8;margin:22px 0 0;line-height:1.4;max-width:600px}
+  .chips{margin-top:auto;display:flex;gap:12px}
+  .chip{white-space:nowrap;font-size:20px;font-weight:600;padding:10px 18px;border-radius:999px;border:2px solid #334155;color:#cbd5e1}
+  .right{width:420px;display:flex;flex-direction:column;justify-content:center;gap:34px}
+  .bar{display:flex;flex-direction:column;gap:10px}
+  .bar .lbl{font-size:22px;color:#94a3b8;display:flex;justify-content:space-between}
+  .bar .lbl b{color:#e6edf3;font-weight:700}
+  .bar i{display:block;height:34px;border-radius:8px}
+  .bar.all i{width:100%;background:#475569}
+  .bar.ours i{width:14%;background:#facc15}
+  .save{font-size:30px;font-weight:700;color:#4ade80;margin-top:4px}
+  .save small{display:block;font-size:20px;font-weight:500;color:#94a3b8;margin-top:6px}
+  .url{position:absolute;right:80px;bottom:60px;font-size:22px;color:#64748b;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+</style></head><body>
+<div class="glow"></div>
+<div class="wrap">
+  <div class="left">
+    <h1 class="name">brief<span>d</span></h1>
+    <p class="tag">Your agents, briefed.<br>Not flooded.</p>
+    <p class="desc">Team knowledge in a git repo, served to Claude Code, Cursor and Codex over MCP as token-budgeted context bundles.</p>
+    <div class="chips"><span class="chip">MCP</span><span class="chip">pure Go · one binary</span><span class="chip">100+ languages</span></div>
+  </div>
+  <div class="right">
+    <div class="bar all"><div class="lbl"><span>Everything in CLAUDE.md</span><b>12,869</b></div><i></i></div>
+    <div class="bar ours"><div class="lbl"><span>briefd bundle</span><b>1,800</b></div><i></i></div>
+    <div class="save">−86% tokens per task<small>answer present 96% of the time</small></div>
+  </div>
+</div>
+<div class="url">github.com/ismailperim/briefd</div>
+</body></html>
