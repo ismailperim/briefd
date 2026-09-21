@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such as Glama and Smithery. Same index, sync and tools as `serve`; no port,
   no token. `serve` and `mcp` now share one process setup.
 
+- `glama.json` (maintainer metadata for the Glama directory).
+
+### Changed
+
+- Tool and parameter descriptions rewritten for agents: when to use each
+  tool versus its neighbour, side effects (all read-only except
+  `propose_update`), what comes back, budget and error behaviour, and that an
+  empty `report_usage` marks a knowledge gap. The tool schemas now cost
+  ~2,300 tokens once per session (was ~1,750).
+
 ### Fixed
 
 - Container image: `BRIEFD_LISTEN` is no longer baked into the image, so a

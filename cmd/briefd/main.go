@@ -31,7 +31,7 @@ Usage:
 Commands:
   init      Create a starter knowledge repository layout
   serve     Start the MCP + REST server
-  mcp       serve the MCP tools over stdio (Claude Desktop, Cursor, directory inspectors)
+  mcp       Serve the MCP tools over stdio (Claude Desktop, Cursor, directory inspectors)
   index     Build or update the knowledge index from a directory
   search    Query the index from the command line
   model     Manage local embedding models (model list | model pull)

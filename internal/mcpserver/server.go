@@ -65,37 +65,37 @@ func New(d Deps) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "search_context",
-		Description: "Search the team knowledge base and return the most relevant sections that fit a token budget. Use it before implementing anything that may be governed by domain rules, conventions or past decisions.",
+		Description: "Search the team's knowledge base (domain rules, conventions, decisions, project notes) and return the most relevant sections, ranked, within a token budget. Use it to look something up or see what exists; use compile_bundle when you want one context block for a task. Read-only. Each section carries its path, heading, scope, score and last-updated date; results never exceed max_tokens and say how many sections the budget omitted.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.searchContext)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "compile_bundle",
-		Description: "Compile the knowledge relevant to a task into one context block that fits a token budget: deduplicated, ordered domain → conventions → project, with a source line per section and a bundle_id. Deterministic and cached; prefer it over search_context when you want context to read rather than results to inspect.",
+		Description: "Compile what the team's knowledge base says about a task into one context block within a token budget. Call it once at the start of a task, before code that rules, conventions or past decisions could govern; describe the task in a sentence, not keywords. Sections are deduplicated, ordered domain → conventions → project, each with a source line (path, heading, last-updated date, and a note when the code it governs changed later). Read-only, deterministic, cached: same task, scopes and budget give the same bundle_id and content. Never exceeds max_tokens; a too-small budget truncates the top section with a marker. Afterwards, report which sections helped via report_usage.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.compileBundle)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "report_usage",
-		Description: "Optional feedback after using a bundle: which sections were actually useful. Helps improve ranking over time.",
+		Description: "Record which sections of a compile_bundle result were actually useful for the task, by chunk_id. Optional, best called once after the task is done. An empty useful_chunk_ids list is meaningful: it marks the question as a knowledge gap for the people who maintain the repository. Stores feedback only; it does not change the current bundle or the ranking of this session.",
 		Annotations: &mcp.ToolAnnotations{IdempotentHint: true},
 	}, t.reportUsage)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "propose_update",
-		Description: "Propose a change to a knowledge document. Creates a git branch briefd/proposal-<id> with the new content (and a pull request when configured) for humans to review; it never changes what briefd serves until merged. Provide the complete new file content.",
+		Description: "Propose a change to a knowledge document — fix an outdated rule, add a missing decision, create a document — for humans to review. Commits the complete new file to a git branch briefd/proposal-<id> (and opens a pull request when a forge is configured); returns branch, commit and PR URL. Never changes what briefd serves until a human merges. Use it for knowledge that is wrong, stale ('code changed since' in bundles) or missing, not for scratch notes. Fails without a writable git source.",
 		Annotations: &mcp.ToolAnnotations{IdempotentHint: false},
 	}, t.proposeUpdate)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_document",
-		Description: "Fetch one knowledge document in full by its repository path (as returned in search results as doc_path).",
+		Description: "Return one knowledge document in full (title, tags, Markdown, last-updated date) by the doc_path given in search or bundle results. Use it when a section is not enough, or before proposing an update to that document. Read-only; not-found for unknown paths, forbidden outside the requested scopes.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.getDocument)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "list_scopes",
-		Description: "List the knowledge scopes available (shared 'domain' and 'conventions', plus one 'projects/<name>' per project) with document and chunk counts.",
+		Description: "List the knowledge scopes this server holds — the shared 'domain' and 'conventions' scopes plus one 'projects/<name>' per project — with document, section and token counts. Read-only, no input. Use it to discover the project scope to pass to search_context or compile_bundle; by default those search only the shared scopes.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.listScopes)
 
@@ -162,10 +162,10 @@ func (t *tools) record(start time.Time, req metrics.Request, err error) {
 
 // SearchContextInput is the search_context tool input.
 type SearchContextInput struct {
-	Query     string   `json:"query" jsonschema:"What you are working on or looking for, in natural language (e.g. 'retry policy for acquirer calls')"`
-	MaxTokens int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the returned sections (default 2000). The result never exceeds it."`
-	Scopes    []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to search, e.g. [\"domain\",\"conventions\",\"projects/ledger-service\"]. Default: domain and conventions."`
-	TopK      int      `json:"top_k,omitempty" jsonschema:"Maximum number of sections to return (default 8)"`
+	Query     string   `json:"query" jsonschema:"What you are working on or looking for, as a natural-language sentence or a few keywords, in any language (e.g. 'retry policy for acquirer calls'). Required, non-empty."`
+	MaxTokens int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the returned sections (default 2000, must be positive). The result never exceeds it; lower-ranked sections are omitted first."`
+	Scopes    []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to search, e.g. [\"domain\",\"conventions\",\"projects/ledger-service\"]. Default: domain and conventions. Use list_scopes to see the project scopes."`
+	TopK      int      `json:"top_k,omitempty" jsonschema:"Maximum number of sections to return before the token budget applies (default 8, server-capped)."`
 }
 
 // SearchContextOutput is the structured search_context result.
@@ -246,9 +246,9 @@ func RenderChunks(out SearchContextOutput) string {
 
 // CompileBundleInput is the compile_bundle tool input.
 type CompileBundleInput struct {
-	TaskDescription string   `json:"task_description" jsonschema:"What you are about to do, in one or two sentences (e.g. 'add partial refunds to the merchant portal')"`
-	MaxTokens       int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the whole bundle (default 2000). Never exceeded."`
-	Scopes          []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to draw from. Default: domain and conventions."`
+	TaskDescription string   `json:"task_description" jsonschema:"What you are about to do, in one or two sentences, in any language (e.g. 'add partial refunds to the merchant portal'). Required; a sentence retrieves better than keywords."`
+	MaxTokens       int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the whole bundle including its header and source lines (default 2000, must be positive). Never exceeded."`
+	Scopes          []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to draw from, e.g. [\"domain\",\"conventions\",\"projects/ledger-service\"]. Default: domain and conventions. Add the project scope when working inside a project."`
 }
 
 // CompileBundleOutput is the structured compile_bundle result.
@@ -291,8 +291,8 @@ func (t *tools) compileBundle(ctx context.Context, req *mcp.CallToolRequest, in 
 
 // ReportUsageInput is the report_usage tool input.
 type ReportUsageInput struct {
-	BundleID       string   `json:"bundle_id" jsonschema:"The bundle_id returned by compile_bundle"`
-	UsefulChunkIDs []string `json:"useful_chunk_ids" jsonschema:"chunk_ids from the bundle's sections that were actually useful (may be empty)"`
+	BundleID       string   `json:"bundle_id" jsonschema:"The bundle_id returned by compile_bundle. Required."`
+	UsefulChunkIDs []string `json:"useful_chunk_ids" jsonschema:"chunk_ids of the bundle's sections that were actually useful. An empty list means nothing in the bundle helped and marks the question as a knowledge gap."`
 }
 
 // ReportUsageOutput acknowledges stored feedback.
@@ -331,9 +331,9 @@ func (t *tools) reportUsage(ctx context.Context, req *mcp.CallToolRequest, in Re
 
 // ProposeUpdateInput is the propose_update tool input.
 type ProposeUpdateInput struct {
-	DocPath           string `json:"doc_path" jsonschema:"Repository-relative path of the document to change or create, e.g. domain/rules/refunds.md"`
-	ChangeDescription string `json:"change_description" jsonschema:"Why this change is needed, for the reviewer (becomes the commit/PR description)"`
-	NewContent        string `json:"new_content" jsonschema:"The complete new content of the file (Markdown, including front matter if any)"`
+	DocPath           string `json:"doc_path" jsonschema:"Repository-relative path of the document to change or create, inside a scope folder, e.g. domain/rules/refunds.md or projects/ledger-service/notes.md. Must end in .md."`
+	ChangeDescription string `json:"change_description" jsonschema:"Why this change is needed and what evidence you have, written for the human reviewer (becomes the commit message and pull request description)."`
+	NewContent        string `json:"new_content" jsonschema:"The complete new content of the file as Markdown, including front matter if the document has any — not a diff or a fragment. Fetch the current content with get_document first when editing."`
 }
 
 // ProposeUpdateOutput describes the created branch.
@@ -379,8 +379,8 @@ func clientName(req *mcp.CallToolRequest) string {
 
 // GetDocumentInput is the get_document tool input.
 type GetDocumentInput struct {
-	DocPath string   `json:"doc_path" jsonschema:"Repository-relative path of the document, e.g. domain/rules/refunds.md"`
-	Scopes  []string `json:"scopes,omitempty" jsonschema:"If given, the document must belong to one of these scopes"`
+	DocPath string   `json:"doc_path" jsonschema:"Repository-relative path of the document exactly as returned in doc_path, e.g. domain/rules/refunds.md. Required."`
+	Scopes  []string `json:"scopes,omitempty" jsonschema:"Optional guard: the document must belong to one of these scopes, otherwise the call is refused."`
 }
 
 // GetDocumentOutput is the get_document tool result.
