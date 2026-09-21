@@ -34,6 +34,8 @@ type Config struct {
 	Sync     Sync    `yaml:"sync"`
 	Search   Search  `yaml:"search"`
 	Metrics  Metrics `yaml:"metrics"`
+	// QueryLog controls the retrieval log behind the knowledge-gap report.
+	QueryLog QueryLog `yaml:"query_log"`
 	// Embeddings selects the vector adapter (SPEC §7, ADR-0003).
 	Embeddings embed.Config `yaml:"embeddings"`
 	// Git configures cloning/authentication when Source is a git URL, and
@@ -67,6 +69,17 @@ type Metrics struct {
 	RequireAuth bool `yaml:"require_auth"`
 }
 
+// QueryLog controls the query log that feeds GET /api/gaps and the
+// dashboard's "Knowledge gaps" panel: every search_context / compile_bundle
+// call is recorded with its retrieval confidence, so questions the corpus
+// could not answer become visible to the people who maintain it.
+type QueryLog struct {
+	// Enabled turns the log on (default true). Query text is stored as-is.
+	Enabled bool `yaml:"enabled"`
+	// RetentionDays prunes older records during sync (default 30).
+	RetentionDays int `yaml:"retention_days"`
+}
+
 // Sync controls how often the source is re-scanned.
 type Sync struct {
 	// Interval between scans; 0 disables periodic sync (index once at start).
@@ -92,6 +105,7 @@ func Default() Config {
 		Source:   "",
 		LogLevel: "info",
 		Sync:     Sync{Interval: 60 * time.Second},
+		QueryLog: QueryLog{Enabled: true, RetentionDays: 30},
 		Search: Search{
 			DefaultScopes:    []string{"domain", "conventions"},
 			DefaultMaxTokens: 2000,
@@ -175,6 +189,20 @@ func (c *Config) applyEnv() error {
 		c.Search.DefaultMaxTokens = n
 	}
 	str("SYNC_WEBHOOK_SECRET", &c.Sync.WebhookSecret)
+	if v, ok := os.LookupEnv("BRIEFD_QUERY_LOG_ENABLED"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("BRIEFD_QUERY_LOG_ENABLED: %w", err)
+		}
+		c.QueryLog.Enabled = b
+	}
+	if v, ok := os.LookupEnv("BRIEFD_QUERY_LOG_RETENTION_DAYS"); ok {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("BRIEFD_QUERY_LOG_RETENTION_DAYS: %w", err)
+		}
+		c.QueryLog.RetentionDays = n
+	}
 	str("GIT_BRANCH", &c.Git.Branch)
 	str("GIT_DIR", &c.Git.Dir)
 	str("GIT_TOKEN", &c.Git.Token)
@@ -218,6 +246,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Sync.Interval < 0 {
 		return errors.New("config: sync.interval must be >= 0")
+	}
+	if c.QueryLog.RetentionDays < 0 {
+		return errors.New("config: query_log.retention_days must be >= 0")
 	}
 	if c.Search.DefaultMaxTokens <= 0 {
 		return errors.New("config: search.default_max_tokens must be > 0")

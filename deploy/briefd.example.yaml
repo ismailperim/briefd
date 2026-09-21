@@ -31,6 +31,10 @@ git:                       # used when source is a git URL, and for proposal com
   author_name: briefd      # BRIEFD_GIT_AUTHOR_NAME
   author_email: briefd@localhost   # BRIEFD_GIT_AUTHOR_EMAIL
 
+query_log:                 # feeds GET /api/gaps and the dashboard's "Knowledge gaps" panel
+  enabled: true            # BRIEFD_QUERY_LOG_ENABLED; query text is stored in the database
+  retention_days: 30       # BRIEFD_QUERY_LOG_RETENTION_DAYS; pruned during sync, 0 = keep forever
+
 forge:                     # optional: open a pull request for each proposal
   type: ""                 # BRIEFD_FORGE_TYPE: github
   token: ""                # BRIEFD_FORGE_TOKEN with pull_requests:write

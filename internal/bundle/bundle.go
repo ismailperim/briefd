@@ -168,6 +168,8 @@ func (c *Compiler) compile(ctx context.Context, task string, scopes []string, ma
 		Sections:         sections,
 		Truncated:        truncated,
 		CreatedAt:        time.Now(),
+		TopScore:         res.TopScore,
+		Margin:           res.Margin,
 	}, nil
 }
 

@@ -69,6 +69,13 @@ type Result struct {
 	Scopes []string `json:"scopes"`
 	// Mode is the retrieval mode that produced the result.
 	Mode string `json:"mode"`
+	// TopScore is the best vector cosine among the candidates (0 in bm25
+	// mode). Margin is TopScore minus the median cosine of the top ten:
+	// a flat top means the corpus has nothing specific for this query.
+	// Absolute cosines are compressed for E5-style models, so treat these
+	// as relative signals for ranking gaps, not as thresholds.
+	TopScore float64 `json:"top_score"`
+	Margin   float64 `json:"margin"`
 }
 
 // Searcher runs queries against a store.
@@ -104,6 +111,15 @@ func (s *Searcher) WithEmbedder(e embed.Embedder) *Searcher {
 
 // Hybrid reports whether vector retrieval is configured.
 func (s *Searcher) Hybrid() bool { return s.embedder != nil }
+
+// Mode is the default retrieval mode: hybrid when an embedder is
+// configured, bm25 otherwise.
+func (s *Searcher) Mode() string {
+	if s.Hybrid() {
+		return ModeHybrid
+	}
+	return ModeBM25
+}
 
 // Vectors returns the vector index (nil in BM25-only mode).
 func (s *Searcher) Vectors() *VectorIndex { return s.vectors }
@@ -161,17 +177,19 @@ func (s *Searcher) Search(ctx context.Context, q Query) (Result, error) {
 
 	var hits []store.ChunkHit
 	var err error
+	var conf confidence
 	switch mode {
 	case ModeBM25:
 		hits, err = s.bm25(ctx, q.Text, scopes, topK*candidateMultiplier)
 	case ModeVector:
-		hits, err = s.vector(ctx, q.Text, scopes, topK*candidateMultiplier)
+		hits, conf, err = s.vector(ctx, q.Text, scopes, topK*candidateMultiplier)
 	default:
-		hits, err = s.hybrid(ctx, q.Text, scopes)
+		hits, conf, err = s.hybrid(ctx, q.Text, scopes)
 	}
 	if err != nil {
 		return res, err
 	}
+	res.TopScore, res.Margin = conf.top, conf.margin
 	for _, h := range hits {
 		if len(res.Chunks) == topK {
 			break
@@ -229,10 +247,25 @@ func (s *Searcher) bm25Split(ctx context.Context, text string, scopes []string, 
 	return hits, allTerms, nil
 }
 
-func (s *Searcher) vector(ctx context.Context, text string, scopes []string, limit int) ([]store.ChunkHit, error) {
+// confidence summarizes the vector side of a query: see Result.TopScore.
+type confidence struct{ top, margin float64 }
+
+func confidenceOf(vhits []VecHit) confidence {
+	if len(vhits) == 0 {
+		return confidence{}
+	}
+	n := len(vhits)
+	if n > 10 {
+		n = 10
+	}
+	top := float64(vhits[0].Score)
+	return confidence{top: top, margin: top - float64(vhits[n/2].Score)}
+}
+
+func (s *Searcher) vector(ctx context.Context, text string, scopes []string, limit int) ([]store.ChunkHit, confidence, error) {
 	vec, err := s.embedder.EmbedQuery(ctx, text)
 	if err != nil {
-		return nil, fmt.Errorf("embedding query: %w", err)
+		return nil, confidence{}, fmt.Errorf("embedding query: %w", err)
 	}
 	vhits := s.vectors.Search(vec, scopes, limit)
 	ids := make([]string, len(vhits))
@@ -241,7 +274,7 @@ func (s *Searcher) vector(ctx context.Context, text string, scopes []string, lim
 	}
 	byID, err := s.chunksByID(ctx, ids)
 	if err != nil {
-		return nil, err
+		return nil, confidence{}, err
 	}
 	out := make([]store.ChunkHit, 0, len(vhits))
 	for _, vh := range vhits {
@@ -250,20 +283,20 @@ func (s *Searcher) vector(ctx context.Context, text string, scopes []string, lim
 			out = append(out, h)
 		}
 	}
-	return out, nil
+	return out, confidenceOf(vhits), nil
 }
 
 // hybrid fuses the top fusionDepth BM25 and vector candidates with RRF.
 // Score is the fused score. A failure to embed the query degrades to BM25
 // rather than failing the search.
-func (s *Searcher) hybrid(ctx context.Context, text string, scopes []string) ([]store.ChunkHit, error) {
+func (s *Searcher) hybrid(ctx context.Context, text string, scopes []string) ([]store.ChunkHit, confidence, error) {
 	bm, allTerms, err := s.bm25Split(ctx, text, scopes, fusionDepth)
 	if err != nil {
-		return nil, err
+		return nil, confidence{}, err
 	}
 	vec, err := s.embedder.EmbedQuery(ctx, text)
 	if err != nil {
-		return bm, nil //nolint:nilerr // degrade gracefully; the caller still gets BM25 results
+		return bm, confidence{}, nil //nolint:nilerr // degrade gracefully; the caller still gets BM25 results
 	}
 	vhits := s.vectors.Search(vec, scopes, fusionDepth)
 
@@ -283,7 +316,7 @@ func (s *Searcher) hybrid(ctx context.Context, text string, scopes []string) ([]
 	}
 	extra, err := s.chunksByID(ctx, missing)
 	if err != nil {
-		return nil, err
+		return nil, confidence{}, err
 	}
 	for id, h := range extra {
 		byID[id] = h
@@ -301,7 +334,7 @@ func (s *Searcher) hybrid(ctx context.Context, text string, scopes []string) ([]
 			out = append(out, h)
 		}
 	}
-	return out, nil
+	return out, confidenceOf(vhits), nil
 }
 
 func (s *Searcher) chunksByID(ctx context.Context, ids []string) (map[string]store.ChunkHit, error) {

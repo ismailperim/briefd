@@ -33,8 +33,22 @@ type Deps struct {
 	Proposals *proposal.Service
 	// Metrics receives one record per tool call; nil disables instrumentation.
 	Metrics *metrics.Registry
-	Version string
-	Logger  *slog.Logger
+	// QueryLog records search_context / compile_bundle calls in the store
+	// for the knowledge-gap report.
+	QueryLog bool
+	Version  string
+	Logger   *slog.Logger
+}
+
+// logQuery appends to the query log; failures are logged, never returned.
+func (t *tools) logQuery(ctx context.Context, r store.QueryRecord) {
+	if !t.deps.QueryLog {
+		return
+	}
+	r.Surface = "mcp"
+	if err := t.deps.Store.LogQuery(context.WithoutCancel(ctx), r); err != nil && t.deps.Logger != nil {
+		t.deps.Logger.Warn("query log write failed", "err", err)
+	}
 }
 
 // New builds an MCP server with the briefd tool set registered.
@@ -174,7 +188,7 @@ type ChunkOut struct {
 	Score   float64 `json:"score"`
 }
 
-func (t *tools) searchContext(ctx context.Context, _ *mcp.CallToolRequest, in SearchContextInput) (_ *mcp.CallToolResult, out SearchContextOutput, err error) {
+func (t *tools) searchContext(ctx context.Context, req *mcp.CallToolRequest, in SearchContextInput) (_ *mcp.CallToolResult, out SearchContextOutput, err error) {
 	start := time.Now()
 	defer func() {
 		t.record(start, metrics.Request{
@@ -194,6 +208,10 @@ func (t *tools) searchContext(ctx context.Context, _ *mcp.CallToolRequest, in Se
 	if err != nil {
 		return nil, SearchContextOutput{}, err
 	}
+	t.logQuery(ctx, store.QueryRecord{
+		Name: "search_context", Query: in.Query, Scopes: res.Scopes, Mode: res.Mode, Results: len(res.Chunks),
+		TopScore: res.TopScore, Margin: res.Margin, Tokens: res.TotalTokens, Client: clientName(req),
+	})
 	out = SearchContextOutput{
 		Chunks:      make([]ChunkOut, 0, len(res.Chunks)),
 		TotalTokens: res.TotalTokens,
@@ -245,7 +263,7 @@ type CompileBundleOutput struct {
 	Content   string                `json:"content"`
 }
 
-func (t *tools) compileBundle(ctx context.Context, _ *mcp.CallToolRequest, in CompileBundleInput) (_ *mcp.CallToolResult, out CompileBundleOutput, err error) {
+func (t *tools) compileBundle(ctx context.Context, req *mcp.CallToolRequest, in CompileBundleInput) (_ *mcp.CallToolResult, out CompileBundleOutput, err error) {
 	start := time.Now()
 	defer func() {
 		t.record(start, metrics.Request{
@@ -259,6 +277,11 @@ func (t *tools) compileBundle(ctx context.Context, _ *mcp.CallToolRequest, in Co
 	if err != nil {
 		return nil, out, err
 	}
+	t.logQuery(ctx, store.QueryRecord{
+		Name: "compile_bundle", Query: in.TaskDescription, Scopes: res.Scopes, Mode: t.deps.Searcher.Mode(),
+		Results: len(res.Sections), TopScore: res.TopScore, Margin: res.Margin, Tokens: res.Tokens,
+		BundleID: res.ID, Client: clientName(req),
+	})
 	out = CompileBundleOutput{
 		BundleID: res.ID, Tokens: res.Tokens, Budget: res.Budget, Sections: res.Sections,
 		Scopes: res.Scopes, Truncated: res.Truncated, Cached: res.Cached, Content: res.Content,

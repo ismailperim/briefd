@@ -138,6 +138,7 @@
   .badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-family: var(--mono); }
   .badge.ok { background: var(--ok-soft); color: var(--ok); }
   .badge.err { background: var(--err-soft); color: var(--err); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
   .badge svg { width: 12px; height: 12px; }
 
   /* Empty states */
@@ -238,6 +239,27 @@
       <div class="value" id="t-sync">—</div>
       <div class="sub" id="t-sync-sub">—</div>
     </div>
+  </div>
+
+  <div class="grid split">
+    <section class="panel" aria-labelledby="h-gaps">
+      <div class="head"><h2 id="h-gaps">Knowledge gaps</h2><span class="hint">last 7 days · questions the knowledge base did not answer</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Question</th><th>Scopes</th><th class="num">Times</th><th>Why</th></tr></thead>
+          <tbody id="gaps"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="h-lowconf">
+      <div class="head"><h2 id="h-lowconf">Low confidence</h2><span class="hint">answered, but the top result barely stood out</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Question</th><th>Scopes</th><th class="num">Times</th><th class="num">Margin</th></tr></thead>
+          <tbody id="lowconf"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
   <div class="grid">
@@ -508,10 +530,30 @@
     $('auth').classList.remove('show');
     return r.json();
   }
+  const reasonLabel = { no_results: 'nothing matched', no_useful_sections: 'agent: nothing useful' };
+  function gapRow(g, last) {
+    return `<tr class="clickable" data-q="${esc(g.query)}" data-scopes="${esc((g.scopes || []).join(','))}" tabindex="0">
+      <td class="q" title="${esc(g.query)}">${esc(g.query)}</td><td class="mono dim">${esc((g.scopes || []).join(', '))}</td>
+      <td class="num">${num(g.times)}</td>${last}</tr>`;
+  }
+  function renderGaps(g) {
+    if (!g.enabled) {
+      const off = '<tr><td colspan="4" class="dim">Query log disabled (<code>query_log.enabled: false</code>)</td></tr>';
+      $('gaps').innerHTML = off; $('lowconf').innerHTML = off;
+      return;
+    }
+    $('gaps').innerHTML = g.no_useful.length ? g.no_useful.map((x) => gapRow(x,
+      `<td><span class="badge ${x.reason === 'no_results' ? 'err' : 'warn'}">${esc(reasonLabel[x.reason] || x.reason)}</span></td>`)).join('')
+      : `<tr><td colspan="4"><div class="empty"><strong>No gaps found.</strong> Questions with no results, or bundles the agent reported as not useful (<code>report_usage</code> with no chunk ids), show up here.</div></td></tr>`;
+    $('lowconf').innerHTML = g.low_confidence.length ? g.low_confidence.map((x) => gapRow(x,
+      `<td class="num mono" title="top ${x.top_score.toFixed(3)}">${x.margin.toFixed(3)}</td>`)).join('')
+      : `<tr><td colspan="4" class="dim">${g.logged ? 'No answered questions yet' : 'No queries logged yet'}</td></tr>`;
+  }
   async function refresh() {
     try {
       const s = await api('/api/stats');
       pushHistory(s); render(s);
+      try { renderGaps(await api('/api/gaps')); } catch (_) {}
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {
       if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }
@@ -557,8 +599,10 @@
     $('searchForm').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     runSearch(tr.dataset.q, tr.dataset.scopes, $('maxTok').value);
   };
-  $('recent').addEventListener('click', (ev) => rerun(ev.target.closest('tr.clickable')));
-  $('recent').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') rerun(ev.target.closest('tr.clickable')); });
+  for (const id of ['recent', 'gaps', 'lowconf']) {
+    $(id).addEventListener('click', (ev) => rerun(ev.target.closest('tr.clickable')));
+    $(id).addEventListener('keydown', (ev) => { if (ev.key === 'Enter') rerun(ev.target.closest('tr.clickable')); });
+  }
 
   refresh();
 })();

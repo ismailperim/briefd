@@ -218,6 +218,10 @@ re-embeds automatically.
   `metrics.require_auth: true` to protect it.
 - The dashboard at `/` is a static page; it asks for the token before
   reading anything.
+- The query log keeps the text of every question agents asked (for the
+  knowledge-gap report) in the database for `query_log.retention_days`
+  (30). Set `query_log.enabled: false` if that is not acceptable where the
+  database lives.
 - What agents retrieve (a bundle, ~2k tokens) is sent to the model provider
   by the agent, exactly as `CLAUDE.md` content is today — briefd itself sends
   nothing anywhere.

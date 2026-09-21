@@ -121,6 +121,20 @@ bearer token, and serves the dashboard at `/` and Prometheus metrics at
 served, sections omitted by the budget, latency percentiles, cache hits, index
 size, sync state, and proposal counts by status.
 
+### Knowledge gaps: what the corpus could not answer
+
+Each retrieval call is also appended to a **query log** (`query_log` table)
+with its result count, the best vector cosine and the *margin* — top cosine
+minus the median of the top ten. Absolute cosines are not a usable threshold
+(E5-style models compress everything into 0.75–0.95, and in-corpus and
+out-of-corpus queries overlap), so briefd does not guess. A question counts
+as a gap only on hard evidence: nothing matched, or the agent's
+`report_usage` named no useful section. Answered questions are additionally
+ranked by margin — a flat top ten means nothing specific was found — as a
+"low confidence" list for a human to skim. `GET /api/gaps` and the dashboard
+group both by question text and count repeats; the log is pruned during sync
+after `query_log.retention_days`.
+
 ## 3. The write path
 
 ![Write path](assets/diagram-write-path.png)

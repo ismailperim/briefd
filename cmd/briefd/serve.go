@@ -123,7 +123,8 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	} else {
 		logger.Warn("embeddings disabled; search is BM25-only")
 	}
-	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize, repo: repo, root: root, proposals: proposals}
+	syncer := &syncer{st: st, reg: reg, logger: logger, searcher: searcher, embedder: embedder, batch: cfg.Embeddings.BatchSize, repo: repo, root: root, proposals: proposals,
+		queryLogRetention: time.Duration(cfg.QueryLog.RetentionDays) * 24 * time.Hour}
 
 	if cfg.Source != "" {
 		// Documents are indexed before we listen so BM25 works immediately;
@@ -149,7 +150,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		DefaultMaxTokens: cfg.Search.DefaultMaxTokens,
 		OnCache:          reg.RecordCache,
 	})
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Proposals: proposals, Metrics: reg, Version: version, Logger: mcpLogger})
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Proposals: proposals, Metrics: reg, QueryLog: cfg.QueryLog.Enabled, Version: version, Logger: mcpLogger})
 	handler := httpapi.New(httpapi.Deps{
 		Store:         st,
 		Searcher:      searcher,
@@ -165,6 +166,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		APIToken:           cfg.APIToken,
 		Metrics:            reg,
 		MetricsRequireAuth: cfg.Metrics.RequireAuth,
+		QueryLog:           cfg.QueryLog.Enabled,
 		Version:            version,
 		Logger:             logger,
 	})
@@ -223,7 +225,9 @@ type syncer struct {
 	repo      *gitsync.Repo // nil for a plain directory
 	proposals *proposal.Service
 	root      string // directory that is indexed
-	mu        sync.Mutex
+	// queryLogRetention prunes the query log during sync; 0 keeps everything.
+	queryLogRetention time.Duration
+	mu                sync.Mutex
 }
 
 // run pulls the git source (if any) and indexes the checkout. With
@@ -270,6 +274,13 @@ func (s *syncer) run(ctx context.Context, embeddings bool) error {
 	}
 	if err := s.proposals.SyncStatuses(ctx); err != nil {
 		s.logger.Warn("proposal status sync failed", "err", err)
+	}
+	if s.queryLogRetention > 0 {
+		if n, err := s.st.PruneQueryLog(ctx, s.queryLogRetention); err != nil {
+			s.logger.Warn("query log prune failed", "err", err)
+		} else if n > 0 {
+			s.logger.Debug("query log pruned", "deleted", n)
+		}
 	}
 	s.refreshGauges(ctx)
 	return nil

@@ -38,7 +38,7 @@ func newTestServer(t *testing.T, token string) *httptest.Server {
 	searcher := search.New(st, search.Options{})
 	reg := metrics.New("test")
 	compiler := bundle.New(st, searcher, bundle.Options{OnCache: reg.RecordCache})
-	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Metrics: reg, Version: "test"})
+	mcpSrv := mcpserver.New(mcpserver.Deps{Store: st, Searcher: searcher, Compiler: compiler, Metrics: reg, QueryLog: true, Version: "test"})
 	h := httpapi.New(httpapi.Deps{
 		Store:    st,
 		Searcher: searcher,
@@ -46,6 +46,7 @@ func newTestServer(t *testing.T, token string) *httptest.Server {
 		MCP:      mcpserver.Handler(mcpSrv, nil),
 		APIToken: token,
 		Metrics:  reg,
+		QueryLog: true,
 		Version:  "test",
 	})
 	srv := httptest.NewServer(h)
@@ -424,5 +425,79 @@ func TestProposalCountsInStats(t *testing.T) {
 	}
 	if snap.Proposals == nil || *snap.Proposals != (metrics.ProposalStats{Open: 1, Merged: 1, Closed: 1}) {
 		t.Fatalf("proposal counts = %+v", snap.Proposals)
+	}
+}
+
+// TestKnowledgeGaps drives the query log through both surfaces: a bundle
+// the agent reports as useless and a search with no results become gaps;
+// an ordinary answered query does not.
+func TestKnowledgeGaps(t *testing.T) {
+	ctx := context.Background()
+	srv := newTestServer(t, testToken)
+	session := connect(t, srv, testToken)
+	client := &http.Client{Transport: bearerTransport{token: testToken, base: http.DefaultTransport}}
+
+	b, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "compile_bundle",
+		Arguments: map[string]any{"task_description": "rotate the on-call pager schedule", "max_tokens": 600},
+	})
+	if err != nil || b.IsError {
+		t.Fatalf("compile_bundle: err=%v res=%+v", err, b)
+	}
+	var bo mcpserver.CompileBundleOutput
+	raw, _ := json.Marshal(b.StructuredContent)
+	_ = json.Unmarshal(raw, &bo)
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "report_usage",
+		Arguments: map[string]any{"bundle_id": bo.BundleID, "useful_chunk_ids": []string{}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing in the corpus contains this token, so BM25-only search returns nothing.
+	if resp, err := client.Get(srv.URL + "/api/search?q=zzqxv&scopes=domain"); err != nil {
+		t.Fatal(err)
+	} else {
+		resp.Body.Close()
+	}
+	if resp, err := client.Get(srv.URL + "/api/search?q=refund+approval&scopes=domain"); err != nil {
+		t.Fatal(err)
+	} else {
+		resp.Body.Close()
+	}
+
+	resp, err := client.Get(srv.URL + "/api/gaps?days=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var gaps struct {
+		Enabled  bool        `json:"enabled"`
+		Logged   int         `json:"logged"`
+		NoUseful []store.Gap `json:"no_useful"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&gaps); err != nil {
+		t.Fatal(err)
+	}
+	if !gaps.Enabled || gaps.Logged != 3 {
+		t.Errorf("enabled=%v logged=%d, want true/3", gaps.Enabled, gaps.Logged)
+	}
+	got := map[string]string{}
+	for _, g := range gaps.NoUseful {
+		got[g.Query] = g.Reason
+	}
+	want := map[string]string{"rotate the on-call pager schedule": "no_useful_sections", "zzqxv": "no_results"}
+	if len(got) != len(want) {
+		t.Fatalf("gaps = %v, want %v", got, want)
+	}
+	for q, r := range want {
+		if got[q] != r {
+			t.Errorf("gap %q reason = %q, want %q", q, got[q], r)
+		}
+	}
+
+	resp, _ = client.Get(srv.URL + "/api/gaps?days=0")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("days=0: status %d", resp.StatusCode)
 	}
 }

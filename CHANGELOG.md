@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Knowledge-gap report: every `search_context` / `compile_bundle` call is
+  logged with its retrieval confidence (`query_log`, default 30-day
+  retention). `GET /api/gaps` and the dashboard's "Knowledge gaps" panel list
+  the questions that returned nothing or whose bundle the agent reported as
+  not useful, grouped and counted, plus a "Low confidence" list of answered
+  questions whose top result barely stood out. Config: `query_log.enabled`,
+  `query_log.retention_days`.
+- `search.Result` and bundles carry `top_score` and `margin`.
+
 ## [0.3.0] — 2026-09-21
 
 ### Added

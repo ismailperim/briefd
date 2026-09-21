@@ -65,6 +65,10 @@ type Bundle struct {
 	Truncated        bool            `json:"truncated"`
 	CreatedAt        time.Time       `json:"created_at"`
 	Hits             int             `json:"hits"`
+	// TopScore and Margin are the retrieval confidence at compile time
+	// (see search.Result).
+	TopScore float64 `json:"top_score"`
+	Margin   float64 `json:"margin"`
 }
 
 // BundleSection attributes one part of the bundle to a chunk.
@@ -79,7 +83,7 @@ type BundleSection struct {
 // GetBundleByKey returns a cached bundle and bumps its hit counter.
 func (s *Store) GetBundleByKey(ctx context.Context, cacheKey string) (*Bundle, error) {
 	b, err := s.scanBundle(s.db.QueryRowContext(ctx, `
-		SELECT id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens, sections, truncated, created_at, hits
+		SELECT id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens, sections, truncated, created_at, hits, top_score, margin
 		FROM bundles WHERE cache_key = ?`, cacheKey))
 	if err != nil {
 		return nil, err
@@ -94,7 +98,7 @@ func (s *Store) GetBundleByKey(ctx context.Context, cacheKey string) (*Bundle, e
 // GetBundle returns a bundle by id.
 func (s *Store) GetBundle(ctx context.Context, id string) (*Bundle, error) {
 	return s.scanBundle(s.db.QueryRowContext(ctx, `
-		SELECT id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens, sections, truncated, created_at, hits
+		SELECT id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens, sections, truncated, created_at, hits, top_score, margin
 		FROM bundles WHERE id = ?`, id))
 }
 
@@ -102,7 +106,7 @@ func (s *Store) scanBundle(row *sql.Row) (*Bundle, error) {
 	var b Bundle
 	var scopes, sections, createdAt string
 	var truncated int
-	err := row.Scan(&b.ID, &b.CacheKey, &b.Task, &scopes, &b.MaxTokens, &b.IndexFingerprint, &b.Model, &b.Content, &b.Tokens, &sections, &truncated, &createdAt, &b.Hits)
+	err := row.Scan(&b.ID, &b.CacheKey, &b.Task, &scopes, &b.MaxTokens, &b.IndexFingerprint, &b.Model, &b.Content, &b.Tokens, &sections, &truncated, &createdAt, &b.Hits, &b.TopScore, &b.Margin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -139,11 +143,11 @@ func (s *Store) PutBundle(ctx context.Context, b *Bundle) error {
 		truncated = 1
 	}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO bundles (id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens, sections, truncated, created_at, hits)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+		INSERT INTO bundles (id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens, sections, truncated, created_at, hits, top_score, margin)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
 		ON CONFLICT(cache_key) DO NOTHING`,
 		b.ID, b.CacheKey, b.Task, string(scopes), b.MaxTokens, b.IndexFingerprint, b.Model, b.Content, b.Tokens, string(sections), truncated,
-		b.CreatedAt.UTC().Format(time.RFC3339))
+		b.CreatedAt.UTC().Format(time.RFC3339), b.TopScore, b.Margin)
 	if err != nil {
 		return fmt.Errorf("storing bundle: %w", err)
 	}

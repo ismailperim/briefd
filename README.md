@@ -112,11 +112,11 @@ Any MCP client that speaks streamable HTTP works. For a project-level `.mcp.json
 | `get_document(doc_path, scopes?)` | One document in full. |
 | `list_scopes()` | Scopes with document/section counts. |
 | `propose_update(doc_path, change_description, new_content)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. |
-| `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback, stored for future ranking. |
+| `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback: which sections helped. An empty list marks the question as a knowledge gap. |
 
 The same operations are available over REST (`/api/search`, `POST /api/bundle`, `/api/docs/{path}`,
-`/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/health`, `/api/stats`) behind the
-same bearer token.
+`/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/gaps`, `/api/health`, `/api/stats`)
+behind the same bearer token.
 
 ## Your knowledge repo
 
@@ -195,6 +195,7 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `embeddings.provider` | `BRIEFD_EMBEDDINGS_PROVIDER` | `local` | `ollama`, `openai`, or `none` for BM25-only |
 | `embeddings.model` | `BRIEFD_EMBEDDINGS_MODEL` | `multilingual-e5-small` | or `all-MiniLM-L6-v2` (English, faster) |
 | `search.default_max_tokens` | `BRIEFD_DEFAULT_MAX_TOKENS` | `2000` | |
+| `query_log.retention_days` | `BRIEFD_QUERY_LOG_RETENTION_DAYS` | `30` | feeds the knowledge-gap report; `query_log.enabled: false` turns it off |
 
 `briefd model pull` pre-fetches the embedding model for offline or image-build use.
 
@@ -206,6 +207,13 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 latency per tool, budget pressure, bundle cache hit rate, index size per scope, sync state, the
 last 100 requests, and a search box for manual inspection. `GET /metrics` exposes the same
 counters in Prometheus text format; `GET /api/stats` as JSON.
+
+**Knowledge gaps.** Every `search_context` / `compile_bundle` call is logged with its retrieval
+confidence (`query_log`, 30-day retention). The dashboard lists the questions of the last seven
+days that the knowledge base did not answer — nothing matched, or the agent's `report_usage` said
+no section helped — grouped by question and ranked by how often they were asked, plus the answered
+questions whose top result barely stood out from the rest. That list is the backlog for whoever
+maintains the repository; `GET /api/gaps?days=7&limit=20` returns it as JSON.
 
 ## Retrieval quality
 
@@ -245,6 +253,7 @@ briefd bench      # tokens per task: static CLAUDE.md vs compile_bundle
 v0.1 is feature-complete; expect rough edges before 1.0. Planned next:
 
 - usage-driven relevance tuning from `report_usage`
+- document age in bundles and a "stalest documents" view
 - staleness scoring via `refs` globs (knowledge that lags the code it governs)
 - contradiction detection for proposals
 - a light Turkish stemmer for the BM25 side and glossary-alias query expansion

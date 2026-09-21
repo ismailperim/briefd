@@ -4,6 +4,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -47,8 +48,21 @@ type Deps struct {
 	Metrics *metrics.Registry
 	// MetricsRequireAuth puts /metrics behind the bearer token too.
 	MetricsRequireAuth bool
-	Version            string
-	Logger             *slog.Logger
+	// QueryLog records /api/search and /api/bundle calls for GET /api/gaps.
+	QueryLog bool
+	Version  string
+	Logger   *slog.Logger
+}
+
+// logQuery appends to the query log; failures are logged, never returned.
+func (a *api) logQuery(ctx context.Context, r store.QueryRecord) {
+	if !a.deps.QueryLog {
+		return
+	}
+	r.Surface = "http"
+	if err := a.deps.Store.LogQuery(context.WithoutCancel(ctx), r); err != nil {
+		a.deps.Logger.Warn("query log write failed", "err", err)
+	}
 }
 
 // New returns the root handler.
@@ -83,6 +97,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/usage", auth(http.HandlerFunc(a.usage)))
 	mux.Handle("POST /api/proposals", auth(http.HandlerFunc(a.proposals)))
 	mux.Handle("GET /api/proposals", auth(http.HandlerFunc(a.listProposals)))
+	mux.Handle("GET /api/gaps", auth(http.HandlerFunc(a.gaps)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
 	}
@@ -203,6 +218,10 @@ func (a *api) search(w http.ResponseWriter, r *http.Request) {
 		Name: "api_search", Query: text, Scopes: res.Scopes,
 		Tokens: res.TotalTokens, Chunks: len(res.Chunks), Omitted: res.Omitted,
 	}, false)
+	a.logQuery(r.Context(), store.QueryRecord{
+		Name: "api_search", Query: text, Scopes: res.Scopes, Mode: res.Mode, Results: len(res.Chunks),
+		TopScore: res.TopScore, Margin: res.Margin, Tokens: res.TotalTokens, Client: q.Get("client"),
+	})
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -210,6 +229,8 @@ type bundleRequest struct {
 	Task      string   `json:"task"`
 	MaxTokens int      `json:"max_tokens"`
 	Scopes    []string `json:"scopes"`
+	// Client is an optional caller name recorded in the query log.
+	Client string `json:"client"`
 }
 
 func (a *api) bundle(w http.ResponseWriter, r *http.Request) {
@@ -233,6 +254,10 @@ func (a *api) bundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.record(start, metrics.Request{Name: "api_bundle", Query: req.Task, Scopes: res.Scopes, Tokens: res.Tokens, Chunks: len(res.Sections)}, false)
+	a.logQuery(r.Context(), store.QueryRecord{
+		Name: "api_bundle", Query: req.Task, Scopes: res.Scopes, Mode: a.deps.Searcher.Mode(), Results: len(res.Sections),
+		TopScore: res.TopScore, Margin: res.Margin, Tokens: res.Tokens, BundleID: res.ID, Client: req.Client,
+	})
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -309,6 +334,56 @@ func (a *api) proposals(w http.ResponseWriter, r *http.Request) {
 	}
 	a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, false)
 	writeJSON(w, http.StatusCreated, res)
+}
+
+// gapsResponse is the GET /api/gaps body.
+type gapsResponse struct {
+	Since time.Time `json:"since"`
+	// Enabled is false when the query log is off; the lists are then empty.
+	Enabled bool `json:"enabled"`
+	// Logged is the number of records currently in the log.
+	Logged int `json:"logged"`
+	// NoUseful are questions that returned nothing, or whose bundle the
+	// agent reported as containing no useful section.
+	NoUseful []store.Gap `json:"no_useful"`
+	// LowConfidence are answered questions where the top result barely
+	// stood out from the rest — worth a look, not necessarily a gap.
+	LowConfidence []store.Gap `json:"low_confidence"`
+}
+
+// gaps lists recent questions the knowledge base did not answer well.
+// Query parameters: days (default 7), limit (default 20).
+func (a *api) gaps(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	days, err := intParam(q.Get("days"), 7)
+	if err != nil || days <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_days", "days must be a positive integer")
+		return
+	}
+	limit, err := intParam(q.Get("limit"), 20)
+	if err != nil || limit <= 0 || limit > 200 {
+		writeError(w, http.StatusBadRequest, "invalid_limit", "limit must be between 1 and 200")
+		return
+	}
+	resp := gapsResponse{Since: time.Now().Add(-time.Duration(days) * 24 * time.Hour), Enabled: a.deps.QueryLog,
+		NoUseful: []store.Gap{}, LowConfidence: []store.Gap{}}
+	if resp.Logged, _, err = a.deps.Store.QueryLogStats(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "gaps_failed", err.Error())
+		return
+	}
+	noUseful, low, err := a.deps.Store.Gaps(r.Context(), resp.Since, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gaps_failed", err.Error())
+		return
+	}
+	if noUseful != nil {
+		resp.NoUseful = noUseful
+	}
+	if low != nil {
+		resp.LowConfidence = low
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (a *api) listProposals(w http.ResponseWriter, r *http.Request) {
