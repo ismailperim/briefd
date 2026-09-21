@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- BEIR runner (`eval/beir/run.py`) with SciFact and NFCorpus results: vector-only
+  matches the published model quality, hybrid beats BM25 and vector-only.
 - `PORT` environment variable (when `BRIEFD_LISTEN` is unset) and `GET /healthz`
   alias, for PaaS and directory runners.
 

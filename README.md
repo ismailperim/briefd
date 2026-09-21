@@ -218,6 +218,10 @@ or [`eval/thresholds-tr.yaml`](eval/thresholds-tr.yaml):
 | Vector only | 0.830 | 0.936 | 0.771 | 0.950 | 1.000 | 0.832 |
 | **Hybrid (default)** | **0.830** | **0.926** | **0.746** | **0.933** | **1.000** | **0.847** |
 
+On public BEIR datasets briefd's vector-only mode reproduces the published quality of both
+embedding models and hybrid mode beats BM25 and vector-only on each — SciFact nDCG@10 0.714
+vs 0.665 for the BEIR BM25 baseline; see [`eval/beir/`](eval/beir/) to reproduce.
+
 Every change to chunking, embeddings or fusion ships with before/after numbers
 ([ADR-0004](docs/adr/0004-hybrid-fusion-tuning.md) is an example).
 
