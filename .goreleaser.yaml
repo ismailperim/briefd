@@ -63,6 +63,22 @@ changelog:
       - '^test'
       - '^ci'
 
+# Homebrew: `brew install ismailperim/tap/briefd`. The cask is pushed to the
+# tap repository only when HOMEBREW_TAP_TOKEN is set (contents:write on the tap).
+homebrew_casks:
+  - name: briefd
+    repository:
+      owner: ismailperim
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_TOKEN "" }}true{{ else }}false{{ end }}'
+    homepage: https://github.com/ismailperim/briefd
+    description: "Git-backed team knowledge, served to coding agents as token-budgeted context bundles over MCP"
+    license: Apache-2.0
+    commit_author:
+      name: briefd-release
+      email: ismailperim@gmail.com
+
 release:
   github:
     owner: ismailperim

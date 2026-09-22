@@ -255,7 +255,7 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `sync.interval` | `BRIEFD_SYNC_INTERVAL` | `60s` | `0` disables polling |
 | `sync.webhook_secret` | `BRIEFD_SYNC_WEBHOOK_SECRET` | — | enables `POST /webhook/git` |
 | `git.token` | `BRIEFD_GIT_TOKEN` | — | HTTPS remotes; `git.ssh_key` for SSH |
-| `forge.type`, `forge.token` | `BRIEFD_FORGE_*` | — | `github` opens PRs for proposals |
+| `forge.type`, `forge.token` | `BRIEFD_FORGE_*` | — | `github` or `gitlab`: opens a pull / merge request for each proposal |
 | `embeddings.provider` | `BRIEFD_EMBEDDINGS_PROVIDER` | `local` | `ollama`, `openai`, or `none` for BM25-only |
 | `embeddings.model` | `BRIEFD_EMBEDDINGS_MODEL` | `multilingual-e5-small` | or `all-MiniLM-L6-v2` (English, faster) |
 | `search.default_max_tokens` | `BRIEFD_DEFAULT_MAX_TOKENS` | `2000` | |

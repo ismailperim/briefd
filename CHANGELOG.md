@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `skills/briefd/SKILL.md`: an agent skill that says when to compile a
   bundle, how to treat a stale section and when to propose an update
   (`npx skills add ismailperim/briefd`).
+- GitLab merge requests for proposals: `forge.type: gitlab` with a token that
+  has the `api` scope; the project path and `https://<host>/api/v4` are
+  derived from the git URL. Status sync maps opened/locked → open (#9).
+- Release pipeline: the container image is also pushed to Docker Hub when
+  `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets exist (#10), and a
+  Homebrew cask is published to `ismailperim/homebrew-tap` when
+  `HOMEBREW_TAP_TOKEN` exists (#11). Forks without the secrets are unaffected.
 - README: "Not another agent memory" — how briefd differs from agent-memory
   tools and why they run side by side.
 

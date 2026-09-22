@@ -41,11 +41,11 @@ query_log:                 # feeds GET /api/gaps and the dashboard's "Knowledge 
   enabled: true            # BRIEFD_QUERY_LOG_ENABLED; query text is stored in the database
   retention_days: 30       # BRIEFD_QUERY_LOG_RETENTION_DAYS; pruned during sync, 0 = keep forever
 
-forge:                     # optional: open a pull request for each proposal
-  type: ""                 # BRIEFD_FORGE_TYPE: github
-  token: ""                # BRIEFD_FORGE_TOKEN with pull_requests:write
-  repo: ""                 # BRIEFD_FORGE_REPO owner/name; derived from source when empty
-  api_url: ""              # BRIEFD_FORGE_API_URL for GitHub Enterprise
+forge:                     # optional: open a pull / merge request for each proposal
+  type: ""                 # BRIEFD_FORGE_TYPE: github | gitlab
+  token: ""                # BRIEFD_FORGE_TOKEN: GitHub PAT with pull_requests:write, or a GitLab token with the api scope
+  repo: ""                 # BRIEFD_FORGE_REPO: owner/name (GitHub) or group/subgroup/name (GitLab); derived from source when empty
+  api_url: ""              # BRIEFD_FORGE_API_URL: GitHub Enterprise, or GitLab default https://<git host>/api/v4
 
 search:
   default_scopes: [domain, conventions]   # BRIEFD_DEFAULT_SCOPES (comma-separated)
