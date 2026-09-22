@@ -29,6 +29,7 @@ Usage:
   briefd <command> [flags]
 
 Commands:
+  demo      Serve the built-in sample knowledge base (try briefd in 30 seconds)
   init      Create a starter knowledge repository layout
   serve     Start the MCP + REST server
   mcp       Serve the MCP tools over stdio (Claude Desktop, Cursor, directory inspectors)
@@ -81,6 +82,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runModel(ctx, args[1:], stdout, stderr, logger)
 	case "serve":
 		err = runServe(ctx, args[1:], stdout, stderr)
+	case "demo":
+		err = runDemo(ctx, args[1:], stdout, stderr)
 	case "mcp":
 		err = runMCP(ctx, args[1:], stdout, stderr)
 	case "eval":

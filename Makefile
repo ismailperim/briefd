@@ -8,7 +8,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-.PHONY: all build test lint fmt tidy eval bench docker release clean help
+.PHONY: all build test lint fmt tidy eval bench docker release clean help sample-sync sample-check
 
 all: build test lint ## Build, test and lint
 
@@ -46,3 +46,9 @@ clean: ## Remove build artifacts
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-10s %s\n", $$1, $$2}'
+
+sample-sync: ## Mirror testdata/knowledge into internal/sample (the corpus `briefd demo` embeds)
+	rsync -a --delete testdata/knowledge/ internal/sample/knowledge/
+
+sample-check: ## Fail when internal/sample/knowledge differs from testdata/knowledge
+	@diff -r testdata/knowledge internal/sample/knowledge && echo "sample corpus in sync"

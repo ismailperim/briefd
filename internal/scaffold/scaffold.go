@@ -16,15 +16,21 @@ var templateFS embed.FS
 // Write creates the starter layout under dir. Existing files are never
 // overwritten; the returned slice lists the files that were created.
 func Write(dir string) ([]string, error) {
+	return WriteFS(templateFS, "template", dir)
+}
+
+// WriteFS copies the tree rooted at root inside fsys into dir, keeping any
+// file that already exists. It returns the relative paths it created.
+func WriteFS(fsys fs.FS, root, dir string) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", dir, err)
 	}
 	var created []string
-	err := fs.WalkDir(templateFS, "template", func(p string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel("template", p)
+		rel, _ := filepath.Rel(root, p)
 		if rel == "." {
 			return nil
 		}
@@ -35,7 +41,7 @@ func Write(dir string) ([]string, error) {
 		if _, err := os.Stat(dst); err == nil {
 			return nil // keep the user's file
 		}
-		data, err := templateFS.ReadFile(p)
+		data, err := fs.ReadFile(fsys, p)
 		if err != nil {
 			return err
 		}

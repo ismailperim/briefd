@@ -60,6 +60,27 @@ carried per turn by 35% and the cost per task by 40%** with identical answers �
 3–4 extra tool-call round trips per task. The saving grows with the size of your knowledge repo;
 a static `CLAUDE.md` cannot.
 
+### Not another agent memory
+
+Memory tools ([agentmemory](https://github.com/rohitg00/agentmemory), Mem0, claude-mem)
+record what *an agent* observed in its sessions, automatically, per user. briefd serves what
+*the team* decided, written by people and reviewed like code. They answer different questions
+and run side by side.
+
+| | Agent memory | briefd |
+|---|---|---|
+| Source of truth | A database the agent writes to | Markdown in a git repository |
+| Who writes | The agent, automatically | People; agents open pull requests |
+| Scope | One agent / one user | The whole team, every project in the domain |
+| Review | None | Every change has a diff, a reviewer and a name |
+| Staleness | Unknown | Dates on every section; drift against the code it governs |
+| What it can't answer | Silently absent | Listed on the dashboard as a backlog |
+| Footprint | Runtime + engine + several ports | One static binary, one SQLite file, one port (or stdio) |
+| Tool surface | Dozens of tools, thousands of tokens per session | 6 tools, ~2.3k tokens per session |
+
+Use a memory tool so your agent remembers what it tried last week. Use briefd so every agent on
+the team applies the same rules — and so someone notices when a rule falls behind the code.
+
 ## How it works
 
 <img src="docs/assets/diagram-pipeline.png" alt="Pipeline: knowledge repo → sync → chunker → SQLite (FTS5 + vectors) → hybrid retrieval → budget packer → MCP/REST → agents" width="100%">
@@ -73,6 +94,17 @@ a static `CLAUDE.md` cannot.
 - **Hard token budgets.** Every API that returns context takes `max_tokens` and never exceeds it.
 
 ## Quickstart
+
+**Try it in 30 seconds** — no repository needed:
+
+```sh
+briefd demo      # serves the built-in sample knowledge base on http://127.0.0.1:7788
+```
+
+Then open the dashboard, or point an agent at it: `claude mcp add --transport http briefd http://127.0.0.1:7788/mcp`.
+The first run downloads the embedding model (about 470 MB); `briefd demo --embeddings none` skips it.
+
+**With your own knowledge:**
 
 ```sh
 # 1. build (Go >= 1.26) or grab a binary from the releases page
@@ -102,6 +134,19 @@ Any MCP client that speaks streamable HTTP works. For a project-level `.mcp.json
     }
   }
 }
+```
+
+**Let the agent install it.** Hand your coding agent one instruction:
+
+> Retrieve and follow the instructions at: https://raw.githubusercontent.com/ismailperim/briefd/main/INSTALL_FOR_AGENTS.md
+
+**Teach the agent when to ask.** Tools an agent does not call save nothing. The
+[`skills/briefd`](skills/briefd/SKILL.md) skill tells Claude Code (and any agent that reads
+`SKILL.md`) when to compile a bundle, how to treat a stale section and when to propose an
+update; the same guidance as a `CLAUDE.md` paragraph is in [`deploy/local/CLAUDE.md`](deploy/local/CLAUDE.md).
+
+```sh
+npx skills add ismailperim/briefd
 ```
 
 **Single-user, no server?** `briefd mcp` speaks MCP over stdio — the same tools, the same
@@ -271,6 +316,7 @@ Every change to chunking, embeddings or fusion ships with before/after numbers
 ## CLI
 
 ```sh
+briefd demo       # serve the built-in sample knowledge base — try it in 30 seconds
 briefd init       # scaffold a knowledge repo (domain/, conventions/, projects/)
 briefd serve      # MCP over HTTP + REST + dashboard, for a shared instance
 briefd mcp        # MCP over stdio, for one agent on this machine (Claude Desktop, Cursor)

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `briefd demo`: serves the built-in sample knowledge base (the fictional
+  payments platform from `testdata/knowledge`, embedded in the binary) with
+  the dashboard and MCP tools — try briefd without a repository.
+- `INSTALL_FOR_AGENTS.md`: instructions a coding agent can follow to install
+  and wire briefd itself (`Retrieve and follow the instructions at: …`).
+- `skills/briefd/SKILL.md`: an agent skill that says when to compile a
+  bundle, how to treat a stale section and when to propose an update
+  (`npx skills add ismailperim/briefd`).
+- README: "Not another agent memory" — how briefd differs from agent-memory
+  tools and why they run side by side.
+
 ## [0.5.0] — 2026-09-22
 
 ### Added
