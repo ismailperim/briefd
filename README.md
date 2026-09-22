@@ -47,7 +47,8 @@ exceeds the token budget you set.
 
 On the sample knowledge repo in this repository (44 documents, 47 realistic developer tasks),
 `compile_bundle` spends **86% fewer tokens per task than pasting everything into `CLAUDE.md`**
-while still containing the section that answers the task **96% of the time**. The realistic
+while still containing the section that answers the task **96% of the time** (98% with the
+English-only `all-MiniLM-L6-v2` model, the figure the explainer video quotes). The realistic
 middle ground — a hand-curated `CLAUDE.md` with just conventions and the glossary — costs
 2.8× more than a bundle and has the answer less than half the time.
 
