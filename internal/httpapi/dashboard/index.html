@@ -266,6 +266,9 @@
   .actions .btn { margin-left: auto; }
   .btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--line-strong); font-weight: 500; }
   .btn.ghost:hover { background: var(--chip); }
+  .btn.small { min-height: 28px; padding: 2px 10px; font-size: 12.5px; margin-left: 10px; }
+  .linkbtn { margin-left: 8px; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--panel); color: var(--muted); font: 12px var(--sans); cursor: pointer; }
+  .linkbtn:hover { color: var(--text); background: var(--chip); }
   .acts { display: inline-flex; gap: 8px; flex-wrap: wrap; }
   .acts .btn { min-height: 32px; padding: 4px 12px; font-family: var(--sans); font-size: 13px; }
   .msg { color: var(--muted); font-size: 12.5px; }
@@ -625,7 +628,7 @@
   </div>
   <div class="grid split">
     <section class="panel" aria-labelledby="h-links">
-      <div class="head"><h2 id="h-links">Links to fix</h2><span class="hint">broken targets · orphans · mentions without a link</span></div>
+      <div class="head"><h2 id="h-links">Links to fix</h2><span class="hint">broken targets · orphans · mentions without a link</span><button class="btn ghost small" type="button" id="linksAll" hidden>Show all</button></div>
       <div class="body flush wrap">
         <table>
           <thead><tr><th>Document</th><th>Issue</th></tr></thead>
@@ -1136,12 +1139,14 @@
   }
   window.addEventListener('hashchange', showView);
   showView();
-  let suggestions = [];
+  let suggestions = [], linksAll = false;
   function renderLinks(g) {
     attn.orphans = g.orphans.length; attn.broken = g.broken.length; attn.suggest = suggestions.length;
     const rows = g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: [[${esc(b.target)}]]</span></td></tr>`)
-      .concat(suggestions.slice(0, 8).map((x) => `<tr><td class="q narrow" title="${esc(x.from)}"><span class="mono">${esc(x.from)}</span></td><td>mentions “${esc(x.mention)}”${x.count > 1 ? ' ' + x.count + '×' : ''} — link <span class="mono">[[${esc(x.to.split('/').pop().replace(/\.md$/, ''))}]]</span></td></tr>`))
+      .concat(suggestions.slice(0, linksAll ? suggestions.length : 8).map((x) => `<tr><td class="q narrow" title="${esc(x.from)}"><span class="mono">${esc(x.from)}</span></td><td>mentions “${esc(x.mention)}”${x.count > 1 ? ' ' + x.count + '×' : ''} — link <span class="mono">[[${esc(x.to.split('/').pop().replace(/\.md$/, ''))}]]</span> <button class="linkbtn" type="button" data-ignore-from="${esc(x.from)}" data-ignore-to="${esc(x.to)}" title="These two documents do not need a link">Ignore</button></td></tr>`))
       .concat(g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan — nothing links here</span></td></tr>`));
+    $('linksAll').hidden = suggestions.length <= 8;
+    $('linksAll').textContent = linksAll ? 'Show fewer' : `Show all ${suggestions.length}`;
     $('links').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="dim">Every document is linked to and every link resolves</td></tr>';
   }
   const yn = (b) => b ? '<span class="yes">yes</span>' : '<span class="no">no</span>';
@@ -1293,6 +1298,13 @@
     catch (e) { syncMsg = 'Could not start: ' + e.message; }
     const m = document.getElementById('syncMsg'); if (m) m.textContent = syncMsg;
     setTimeout(() => { syncMsg = ''; }, 15000);
+  });
+  $('linksAll').addEventListener('click', () => { linksAll = !linksAll; refresh(); });
+  $('links').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-ignore-from]'); if (!b) return;
+    b.disabled = true;
+    try { await post('/api/links/ignore', { from: b.dataset.ignoreFrom, to: b.dataset.ignoreTo }); suggestions = suggestions.filter((x) => !(x.from === b.dataset.ignoreFrom && x.to === b.dataset.ignoreTo)); b.closest('tr').remove(); }
+    catch (e) { b.disabled = false; b.textContent = 'Failed'; }
   });
   $('resetStats').addEventListener('click', async () => {
     if (!confirm('Reset requests, tokens served, latency, the request log and circulation to zero? The index is not touched.')) return;

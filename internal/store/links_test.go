@@ -44,4 +44,16 @@ func TestSuggestLinks(t *testing.T) {
 	if s := got[0]; s.From != "domain/outage.md" || s.To != "domain/snapshot-server.md" || s.Mention != "snapshotserver" || s.Count != 2 {
 		t.Errorf("suggestion = %+v", s)
 	}
+	if err := st.IgnoreLinkSuggestion(ctx, "domain/outage.md", "domain/snapshot-server.md"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.SuggestLinks(ctx, 10); len(got) != 0 {
+		t.Errorf("ignored suggestion still listed: %+v", got)
+	}
+	if n, err := st.ClearLinkIgnores(ctx); err != nil || n != 1 {
+		t.Errorf("clear = %d %v", n, err)
+	}
+	if got, _ := st.SuggestLinks(ctx, 10); len(got) != 1 {
+		t.Errorf("after clear: %+v", got)
+	}
 }

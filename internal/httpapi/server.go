@@ -119,6 +119,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/sync", auth(http.HandlerFunc(a.syncNow)))
 	mux.Handle("POST /api/stats/reset", auth(http.HandlerFunc(a.resetStats)))
 	mux.Handle("GET /api/links/suggestions", auth(http.HandlerFunc(a.linkSuggestions)))
+	mux.Handle("POST /api/links/ignore", auth(http.HandlerFunc(a.ignoreLinkSuggestion)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
 	}
@@ -543,6 +544,37 @@ func (a *api) resetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "counters reset"})
+}
+
+// ignoreLinkSuggestion dismisses one suggestion ({"from", "to"}) or, with
+// {"clear": true}, brings every dismissed one back.
+func (a *api) ignoreLinkSuggestion(w http.ResponseWriter, r *http.Request) {
+	if !jsonAction(w, r) {
+		return
+	}
+	var req struct {
+		From  string `json:"from"`
+		To    string `json:"to"`
+		Clear bool   `json:"clear"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil || (!req.Clear && (req.From == "" || req.To == "")) {
+		writeError(w, http.StatusBadRequest, "invalid_request", `send {"from": "<doc path>", "to": "<doc path>"} or {"clear": true}`)
+		return
+	}
+	var err error
+	if req.Clear {
+		_, err = a.deps.Store.ClearLinkIgnores(r.Context())
+	} else {
+		err = a.deps.Store.IgnoreLinkSuggestion(r.Context(), req.From, req.To)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "ignore_failed", err.Error())
+		return
+	}
+	a.suggestMu.Lock()
+	a.suggestFor = "" // recompute on the next read
+	a.suggestMu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // instance describes this server's configuration without secrets.

@@ -119,6 +119,12 @@ func New(d Deps) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.listScopes)
 
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "suggest_links",
+		Description: "List links the knowledge base is missing: documents that mention another document by name without linking to it, and links whose target does not exist. Read-only. Use it when asked to tidy or connect the knowledge base, then fix the documents with propose_update (add [[wikilinks]] in the text or in a related: front-matter list). Suggestions a maintainer dismissed are left out.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
+	}, t.suggestLinks)
+
 	return srv
 }
 
@@ -491,4 +497,61 @@ func (t *tools) listScopes(ctx context.Context, _ *mcp.CallToolRequest, _ struct
 
 func textResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
+}
+
+// SuggestLinksInput is the suggest_links tool input.
+type SuggestLinksInput struct {
+	DocPath string `json:"doc_path,omitempty" jsonschema:"Only suggestions for this document (as the one that should add the link). Default: all documents."`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum number of suggestions (default 50, max 200), most-mentioned first."`
+}
+
+// SuggestLinksOutput lists missing and broken links.
+type SuggestLinksOutput struct {
+	Missing []store.LinkSuggestion `json:"missing"`
+	Broken  []store.BrokenLink     `json:"broken"`
+}
+
+func (t *tools) suggestLinks(ctx context.Context, _ *mcp.CallToolRequest, in SuggestLinksInput) (_ *mcp.CallToolResult, out SuggestLinksOutput, err error) {
+	start := time.Now()
+	defer func() {
+		t.record(start, metrics.Request{Name: "suggest_links", Query: in.DocPath, Chunks: len(out.Missing) + len(out.Broken)}, err)
+	}()
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	all, err := t.deps.Store.SuggestLinks(ctx, 0)
+	if err != nil {
+		return nil, out, err
+	}
+	out = SuggestLinksOutput{Missing: []store.LinkSuggestion{}, Broken: []store.BrokenLink{}}
+	for _, s := range all {
+		if in.DocPath == "" || s.From == in.DocPath {
+			out.Missing = append(out.Missing, s)
+			if len(out.Missing) == limit {
+				break
+			}
+		}
+	}
+	g, err := t.deps.Store.LinkGraph(ctx)
+	if err != nil {
+		return nil, out, err
+	}
+	for _, b := range g.Broken {
+		if in.DocPath == "" || b.From == in.DocPath {
+			out.Broken = append(out.Broken, b)
+		}
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%d missing link(s), %d broken link(s).\n", len(out.Missing), len(out.Broken))
+	for _, s := range out.Missing {
+		fmt.Fprintf(&sb, "- %s mentions %q %d× — add [[%s]] (%s)\n", s.From, s.Mention, s.Count, strings.TrimSuffix(s.To[strings.LastIndex(s.To, "/")+1:], ".md"), s.To)
+	}
+	for _, b := range out.Broken {
+		fmt.Fprintf(&sb, "- %s links to %q, which does not exist\n", b.From, b.Target)
+	}
+	return textResult(sb.String()), out, nil
 }

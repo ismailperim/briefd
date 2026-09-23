@@ -78,6 +78,7 @@ and broken links on the dashboard.
    configured) PR URL. Never touches the index.
 6. `report_usage(bundle_id, useful_chunk_ids)` — optional feedback signal (v0.2 uses it
    for relevance tuning; v0.1 only stores it).
+7. `suggest_links(doc_path?, limit?)` — read-only: documents that mention another by name without a link, and broken links (dismissed suggestions excluded).
 
 ### 3.2 REST (secondary)
 

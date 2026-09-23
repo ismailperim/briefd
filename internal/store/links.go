@@ -317,6 +317,19 @@ func (s *Store) SuggestLinks(ctx context.Context, limit int) ([]LinkSuggestion, 
 		linked[[2]string{a, b}], linked[[2]string{b, a}] = true, true
 	}
 	rows.Close()
+	rows, err = s.db.QueryContext(ctx, `SELECT from_path, to_path FROM link_ignores`)
+	if err != nil {
+		return nil, fmt.Errorf("suggesting links: %w", err)
+	}
+	for rows.Next() {
+		var a, b string
+		if err := rows.Scan(&a, &b); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("suggesting links: %w", err)
+		}
+		linked[[2]string{a, b}] = true
+	}
+	rows.Close()
 	chunks, err := s.AllChunks(ctx)
 	if err != nil {
 		return nil, err
@@ -374,4 +387,24 @@ func (s *Store) SuggestLinks(ctx context.Context, limit int) ([]LinkSuggestion, 
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// IgnoreLinkSuggestion dismisses the suggestion that from should link to.
+func (s *Store) IgnoreLinkSuggestion(ctx context.Context, from, to string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO link_ignores (from_path, to_path, created_at) VALUES (?, ?, ?)`,
+		from, to, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("ignoring link suggestion: %w", err)
+	}
+	return nil
+}
+
+// ClearLinkIgnores brings every dismissed suggestion back.
+func (s *Store) ClearLinkIgnores(ctx context.Context) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM link_ignores`)
+	if err != nil {
+		return 0, fmt.Errorf("clearing ignored link suggestions: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }

@@ -177,6 +177,7 @@ when the agent runs on the machine that holds the checkout.
 | `list_scopes()` | Scopes with document/section counts. |
 | `propose_update(doc_path, change_description, new_content)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. |
 | `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback: which sections helped. An empty list marks the question as a knowledge gap. |
+| `suggest_links(doc_path?, limit?)` | Links the knowledge base is missing (a document names another without linking it) and broken links — for an agent tidying the knowledge base via `propose_update`. |
 
 The same operations are available over REST (`/api/search`, `POST /api/bundle`, `/api/docs/{path}`,
 `/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/gaps`, `/api/health`, `/api/stats`)

@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`POST /api/sync`, `{"rebuild": true}` re-parses every document) start a
   sync without waiting for the interval. Actions require a JSON body type so
   another site cannot trigger them from a browser.
+- `suggest_links` MCP tool: missing links (mentions without a link) and
+  broken links, optionally for one document, so an agent can connect the
+  knowledge base and propose the fix. Suggestions can be dismissed from the
+  dashboard ("Ignore", `POST /api/links/ignore`); "Show all" lists every one.
 - Proposals on the dashboard: Maintenance lists open proposals first (then
   recent merged/closed) with the document, the change, the branch and a link
   to the pull request — or, without a forge, a link that opens one on
