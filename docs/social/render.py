@@ -16,7 +16,7 @@ if not chrome:
     chrome = found[0] if found else None
 if not chrome:
     sys.exit("no headless Chromium found; set BRIEFD_CHROME")
-subprocess.run([chrome, "--headless", "--disable-gpu", "--hide-scrollbars", "--window-size=1280,640",
+subprocess.run([chrome, "--headless", "--disable-gpu", "--hide-scrollbars", "--allow-file-access-from-files", "--virtual-time-budget=4000", "--window-size=1280,640",
                 "--force-device-scale-factor=2", f"--screenshot={OUT}", SRC.as_uri()], check=True,
                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 print("rendered", OUT.relative_to(ROOT), OUT.stat().st_size, "bytes")

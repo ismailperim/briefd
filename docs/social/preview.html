@@ -1,43 +1,43 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>briefd social preview</title>
 <style>
-  /* 1280×640 — GitHub's recommended social-preview size (2:1). */
-  html,body{margin:0;width:1280px;height:640px;overflow:hidden}
-  body{background:#0f172a;color:#e6edf3;font-family:-apple-system,"SF Pro Display","Inter","Segoe UI",Helvetica,Arial,sans-serif;position:relative}
-  .glow{position:absolute;right:-120px;top:-160px;width:640px;height:640px;border-radius:50%;
-        background:radial-gradient(closest-side,rgba(250,204,21,.18),rgba(250,204,21,0))}
-  .wrap{position:absolute;inset:0;padding:72px 80px;display:flex;justify-content:space-between}
-  .left{width:640px;display:flex;flex-direction:column}
-  .name{font-size:96px;font-weight:800;letter-spacing:-3px;line-height:1;margin:0}
-  .name span{color:#facc15}
-  .tag{font-size:38px;font-weight:600;letter-spacing:-.5px;margin:22px 0 0;line-height:1.15}
-  .desc{font-size:24px;color:#94a3b8;margin:22px 0 0;line-height:1.4;max-width:600px}
-  .chips{margin-top:auto;display:flex;gap:12px}
-  .chip{white-space:nowrap;font-size:20px;font-weight:600;padding:10px 18px;border-radius:999px;border:2px solid #334155;color:#cbd5e1}
-  .right{width:420px;display:flex;flex-direction:column;justify-content:center;gap:34px}
-  .bar{display:flex;flex-direction:column;gap:10px}
-  .bar .lbl{font-size:22px;color:#94a3b8;display:flex;justify-content:space-between}
-  .bar .lbl b{color:#e6edf3;font-weight:700}
-  .bar i{display:block;height:34px;border-radius:8px}
-  .bar.all i{width:100%;background:#475569}
-  .bar.ours i{width:14%;background:#facc15}
-  .save{font-size:30px;font-weight:700;color:#4ade80;margin-top:4px}
-  .save small{display:block;font-size:20px;font-weight:500;color:#94a3b8;margin-top:6px}
-  .url{position:absolute;right:80px;bottom:60px;font-size:22px;color:#64748b;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  /* 1280×640 — GitHub's social-preview size (2:1). Rendered by render.py. */
+  @font-face { font-family: "Hanken Grotesk"; font-weight: 100 900; src: url(../../internal/httpapi/dashboard/assets/hanken-grotesk-latin.woff2) format("woff2"); }
+  :root { --ink: #1b2130; --muted: #6b7080; --accent: #3d4f9f; --accent-soft: #e2e6f5; --ok: #0ab39c; --stamp: #f06548; --bg: #f3f3f9; }
+  html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; }
+  body { background: var(--bg); font-family: "Hanken Grotesk", system-ui, sans-serif; color: var(--ink); position: relative; }
+  .glow { position: absolute; right: -180px; top: -220px; width: 820px; height: 820px; border-radius: 50%;
+          background: radial-gradient(closest-side, rgba(61,79,159,.18), rgba(61,79,159,0)); }
+  .left { position: absolute; left: 72px; top: 64px; width: 500px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand svg { width: 44px; height: 44px; }
+  .brand span { font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+  h1 { margin: 54px 0 0; font-size: 58px; line-height: 1.02; font-weight: 700; letter-spacing: -.035em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  p { margin: 22px 0 0; font-size: 21px; line-height: 1.45; color: var(--muted); }
+  .facts { position: absolute; left: 72px; bottom: 84px; display: flex; gap: 34px; }
+  .fact b { display: block; font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+  .fact span { font-size: 13.5px; color: var(--muted); display: block; max-width: 150px; line-height: 1.3; }
+  .fact b.ok { color: var(--ok); }
+  .shot { position: absolute; left: 640px; top: 92px; width: 760px; border-radius: 14px; overflow: hidden; background: #fff;
+          box-shadow: 0 24px 60px rgba(27,33,48,.18), 0 2px 6px rgba(27,33,48,.08); }
+  .bar { height: 30px; background: #fff; border-bottom: 1px solid #e9ebf0; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+  .bar i { width: 10px; height: 10px; border-radius: 50%; background: #e3e5ec; display: block; }
+  .bar u { margin-left: 18px; flex: 0 0 260px; height: 16px; border-radius: 8px; background: #f1f2f6; text-decoration: none; }
+  .shot img { display: block; width: 100%; }
+  .url { position: absolute; left: 72px; bottom: 34px; font-size: 14px; color: var(--muted); letter-spacing: .01em; }
 </style></head><body>
 <div class="glow"></div>
-<div class="wrap">
-  <div class="left">
-    <h1 class="name">brief<span>d</span></h1>
-    <p class="tag">Your agents, briefed.<br>Not flooded.</p>
-    <p class="desc">Team knowledge in a git repo, served to Claude Code, Cursor and Codex over MCP as token-budgeted context bundles.</p>
-    <div class="chips"><span class="chip">MCP</span><span class="chip">pure Go · one binary</span><span class="chip">100+ languages</span></div>
-  </div>
-  <div class="right">
-    <div class="bar all"><div class="lbl"><span>Everything in CLAUDE.md</span><b>12,869</b></div><i></i></div>
-    <div class="bar ours"><div class="lbl"><span>briefd bundle</span><b>1,800</b></div><i></i></div>
-    <div class="save">−86% tokens per task<small>answer present 96% of the time</small></div>
-  </div>
+<div class="left">
+  <div class="brand"><svg viewBox="0 0 16 16"><rect width="16" height="16" rx="3.5" fill="#3d4f9f"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/></svg><span>briefd</span></div>
+  <h1>Your agents, <em>briefed.</em><br>Not flooded.</h1>
+  <p>Your team's knowledge in git, served to coding agents over MCP — only what the task needs, within a token budget.</p>
 </div>
+<div class="facts">
+  <div class="fact"><b class="ok">−86%</b><span>knowledge tokens per task</span></div>
+  <div class="fact"><b>96%</b><span>right section in the bundle</span></div>
+  <div class="fact"><b>1</b><span>binary, one SQLite file, no services</span></div>
+</div>
+<div class="shot"><div class="bar"><i></i><i></i><i></i><u></u></div><img src="../assets/dashboard.png" alt=""></div>
 <div class="url">github.com/ismailperim/briefd</div>
 </body></html>

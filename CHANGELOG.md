@@ -106,7 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tool versus its neighbour, side effects (all read-only except
   `propose_update`), what comes back, budget and error behaviour, and that an
   empty `report_usage` marks a knowledge gap. The tool schemas now cost
-  ~2,300 tokens once per session (was ~1,750).
+  ~2,800 tokens once per session with the seven tools of this release (was
+  ~1,750 for six).
 
 ### Fixed
 

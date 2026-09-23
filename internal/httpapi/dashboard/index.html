@@ -6,7 +6,7 @@
 <title>briefd</title>
 <meta name="description" content="briefd status dashboard: requests, tokens served, index contents and sync state.">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23b3283c'/><path d='M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z' fill='none' stroke='%23f9fafb' stroke-width='1.7'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d4f9f'/><path d='M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z' fill='none' stroke='%23f9fafb' stroke-width='1.7'/></svg>">
 <style>
   /* Palette: archive paper and ink; the one accent is the circulation
      stamp, reserved for documents that were just handed to an agent. */
@@ -223,8 +223,9 @@
   .circ .when.old { color: var(--muted); font-weight: 400; }
   .circ .doc { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   .circ .via { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-  #graph circle.stamp, #bigGraph circle.stamp { fill: none; stroke: var(--stamp); stroke-width: 2; pointer-events: none; opacity: 1; }
+  #graph circle.stamp, #bigGraph circle.stamp { fill: none; stroke: var(--stamp); stroke-width: 1.75; pointer-events: none; opacity: 1; }
   .brand .ver { display: none; }
+  #bigGraph.focus circle.stamp { opacity: .15; } #bigGraph.focus circle.stamp.hl { opacity: 1; }
   .legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
   .legend i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--stamp); display: inline-block; }
   /* Instance */
@@ -986,7 +987,7 @@
   const scopeColor = (scope) => getComputedStyle(document.documentElement).getPropertyValue('--sc-' + (scope.startsWith('projects/') ? 'projects' : scope)).trim() || '#888';
   // Stamp strength by age: just served → solid, fading over a day.
   const stampOpacity = (path) => { const d = served.get(path); if (!d) return 0; const m = (Date.now() - new Date(d.last).getTime()) / 60000; return m < 5 ? 1 : m < 60 ? 0.7 : m < 360 ? 0.4 : 0.2; };
-  const stampSVG = (n, r) => { const o = stampOpacity(n.path); return o ? `<circle class="stamp" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${(r + 3.5).toFixed(1)}" stroke-opacity="${o}"/>` : ''; };
+  const stampSVG = (n, r, hl) => { const o = stampOpacity(n.path); return o ? `<circle class="stamp${hl ? ' hl' : ''}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${(r + 3.5).toFixed(1)}" stroke-opacity="${o}"/>` : ''; };
   // Force-directed layout in a W×H box; cached per graph change and
   // shared by the overview panel and the Graph view (which scales it).
   function layoutGraph(g, W, H) {
@@ -1034,6 +1035,7 @@
     $('bigGraph-hint').textContent = `${hint} · scroll or +/− to zoom, drag or arrows to pan`;
     if (key !== graphKey) {
       graphKey = key; graphData = g;
+      if (gstate.sel) setTimeout(() => showDetails(gstate.sel), 0);
       smallLayout = g.edges.length ? layoutGraph(g, 600, 360) : null;
       graphLayout = g.edges.length ? layoutGraph(g, 1200, 720) : null;
     }
@@ -1043,9 +1045,12 @@
       return;
     }
     const { nodes, edges, drawn } = smallLayout;
-    const labelled = drawn.length <= 30 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out) || stampOpacity(b.path) - stampOpacity(a.path)).slice(0, 18);
+    // The overview graph is a thumbnail: label the best-connected dozen and stamp
+    // only the most recently served dozen; the Graph view shows everything.
+    const labelled = drawn.length <= 16 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out)).slice(0, 12);
+    const recent = new Set([...served.values()].sort((a, b) => new Date(b.last) - new Date(a.last) || b.count - a.count).slice(0, 12).map((d) => d.path));
     svg.innerHTML = edges.map(([i, j]) => `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}"/>`).join('')
-      + drawn.map((n) => stampSVG(n, nodeR(n))).join('')
+      + drawn.filter((n) => recent.has(n.path)).map((n) => stampSVG(n, nodeR(n))).join('')
       + drawn.map((n) => `<circle class="node" data-q="${esc(n.title)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${nodeR(n)}" fill="${scopeColor(n.scope)}" tabindex="0"><title>${esc(n.path)} · ${n.in} in / ${n.out} out</title></circle>`).join('')
       + labelled.map((n) => `<text x="${(n.x + nodeR(n) + 3).toFixed(1)}" y="${(n.y + 3).toFixed(1)}">${esc(nodeLabel(n))}</text>`).join('');
     renderBigGraph();
@@ -1074,7 +1079,7 @@
       const a = nodes[i], b = nodes[j]; const on = sel && (a.path === sel || b.path === sel);
       return `<line class="${on ? 'hl' : ''}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
     }).join('')
-      + drawn.filter((n) => visible.has(n.path)).map((n) => stampSVG(n, nodeR(n) * 1.3)).join('')
+      + drawn.filter((n) => visible.has(n.path)).map((n) => stampSVG(n, nodeR(n) * 1.3, hl(n.path))).join('')
       + drawn.filter((n) => visible.has(n.path)).map((n) => `<circle class="node ${hl(n.path) ? 'hl' : ''} ${n.path === sel ? 'sel' : ''}" data-path="${esc(n.path)}" tabindex="0" role="button" aria-label="${esc(n.title)} — ${esc(n.scope)}, ${n.in} links in, ${n.out} out${served.has(n.path) ? ', served recently' : ''}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${nodeR(n) * 1.3}" fill="${scopeColor(n.scope)}"><title>${esc(n.path)}</title></circle>`).join('')
       + drawn.filter((n) => visible.has(n.path) && (drawn.length <= 120 || hl(n.path) || n.in + n.out >= 3)).map((n) => `<text class="${hl(n.path) ? 'hl' : ''}" x="${(n.x + nodeR(n) * 1.3 + 4).toFixed(1)}" y="${(n.y + 4).toFixed(1)}">${esc(nodeLabel(n))}</text>`).join('');
   }
@@ -1097,7 +1102,7 @@
     window.addEventListener('mousemove', (ev) => { if (!drag) return; const s = 1200 / svg.getBoundingClientRect().width; gstate.tx = drag.tx + (ev.clientX - drag.x) * s; gstate.ty = drag.ty + (ev.clientY - drag.y) * s; if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 3) drag.moved = true; $('gview').setAttribute('transform', `translate(${gstate.tx} ${gstate.ty}) scale(${gstate.k})`); });
     window.addEventListener('mouseup', () => { if (drag) { svg.classList.remove('dragging'); } drag = null; });
     svg.addEventListener('wheel', (ev) => { ev.preventDefault(); const rect = svg.getBoundingClientRect(); const s = 1200 / rect.width; const px = (ev.clientX - rect.left) * s, py = (ev.clientY - rect.top) * s; const f = ev.deltaY < 0 ? 1.15 : 1 / 1.15; const k2 = Math.max(0.3, Math.min(6, gstate.k * f)); gstate.tx = px - (px - gstate.tx) * (k2 / gstate.k); gstate.ty = py - (py - gstate.ty) * (k2 / gstate.k); gstate.k = k2; $('gview').setAttribute('transform', `translate(${gstate.tx} ${gstate.ty}) scale(${gstate.k})`); }, { passive: false });
-    svg.addEventListener('click', (ev) => { if (drag && drag.moved) return; const c = ev.target.closest('circle.node'); gstate.sel = c ? c.dataset.path : null; renderBigGraph(); if (c) showDetails(c.dataset.path); });
+    svg.addEventListener('click', (ev) => { if (drag && drag.moved) return; const c = ev.target.closest('circle.node'); gstate.sel = c ? c.dataset.path : null; renderBigGraph(); if (c) { showDetails(c.dataset.path); history.replaceState(null, '', '#graph=' + encodeURIComponent(c.dataset.path)); } });
     $('gscopes').addEventListener('click', (ev) => { const t = ev.target.closest('.chip-toggle'); if (!t) return; const s = t.dataset.scope; gstate.scopesOff.has(s) ? gstate.scopesOff.delete(s) : gstate.scopesOff.add(s); renderBigGraph(); });
     $('gfind').addEventListener('input', (ev) => { gstate.find = ev.target.value; gstate.sel = null; renderBigGraph(); });
     $('gfit').addEventListener('click', () => { gstate.tx = 0; gstate.ty = 0; gstate.k = 1; renderBigGraph(); });
@@ -1118,7 +1123,10 @@
     $('gdetails').addEventListener('click', (ev) => { const a = ev.target.closest('a[data-path]'); if (a) { gstate.sel = a.dataset.path; renderBigGraph(); showDetails(a.dataset.path); return; } const s = ev.target.closest('#gsearch'); if (s) { $('q').value = s.dataset.q; setTimeout(() => runSearch(s.dataset.q, $('scopesIn').value, $('maxTok').value), 50); } });
   })();
   function showView() {
-    const v = ['#graph', '#instance', '#maintenance', '#activity'].includes(location.hash) ? location.hash.slice(1) : 'overview';
+    // #graph=<doc path> opens the graph with that document selected.
+    const h = location.hash, eq = h.indexOf('=');
+    const v = ['#graph', '#instance', '#maintenance', '#activity'].includes(eq > 0 ? h.slice(0, eq) : h) ? (eq > 0 ? h.slice(1, eq) : h.slice(1)) : 'overview';
+    if (v === 'graph' && eq > 0) { gstate.sel = decodeURIComponent(h.slice(eq + 1)); setTimeout(() => { renderBigGraph(); showDetails(gstate.sel); }, 0); }
     $('view-overview').hidden = v !== 'overview';
     $('view-maintenance').hidden = v !== 'maintenance';
     $('view-activity').hidden = v !== 'activity';

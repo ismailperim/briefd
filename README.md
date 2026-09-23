@@ -76,14 +76,14 @@ and run side by side.
 | Staleness | Unknown | Dates on every section; drift against the code it governs |
 | What it can't answer | Silently absent | Listed on the dashboard as a backlog |
 | Footprint | Runtime + engine + several ports | One static binary, one SQLite file, one port (or stdio) |
-| Tool surface | Dozens of tools, thousands of tokens per session | 6 tools, ~2.3k tokens per session |
+| Tool surface | Dozens of tools, thousands of tokens per session | 7 tools, ~2.8k tokens per session |
 
 Use a memory tool so your agent remembers what it tried last week. Use briefd so every agent on
 the team applies the same rules — and so someone notices when a rule falls behind the code.
 
 ## How it works
 
-<img src="docs/assets/diagram-pipeline.png" alt="Pipeline: knowledge repo → sync → chunker → SQLite (FTS5 + vectors) → hybrid retrieval → budget packer → MCP/REST → agents" width="100%">
+<img src="docs/assets/diagram-pipeline.png" alt="How briefd works. Ingest: knowledge repo → chunker → SQLite → embeddings in pure Go. Serve: coding agent → MCP/REST → hybrid retrieval → budget packer → MCP/REST → agents" width="100%">
 
 - **Git is the source of truth.** The index is a disposable cache rebuilt from a clone.
 - **Agents never write to the index.** `propose_update` opens a reviewable branch/PR; what
@@ -277,12 +277,29 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 
 ## Dashboard and metrics
 
-<img src="docs/assets/dashboard.png" alt="briefd dashboard: request and token tiles, knowledge gaps and low-confidence questions, oldest documents, documents behind the code" width="100%">
+<img src="docs/assets/dashboard.png" alt="briefd dashboard overview: requests, tokens served and saved, index and sync figures; the knowledge graph with recently served documents stamped; the circulation list; and a Needs attention summary" width="100%">
 
-`GET /` is a read-only status page embedded in the binary: requests and tokens served, p50/p95
-latency per tool, budget pressure, bundle cache hit rate, index size per scope, the oldest
-documents, sync state, the last 100 requests, and a search box for manual inspection. `GET /metrics` exposes the same
-counters in Prometheus text format; `GET /api/stats` as JSON.
+`GET /` is a dashboard embedded in the binary (no build step, no external assets):
+
+- **Overview** — requests, tokens served and saved, index and sync; the knowledge graph with the
+  documents agents were served in the last 24 hours stamped on it; the circulation list; and
+  **Needs attention**, one line per maintenance signal, worst first.
+- **Graph** — every document and link, zoom and pan (mouse or keyboard), scope filters, search;
+  select a document to see its links, backlinks and how often it was served
+  (`#graph=<doc path>` links straight to it).
+- **Maintenance** — proposals awaiting review, knowledge gaps, documents behind the code, the
+  oldest documents, links to fix and code coverage.
+- **Activity** — latency and volume per tool, the index by scope and the request log; counters
+  persist across restarts and can be reset.
+- **Instance** — the running configuration (secrets shown only as set/unset), with Sync now and
+  Rebuild index.
+
+`GET /metrics` exposes the counters in Prometheus text format; `GET /api/stats` as JSON.
+
+<table><tr>
+<td width="50%"><img src="docs/assets/dashboard-graph.png" alt="Graph view with one document selected: its links and backlinks highlighted, the details panel listing them and how often it was served"></td>
+<td width="50%"><img src="docs/assets/dashboard-maintenance.png" alt="Maintenance view: proposals awaiting review, knowledge gaps, low-confidence questions, documents behind the code and oldest documents"></td>
+</tr></table>
 
 **Knowledge gaps.** Every `search_context` / `compile_bundle` call is logged with its retrieval
 confidence (`query_log`, 30-day retention). The dashboard lists the questions of the last seven

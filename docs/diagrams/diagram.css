@@ -1,0 +1,26 @@
+/* Shared style for the architecture diagrams (rendered by render.py). */
+@font-face { font-family: "Hanken Grotesk"; font-weight: 100 900; src: url(../../internal/httpapi/dashboard/assets/hanken-grotesk-latin.woff2) format("woff2"); }
+:root { --ink: #1b2130; --muted: #6b7080; --line: #d9dde6; --accent: #3d4f9f; --accent-soft: #e6e9f6; --ok: #0ab39c; --ok-soft: #dcf5f1;
+        --warn: #d9942a; --warn-soft: #fdf1dc; --err: #f06548; --err-soft: #fde8e4; --bg: #f3f3f9; --card: #fff; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); font-family: "Hanken Grotesk", system-ui, sans-serif; color: var(--ink); padding: 56px 64px; }
+h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+.sub { margin: 8px 0 0; font-size: 18px; color: var(--muted); }
+.eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.card { background: var(--card); border-radius: 14px; box-shadow: 0 1px 2px rgba(27,33,48,.06), 0 8px 24px rgba(27,33,48,.06); padding: 20px 22px; }
+.card h3 { margin: 0 0 6px; font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+.card p { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--muted); }
+.tag { display: inline-flex; align-items: center; gap: 8px; }
+.tag i { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-style: normal; font-weight: 700; font-size: 14px; }
+.t-accent i { background: var(--accent-soft); color: var(--accent); }
+.t-ok i { background: var(--ok-soft); color: var(--ok); }
+.t-warn i { background: var(--warn-soft); color: var(--warn); }
+.t-err i { background: var(--err-soft); color: var(--err); }
+.t-grey i { background: #eceef3; color: #4a5060; }
+.arrow { position: relative; flex: 0 0 auto; display: grid; place-items: center; color: #9aa0b0; font-size: 13px; }
+.arrow svg { display: block; }
+.note { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .92em; }
+.pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.p-ok { background: var(--ok-soft); color: #067d6d; } .p-err { background: var(--err-soft); color: #c0452b; } .p-accent { background: var(--accent-soft); color: var(--accent); }

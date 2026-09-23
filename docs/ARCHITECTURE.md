@@ -1,8 +1,8 @@
 # How briefd works
 
 A guided tour of the system, from the problem it solves to the packages in this
-repository. The diagrams are generated from [`diagrams/build.py`](diagrams/build.py)
-and can be edited in [Excalidraw](https://excalidraw.com) (`diagrams/*.excalidraw`).
+repository. The diagrams are HTML pages in [`diagrams/`](diagrams/), rendered to PNG with
+`python3 docs/diagrams/render.py`.
 
 ## 1. The problem
 
