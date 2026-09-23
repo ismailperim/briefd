@@ -249,6 +249,19 @@
   .iconbtn { width: 34px; height: 34px; }
   @media (pointer: coarse) { .tab, .chip-toggle, .zoom button, .iconbtn, .btn { min-height: 44px; min-width: 44px; } .circ li { min-height: 44px; } }
   .gstatus { font-size: 12px; color: var(--muted); }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 720px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 1100px) { .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); } .tiles.tiles-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .lede { margin: 0 0 var(--s3); color: var(--text-2); font-size: 13.5px; }
+  .tab .count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--stamp); color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 700; }
+  .attention { margin-bottom: var(--s3); }
+  .att { list-style: none; margin: 0; padding: 0 var(--s4) var(--s3); display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--s5); }
+  @media (min-width: 900px) { .att { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .att li { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .att li b { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 2.5ch; text-align: right; }
+  .att li.hot b { color: var(--stamp); }
+  .att li a { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+  .att li.ok { color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
   /* Empty states */
@@ -290,6 +303,8 @@
     <nav class="tabs" aria-label="Views">
       <a class="tab" href="#overview" data-view="overview">Overview</a>
       <a class="tab" href="#graph" data-view="graph">Graph</a>
+      <a class="tab" href="#maintenance" data-view="maintenance">Maintenance <span class="count" id="attCount" hidden></span></a>
+      <a class="tab" href="#activity" data-view="activity">Activity</a>
       <a class="tab" href="#instance" data-view="instance">Instance</a>
     </nav>
     <div class="status">
@@ -331,17 +346,6 @@
       <div class="sub" id="t-tok-sub">—</div>
     </div>
     <div class="panel tile">
-      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/></svg>Sections served</div>
-      <div class="value" id="t-chk">—</div>
-      <div class="sub" id="t-chk-sub">—</div>
-    </div>
-    <div class="panel tile">
-      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Latency p95</div>
-      <div class="value" id="t-p95">—</div>
-      <svg class="spark" id="s-p95" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"></svg>
-      <div class="sub" id="t-p95-sub">—</div>
-    </div>
-    <div class="panel tile">
       <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>Index</div>
       <div class="value" id="t-docs">—</div>
       <div class="sub" id="t-docs-sub">—</div>
@@ -371,6 +375,38 @@
     </section>
   </div>
 
+  <section class="panel attention" aria-labelledby="h-att">
+    <div class="head"><h2 id="h-att">Needs attention</h2><span class="hint"><a href="#maintenance">open maintenance</a></span></div>
+    <ul class="att" id="att"><li class="dim">Checking…</li></ul>
+  </section>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-search">
+      <div class="head"><h2 id="h-search">Try a search</h2><span class="hint">same ranking and budget as <code>search_context</code></span></div>
+      <div class="body">
+        <form class="search" id="searchForm">
+          <div><label for="q">Query</label><input id="q" name="q" type="search" placeholder="what is our retry policy for acquirer calls?" required autocomplete="off"></div>
+          <div><label for="scopesIn">Scopes</label><input id="scopesIn" name="scopes" type="text" placeholder="domain, conventions"></div>
+          <div><label for="maxTok">Max tokens</label><input id="maxTok" name="max_tokens" type="number" min="1" step="100" value="2000"></div>
+          <button class="btn" type="submit">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search
+          </button>
+        </form>
+        <div class="results" id="results" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <a href="/metrics">/metrics</a>
+    <a href="/api/health">/api/health</a>
+    <span>MCP endpoint <code>/mcp</code></span>
+    <span id="refreshed"></span>
+  </footer>
+  </div>
+
+  <div id="view-maintenance" hidden>
+    <p class="lede">What the knowledge base is missing or getting wrong. Work through it top to bottom.</p>
   <div class="grid split">
     <section class="panel" aria-labelledby="h-gaps">
       <div class="head"><h2 id="h-gaps">Knowledge gaps</h2><span class="hint">last 7 days · questions the knowledge base did not answer</span></div>
@@ -391,8 +427,16 @@
       </div>
     </section>
   </div>
-
   <div class="grid split">
+    <section class="panel" aria-labelledby="h-drift">
+      <div class="head"><h2 id="h-drift">Behind the code</h2><span class="hint">governed code changed after the document</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Document</th><th class="num">Commits</th><th class="num">Last change</th></tr></thead>
+          <tbody id="drift"></tbody>
+        </table>
+      </div>
+    </section>
     <section class="panel" aria-labelledby="h-stalest">
       <div class="head"><h2 id="h-stalest">Oldest documents</h2><span class="hint">content last changed longest ago</span></div>
       <div class="body flush wrap">
@@ -402,12 +446,14 @@
         </table>
       </div>
     </section>
-    <section class="panel" aria-labelledby="h-drift">
-      <div class="head"><h2 id="h-drift">Behind the code</h2><span class="hint">governed code changed after the document</span></div>
+  </div>
+  <div class="grid split">
+    <section class="panel" aria-labelledby="h-links">
+      <div class="head"><h2 id="h-links">Orphans and broken links</h2><span class="hint">nothing links here · targets that do not exist</span></div>
       <div class="body flush wrap">
         <table>
-          <thead><tr><th>Document</th><th class="num">Commits</th><th class="num">Last change</th></tr></thead>
-          <tbody id="drift"></tbody>
+          <thead><tr><th>Document</th><th>Issue</th></tr></thead>
+          <tbody id="links"></tbody>
         </table>
       </div>
     </section>
@@ -420,17 +466,23 @@
         </table>
       </div>
     </section>
-    <section class="panel" aria-labelledby="h-links">
-      <div class="head"><h2 id="h-links">Orphans and broken links</h2><span class="hint">nothing links here · targets that do not exist</span></div>
-      <div class="body flush wrap">
-        <table>
-          <thead><tr><th>Document</th><th>Issue</th></tr></thead>
-          <tbody id="links"></tbody>
-        </table>
-      </div>
-    </section>
+  </div>
   </div>
 
+  <div id="view-activity" hidden>
+    <div class="tiles tiles-2">
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/></svg>Sections served</div>
+      <div class="value" id="t-chk">—</div>
+      <div class="sub" id="t-chk-sub">—</div>
+    </div>
+    <div class="panel tile">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Latency p95</div>
+      <div class="value" id="t-p95">—</div>
+      <svg class="spark" id="s-p95" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="sub" id="t-p95-sub">—</div>
+    </div>
+    </div>
   <div class="grid split">
     <section class="panel" aria-labelledby="h-byname">
       <div class="head"><h2 id="h-byname">By tool / route</h2><span class="hint">click a column to sort</span></div>
@@ -460,24 +512,6 @@
       </div>
     </section>
   </div>
-
-  <div class="grid">
-    <section class="panel" aria-labelledby="h-search">
-      <div class="head"><h2 id="h-search">Try a search</h2><span class="hint">same ranking and budget as <code>search_context</code></span></div>
-      <div class="body">
-        <form class="search" id="searchForm">
-          <div><label for="q">Query</label><input id="q" name="q" type="search" placeholder="what is our retry policy for acquirer calls?" required autocomplete="off"></div>
-          <div><label for="scopesIn">Scopes</label><input id="scopesIn" name="scopes" type="text" placeholder="domain, conventions"></div>
-          <div><label for="maxTok">Max tokens</label><input id="maxTok" name="max_tokens" type="number" min="1" step="100" value="2000"></div>
-          <button class="btn" type="submit">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search
-          </button>
-        </form>
-        <div class="results" id="results" aria-live="polite"></div>
-      </div>
-    </section>
-  </div>
-
   <div class="grid">
     <section class="panel" aria-labelledby="h-recent">
       <div class="head"><h2 id="h-recent">Recent requests</h2><span class="hint">click a row to re-run it above</span></div>
@@ -489,13 +523,6 @@
       </div>
     </section>
   </div>
-
-  <footer>
-    <a href="/metrics">/metrics</a>
-    <a href="/api/health">/api/health</a>
-    <span>MCP endpoint <code>/mcp</code></span>
-    <span id="refreshed"></span>
-  </footer>
   </div>
 
   <div id="view-instance" hidden>
@@ -658,6 +685,9 @@
 
     renderByName(s.by_name);
 
+    attn.drift = (x.code_drift || []).length;
+    attn.stale = (x.stalest || []).filter((d) => d.updated_at && Date.now() - new Date(d.updated_at).getTime() > 180 * 864e5).length;
+    attn.syncErr = x.last_error || '';
     const drift = x.code_drift;
     $('drift').innerHTML = !drift ? '<tr><td colspan="3" class="dim">Unavailable</td></tr>' : drift.length ? drift.map((d) => `<tr>
       <td class="q narrow" title="${esc(d.repo)}: ${esc(d.last_path)}"><span class="mono">${esc(d.doc_path)}</span></td>
@@ -729,7 +759,30 @@
       <td class="q" title="${esc(g.query)}">${esc(g.query)}</td><td class="mono dim">${esc((g.scopes || []).join(', '))}</td>
       <td class="num">${num(g.times)}</td>${last}</tr>`;
   }
+  // Needs attention: one line per maintenance signal, worst first.
+  const attn = {};
+  function renderAttention() {
+    const items = [
+      ['syncErr', 'Sync is failing', '#instance', (v) => v ? 1 : 0],
+      ['gaps', 'questions agents asked that nothing answered (7 days)', '#maintenance'],
+      ['drift', 'documents behind the code they govern', '#maintenance'],
+      ['broken', 'broken links between documents', '#maintenance'],
+      ['low', 'answered questions with a weak top match', '#maintenance'],
+      ['stale', 'documents unchanged for over 6 months', '#maintenance'],
+      ['orphans', 'documents nothing links to', '#graph'],
+      ['blind', 'code directories no document claims', '#maintenance'],
+    ].filter(([k]) => attn[k] !== undefined);
+    const n = (it) => it[3] ? it[3](attn[it[0]]) : attn[it[0]];
+    const hot = items.filter((it) => n(it) > 0);
+    const urgent = (attn.gaps || 0) + (attn.drift || 0) + (attn.broken || 0) + (attn.syncErr ? 1 : 0);
+    $('attCount').hidden = !urgent; $('attCount').textContent = urgent;
+    $('att').innerHTML = hot.length ? hot.map((it) => it[0] === 'syncErr'
+      ? `<li class="hot"><b>!</b><span>${esc(it[1])}: ${esc(attn.syncErr)}</span><a href="${it[2]}">details</a></li>`
+      : `<li class="${['gaps', 'drift', 'broken'].includes(it[0]) ? 'hot' : ''}"><b>${num(n(it))}</b><span>${esc(it[1])}</span><a href="${it[2]}">review</a></li>`).join('')
+      : '<li class="ok">Nothing needs attention: every question was answered, links resolve and no rule lags its code.</li>';
+  }
   function renderGaps(g) {
+    attn.gaps = g.enabled ? g.no_useful.length : undefined; attn.low = g.enabled ? g.low_confidence.length : undefined;
     if (!g.enabled) {
       const off = '<tr><td colspan="4" class="dim">Query log disabled (<code>query_log.enabled: false</code>)</td></tr>';
       $('gaps').innerHTML = off; $('lowconf').innerHTML = off;
@@ -881,8 +934,10 @@
     $('gdetails').addEventListener('click', (ev) => { const a = ev.target.closest('a[data-path]'); if (a) { gstate.sel = a.dataset.path; renderBigGraph(); showDetails(a.dataset.path); return; } const s = ev.target.closest('#gsearch'); if (s) { $('q').value = s.dataset.q; setTimeout(() => runSearch(s.dataset.q, $('scopesIn').value, $('maxTok').value), 50); } });
   })();
   function showView() {
-    const v = ['#graph', '#instance'].includes(location.hash) ? location.hash.slice(1) : 'overview';
+    const v = ['#graph', '#instance', '#maintenance', '#activity'].includes(location.hash) ? location.hash.slice(1) : 'overview';
     $('view-overview').hidden = v !== 'overview';
+    $('view-maintenance').hidden = v !== 'maintenance';
+    $('view-activity').hidden = v !== 'activity';
     $('view-graph').hidden = v !== 'graph';
     $('view-instance').hidden = v !== 'instance';
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
@@ -890,6 +945,7 @@
   window.addEventListener('hashchange', showView);
   showView();
   function renderLinks(g) {
+    attn.orphans = g.orphans.length; attn.broken = g.broken.length;
     const rows = g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan</span></td></tr>`)
       .concat(g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: ${esc(b.target)}</span></td></tr>`));
     $('links').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="dim">Every document is linked to and every link resolves</td></tr>';
@@ -947,6 +1003,7 @@
     ].join('');
   }
   function renderCoverage(c) {
+    attn.blind = c.enabled ? c.repos.reduce((a, r) => a + r.uncovered.length, 0) : undefined;
     $('coverage').innerHTML = !c.enabled ? '<tr><td colspan="3" class="dim">No <code>code.repos</code> configured</td></tr>' : c.repos.length ? c.repos.map((r) => `<tr>
       <td class="mono">${esc(r.repo)}</td><td class="num">${num(r.covered)} / ${num(r.dirs)}</td>
       <td class="q" title="${esc(r.uncovered.join(', '))}"><span class="mono dim">${esc(r.uncovered.slice(0, 6).join(', '))}${r.uncovered.length > 6 ? ` +${r.uncovered.length - 6}` : ''}</span></td></tr>`).join('')
@@ -960,6 +1017,7 @@
       try { renderCoverage(await api('/api/coverage')); } catch (_) {}
       try { const g = await api('/api/graph'); renderGraph(g); renderLinks(g); } catch (_) {}
       try { const i = await api('/api/instance'); renderIdentity(i); renderInstance(i); } catch (_) {}
+      renderAttention();
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {
       if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }
