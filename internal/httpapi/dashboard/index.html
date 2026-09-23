@@ -181,7 +181,7 @@
   /* ---- Console restyle ---- */
   body { font-size: 14.5px; }
   main { max-width: 1320px; padding-top: var(--s5); }
-  header { margin-bottom: var(--s2); align-items: baseline; }
+  header { margin-bottom: var(--s4); align-items: center; padding-bottom: var(--s3); border-bottom: 2px solid var(--text); }
   .brand svg { width: 22px; height: 22px; align-self: center; }
   .brand h1 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
   .pill { background: transparent; padding: 0 2px; min-height: 0; font-size: 12px; color: var(--muted); }
@@ -316,7 +316,6 @@
       </button>
     </div>
   </header>
-  <div class="ident" id="ident"><span class="repo" id="identRepo">briefd</span><span class="meta" id="identMeta">connecting…</span></div>
 
   <section class="panel notice" id="auth" aria-labelledby="auth-h">
     <div class="body">
@@ -953,18 +952,8 @@
   const yn = (b) => b ? '<span class="yes">yes</span>' : '<span class="no">no</span>';
   const bytes = (n) => n > 1e9 ? (n / 1e9).toFixed(1) + ' GB' : n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : n > 1e3 ? (n / 1e3).toFixed(0) + ' kB' : n + ' B';
   const repoName = (src) => { if (!src) return 'no source'; const t = src.replace(/\/+$/, '').replace(/\.git$/, ''); return decodeURIComponent(t.split(/[/:]/).pop() || t); };
-  function renderIdentity(i) {
-    $('identRepo').textContent = repoName(i.source);
-    const sync = i.last_sync_at ? `synced ${ago(i.last_sync_at)}` : 'not synced yet';
-    const parts = [
-      i.branch ? `<b>${esc(i.branch)}</b>${i.head_commit ? ' @ ' + esc(i.head_commit.slice(0, 7)) : ''}` : esc(i.source_kind),
-      i.last_sync_error ? `<span style="color:var(--err)">sync failing</span>` : esc(sync),
-      esc(i.embeddings.startsWith('off') ? 'keyword search' : 'hybrid · ' + i.embeddings.replace(/^local\//, '')),
-      esc(i.version),
-    ];
-    $('identMeta').innerHTML = parts.join('<span class="sep">/</span>');
-    document.title = `${repoName(i.source)} · briefd`;
-  }
+  // The repository name labels the browser tab; details live under Instance.
+  function renderIdentity(i) { document.title = `${repoName(i.source)} · briefd`; }
   function renderInstance(i) {
     const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
     const box = (title, rows) => `<section class="panel"><div class="head"><h2>${title}</h2></div><dl>${rows.join('')}</dl></section>`;
