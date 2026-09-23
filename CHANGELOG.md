@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Dashboard: the "Open a pull request" link matched forge hosts by
+  substring, so a source such as `dev.azure.com.example.net` counted as
+  Azure DevOps (CodeQL js/incomplete-url-substring-sanitization). Hosts are
+  now matched exactly, or by the first label for self-hosted GitLab, and the
+  configured forge type takes precedence. The source is operator
+  configuration, so this was not reachable by agents or API callers.
+
 ## [0.6.0] — 2026-09-23
 
 ### Added

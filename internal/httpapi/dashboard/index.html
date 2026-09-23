@@ -1173,10 +1173,15 @@
     if (!m) return '';
     const host = m[1].replace(/^ssh\./, ''), path = m[2].replace(/^v3\//, '');
     const b = encodeURIComponent(branch), t = encodeURIComponent(base || 'main');
+    // Hosts are matched exactly (or by their first label for self-hosted
+    // GitLab), never by substring, so "dev.azure.com.example.net" is not
+    // mistaken for Azure DevOps. The configured forge type wins when set.
+    const forge = (lastInstance && lastInstance.forge) || '';
+    const label = host.split('.')[0];
+    if (host === 'dev.azure.com') { const p = path.split('/'); return p.length >= 3 ? `https://dev.azure.com/${p[0]}/${p[1]}/_git/${p[2]}/pullrequestcreate?sourceRef=${b}&targetRef=${t}` : ''; }
     if (path.includes('/_git/')) return `https://${host}/${path}/pullrequestcreate?sourceRef=${b}&targetRef=${t}`;
-    if (host.includes('dev.azure.com')) { const p = path.split('/'); return p.length >= 3 ? `https://dev.azure.com/${p[0]}/${p[1]}/_git/${p[2]}/pullrequestcreate?sourceRef=${b}&targetRef=${t}` : ''; }
-    if (host === 'github.com') return `https://github.com/${path}/compare/${t}...${b}`;
-    if (host.includes('gitlab')) return `https://${host}/${path}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${b}`;
+    if (forge === 'github' || host === 'github.com') return `https://${host}/${path}/compare/${t}...${b}`;
+    if (forge === 'gitlab' || host === 'gitlab.com' || label === 'gitlab') return `https://${host}/${path}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${b}`;
     return '';
   }
   function renderProposals(list) {
