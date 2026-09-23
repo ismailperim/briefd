@@ -9,6 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,6 +95,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		MetricsRequireAuth: cfg.Metrics.RequireAuth,
 		QueryLog:           cfg.QueryLog.Enabled,
 		Coverage:           rt.syncer.coverageFunc(),
+		Instance:           instanceInfo(cfg, rt),
 		Version:            version,
 		Logger:             logger,
 	})
@@ -264,6 +268,89 @@ func buildProcess(ctx context.Context, cfg config.Config, stderr io.Writer) (rt 
 }
 
 func (rt *process) close() { rt.st.Close() }
+
+// instanceInfo describes the running configuration for the dashboard.
+// Secrets are reduced to whether they are set; URLs lose any userinfo.
+func instanceInfo(cfg config.Config, rt *process) func() map[string]any {
+	started := time.Now()
+	sourceKind := "none"
+	switch {
+	case gitsync.IsGitURL(cfg.Source):
+		sourceKind = "git"
+	case rt.repo != nil:
+		sourceKind = "local git checkout"
+	case cfg.Source != "":
+		sourceKind = "directory"
+	}
+	branch := cfg.Git.Branch
+	if rt.repo != nil {
+		branch = rt.repo.Branch()
+	}
+	var code []map[string]string
+	for _, cr := range cfg.Code.Repos {
+		code = append(code, map[string]string{"name": cr.DisplayName(), "source": redactURL(cr.Source), "branch": cr.Branch})
+	}
+	gitAuth := "none"
+	switch {
+	case cfg.Git.SSHKey != "":
+		gitAuth = "ssh key file"
+	case cfg.Git.Token != "":
+		gitAuth = "https token"
+	case strings.HasPrefix(cfg.Source, "git@") || strings.HasPrefix(cfg.Source, "ssh://"):
+		gitAuth = "ssh agent"
+	}
+	return func() map[string]any {
+		info := map[string]any{
+			"version": version, "commit": commit, "built": date,
+			"go": runtime.Version(), "platform": runtime.GOOS + "/" + runtime.GOARCH,
+			"started_at": started, "listen": cfg.Listen,
+			"auth":               cfg.APIToken != "",
+			"metrics_auth":       cfg.Metrics.RequireAuth,
+			"source":             redactURL(cfg.Source),
+			"source_kind":        sourceKind,
+			"branch":             branch,
+			"git_auth":           gitAuth,
+			"sync_interval":      cfg.Sync.Interval.String(),
+			"webhook":            cfg.Sync.WebhookSecret != "",
+			"forge":              cfg.Forge.Type,
+			"forge_token":        cfg.Forge.Token != "",
+			"proposals_enabled":  rt.proposals.Available(),
+			"db":                 cfg.DB,
+			"db_bytes":           fileSize(cfg.DB) + fileSize(cfg.DB+"-wal"),
+			"default_scopes":     cfg.Search.DefaultScopes,
+			"default_max_tokens": cfg.Search.DefaultMaxTokens,
+			"max_top_k":          cfg.Search.MaxTopK,
+			"query_log":          cfg.QueryLog.Enabled,
+			"query_log_days":     cfg.QueryLog.RetentionDays,
+			"code_repos":         code,
+			"embeddings":         "off (BM25 only)",
+		}
+		if rt.searcher.Hybrid() {
+			v := rt.searcher.Vectors()
+			info["embeddings"] = v.Model()
+			info["vectors"] = v.Len()
+		}
+		return info
+	}
+}
+
+// redactURL drops userinfo (user:token@) from a URL-shaped source.
+func redactURL(u string) string {
+	if i := strings.Index(u, "://"); i > 0 {
+		rest := u[i+3:]
+		if at := strings.Index(rest, "@"); at >= 0 && (strings.Index(rest, "/") < 0 || at < strings.Index(rest, "/")) {
+			return u[:i+3] + rest[at+1:]
+		}
+	}
+	return u
+}
+
+func fileSize(p string) int64 {
+	if fi, err := os.Stat(p); err == nil {
+		return fi.Size()
+	}
+	return 0
+}
 
 // coverageDepth is how deep into a code repository's tree coverage looks:
 // top-level directories and their children (e.g. services/payment).

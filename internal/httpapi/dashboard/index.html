@@ -6,37 +6,43 @@
 <title>briefd</title>
 <meta name="description" content="briefd status dashboard: requests, tokens served, index contents and sync state.">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2322c55e'/><path d='M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z' fill='none' stroke='%230f172a' stroke-width='1.7'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23b3283c'/><path d='M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z' fill='none' stroke='%23f9fafb' stroke-width='1.7'/></svg>">
 <style>
+  /* Palette: archive paper and ink; the one accent is the circulation
+     stamp, reserved for documents that were just handed to an agent. */
   :root {
-    --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f8fafc; --line: #d9dee6; --line-strong: #c3cad5;
-    --text: #0f172a; --text-2: #334155; --muted: #5b6676;
-    --accent: #15803d; --accent-2: #16a34a; --accent-soft: #dcfce7; --on-accent: #ffffff;
-    --info: #1d4ed8; --warn: #a16207; --warn-soft: #fef3c7; --err: #b91c1c; --err-soft: #fee2e2; --ok: #15803d; --ok-soft: #dcfce7;
-    --chip: #eef2f6; --ring: #1d4ed8;
-    --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 12px rgba(15, 23, 42, .04);
-    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --sans: "IBM Plex Sans", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --bg: #e9edf1; --panel: #f9fafb; --panel-2: #f1f4f7; --line: #cfd6de; --line-strong: #b4bec9;
+    --text: #17202b; --text-2: #394453; --muted: #5d6876;
+    --accent: #17202b; --accent-2: #3d6fb6; --accent-soft: #dde6f3; --on-accent: #f9fafb;
+    --stamp: #b3283c; --stamp-soft: #f6dde1;
+    --info: #2b5bb5; --warn: #9a5b00; --warn-soft: #f7e7c9; --err: #b3283c; --err-soft: #f6dde1; --ok: #25704f; --ok-soft: #d9ece2;
+    --chip: #e1e6ec; --ring: #2b5bb5;
+    --sc-domain: #3b6fd8; --sc-conventions: #2f8f72; --sc-projects: #b8812a;
+    --shadow: none;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
-    --r: 10px; --r-sm: 6px;
+    --r: 4px; --r-sm: 3px;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0b1220; --panel: #111a2c; --panel-2: #0f172a; --line: #223049; --line-strong: #334155;
-      --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8;
-      --accent: #22c55e; --accent-2: #4ade80; --accent-soft: #14532d; --on-accent: #052e16;
-      --info: #93c5fd; --warn: #fbbf24; --warn-soft: #3b2f0b; --err: #f87171; --err-soft: #450a0a; --ok: #4ade80; --ok-soft: #052e16;
-      --chip: #1b2537; --ring: #93c5fd;
-      --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
+      --bg: #0f1318; --panel: #161b22; --panel-2: #1b2129; --line: #28303a; --line-strong: #37414d;
+      --text: #e6eaf0; --text-2: #c2cad4; --muted: #8d99a7;
+      --accent: #e6eaf0; --accent-2: #7ea6e0; --accent-soft: #1f2a3a; --on-accent: #0f1318;
+      --stamp: #f0607a; --stamp-soft: #3a1820;
+      --info: #8fb2e8; --warn: #e3a64a; --warn-soft: #33260f; --err: #f0607a; --err-soft: #3a1820; --ok: #5cc596; --ok-soft: #15291f;
+      --chip: #212831; --ring: #8fb2e8;
+      --sc-domain: #6f98ea; --sc-conventions: #4fbf98; --sc-projects: #dba54e;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0b1220; --panel: #111a2c; --panel-2: #0f172a; --line: #223049; --line-strong: #334155;
-    --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8;
-    --accent: #22c55e; --accent-2: #4ade80; --accent-soft: #14532d; --on-accent: #052e16;
-    --info: #93c5fd; --warn: #fbbf24; --warn-soft: #3b2f0b; --err: #f87171; --err-soft: #450a0a; --ok: #4ade80; --ok-soft: #052e16;
-    --chip: #1b2537; --ring: #93c5fd;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
+    --bg: #0f1318; --panel: #161b22; --panel-2: #1b2129; --line: #28303a; --line-strong: #37414d;
+    --text: #e6eaf0; --text-2: #c2cad4; --muted: #8d99a7;
+    --accent: #e6eaf0; --accent-2: #7ea6e0; --accent-soft: #1f2a3a; --on-accent: #0f1318;
+    --stamp: #f0607a; --stamp-soft: #3a1820;
+    --info: #8fb2e8; --warn: #e3a64a; --warn-soft: #33260f; --err: #f0607a; --err-soft: #3a1820; --ok: #5cc596; --ok-soft: #15291f;
+    --chip: #212831; --ring: #8fb2e8;
+    --sc-domain: #6f98ea; --sc-conventions: #4fbf98; --sc-projects: #dba54e;
   }
 
   * { box-sizing: border-box; }
@@ -172,6 +178,65 @@
   #graph .empty-note { font: 13px var(--sans); fill: var(--muted); }
   .badge svg { width: 12px; height: 12px; }
 
+  /* ---- Console restyle ---- */
+  body { font-size: 14.5px; }
+  main { max-width: 1320px; padding-top: var(--s5); }
+  header { margin-bottom: var(--s2); align-items: baseline; }
+  .brand svg { width: 22px; height: 22px; align-self: center; }
+  .brand h1 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  .pill { background: transparent; padding: 0 2px; min-height: 0; font-size: 12px; color: var(--muted); }
+  .iconbtn { width: 30px; height: 30px; border-color: var(--line); background: transparent; }
+  .ident { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 var(--s4); padding-bottom: var(--s3); border-bottom: 2px solid var(--text); }
+  .ident .repo { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .ident .meta { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+  .ident .meta b { font-weight: 600; color: var(--text); }
+  .ident .meta .sep { color: var(--line-strong); margin: 0 6px; }
+  .panel { border-radius: var(--r); box-shadow: none; }
+  .panel h2 { font-size: 14px; font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--text); }
+  .panel > .head { padding: var(--s3) var(--s4) var(--s1); }
+  .panel > .head .hint { font-size: 12px; }
+  th { font-size: 11.5px; letter-spacing: 0; text-transform: none; font-weight: 600; background: var(--panel); }
+  td { padding: 7px 12px; }
+  .btn { background: var(--accent); color: var(--on-accent); border-radius: var(--r-sm); min-height: 34px; padding: 6px 14px; font-weight: 600; }
+  .tabs { background: transparent; padding: 0; gap: 18px; margin-left: var(--s4); }
+  .tab { padding: 2px 0; border-radius: 0; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab.active { background: transparent; box-shadow: none; color: var(--text); border-bottom-color: var(--stamp); }
+  .tab:hover { text-decoration: none; color: var(--text); }
+  /* Figures: one strip, hairline dividers, no icons or boxes */
+  .tiles { gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: var(--s4); overflow: hidden; }
+  .tiles .tile { border: 0; border-radius: 0; background: transparent; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 0 -1px -1px 0; min-height: 92px; padding: var(--s3) var(--s4); }
+  .tile .label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; color: var(--muted); order: 2; }
+  .tile .label svg { display: none; }
+  .tile .value { order: 1; margin-top: 0; font-family: var(--sans); font-weight: 650; font-size: 25px; letter-spacing: -.02em; }
+  .tile .value.green { color: var(--ok); }
+  .tile svg.spark { order: 3; height: 18px; margin-top: 4px; }
+  .tile .sub { order: 4; font-size: 11.5px; margin-top: 2px; }
+  .spark .line { stroke: var(--accent-2); stroke-width: 1.25; }
+  .spark .area { fill: var(--accent-2); opacity: .08; }
+  .bar { height: 4px; } .bar > i { background: var(--accent-2); }
+  .badge { border-radius: var(--r-sm); font-size: 11.5px; }
+  /* Circulation: documents recently handed to agents */
+  .circ { list-style: none; margin: 0; padding: 0 var(--s4) var(--s3); }
+  .circ li { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .circ li:last-child { border-bottom: 0; }
+  .circ .when { font-family: var(--mono); font-size: 11.5px; color: var(--stamp); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .circ .when.old { color: var(--muted); font-weight: 400; }
+  .circ .doc { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .circ .via { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  #graph circle.stamp, #bigGraph circle.stamp { fill: none; stroke: var(--stamp); stroke-width: 2; pointer-events: none; opacity: 1; }
+  .brand .ver { display: none; }
+  .legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--stamp); display: inline-block; }
+  /* Instance */
+  .inst { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
+  @media (min-width: 900px) { .inst { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .inst dl { display: grid; grid-template-columns: minmax(130px, 38%) minmax(0, 1fr); margin: 0; padding: var(--s1) var(--s4) var(--s3); }
+  .inst dt { color: var(--muted); font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .inst dd { margin: 0; padding: 6px 0; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+  .inst dl > :nth-last-child(-n+2) { border-bottom: 0; }
+  .yes { color: var(--ok); } .no { color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
   /* Empty states */
   .empty { padding: var(--s4); color: var(--muted); font-size: 13.5px; }
   .empty strong { color: var(--text-2); font-weight: 600; }
@@ -211,6 +276,7 @@
     <nav class="tabs" aria-label="Views">
       <a class="tab" href="#overview" data-view="overview">Overview</a>
       <a class="tab" href="#graph" data-view="graph">Graph</a>
+      <a class="tab" href="#instance" data-view="instance">Instance</a>
     </nav>
     <div class="status" role="status" aria-live="polite">
       <span class="pill" id="uptime" title="Process uptime">up —</span>
@@ -221,6 +287,7 @@
       </button>
     </div>
   </header>
+  <div class="ident" id="ident"><span class="repo" id="identRepo">briefd</span><span class="meta" id="identMeta">connecting…</span></div>
 
   <section class="panel notice" id="auth" aria-labelledby="auth-h">
     <div class="body">
@@ -278,6 +345,19 @@
   </div>
 
   <div class="grid split">
+    <section class="panel" aria-labelledby="h-graph">
+      <div class="head"><h2 id="h-graph">Knowledge graph</h2><span class="hint" id="graph-hint">documents and the links between them</span></div>
+      <div class="body flush">
+        <svg id="graph" viewBox="0 0 600 360" width="100%" height="360" role="img" aria-label="Document link graph"></svg>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="h-circ">
+      <div class="head"><h2 id="h-circ">Circulation</h2><span class="hint"><span class="legend"><i></i>served to an agent, last 24 h</span></span></div>
+      <ul class="circ" id="circ"></ul>
+    </section>
+  </div>
+
+  <div class="grid split">
     <section class="panel" aria-labelledby="h-gaps">
       <div class="head"><h2 id="h-gaps">Knowledge gaps</h2><span class="hint">last 7 days · questions the knowledge base did not answer</span></div>
       <div class="body flush wrap">
@@ -293,24 +373,6 @@
         <table>
           <thead><tr><th>Question</th><th>Scopes</th><th class="num">Times</th><th class="num">Margin</th></tr></thead>
           <tbody id="lowconf"></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-
-  <div class="grid split">
-    <section class="panel" aria-labelledby="h-graph">
-      <div class="head"><h2 id="h-graph">Knowledge graph</h2><span class="hint" id="graph-hint">documents and the links between them</span></div>
-      <div class="body flush">
-        <svg id="graph" viewBox="0 0 600 360" width="100%" height="360" role="img" aria-label="Document link graph"></svg>
-      </div>
-    </section>
-    <section class="panel" aria-labelledby="h-links">
-      <div class="head"><h2 id="h-links">Orphans and broken links</h2><span class="hint">nothing links here · targets that do not exist</span></div>
-      <div class="body flush wrap">
-        <table>
-          <thead><tr><th>Document</th><th>Issue</th></tr></thead>
-          <tbody id="links"></tbody>
         </table>
       </div>
     </section>
@@ -344,12 +406,12 @@
         </table>
       </div>
     </section>
-    <section class="panel" aria-labelledby="h-proposals">
-      <div class="head"><h2 id="h-proposals">Proposals</h2><span class="hint">forge pull request status</span></div>
+    <section class="panel" aria-labelledby="h-links">
+      <div class="head"><h2 id="h-links">Orphans and broken links</h2><span class="hint">nothing links here · targets that do not exist</span></div>
       <div class="body flush wrap">
         <table>
-          <thead><tr><th>Status</th><th class="num">Count</th></tr></thead>
-          <tbody id="proposals"></tbody>
+          <thead><tr><th>Document</th><th>Issue</th></tr></thead>
+          <tbody id="links"></tbody>
         </table>
       </div>
     </section>
@@ -422,10 +484,15 @@
   </footer>
   </div>
 
+  <div id="view-instance" hidden>
+    <div class="inst" id="inst"></div>
+  </div>
+
   <section id="view-graph" class="panel" hidden aria-labelledby="h-graph-view">
     <div class="head"><h2 id="h-graph-view">Knowledge graph</h2><span class="hint" id="bigGraph-hint">documents and the links between them · scroll to zoom, drag to pan, click a node</span></div>
     <div class="toolbar" id="gtoolbar">
-      <input id="gfind" type="search" placeholder="find a document…" autocomplete="off" aria-label="Find a document in the graph">
+      <input id="gfind" type="search" placeholder="Find a document" autocomplete="off" aria-label="Find a document in the graph">
+      <span class="legend"><i></i>served in the last 24 h</span>
       <span id="gscopes"></span>
       <button class="btn" type="button" id="gfit">Fit</button>
     </div>
@@ -570,11 +637,7 @@
     }
     $('source').textContent = x.source ? `${x.source}${x.last_commit ? ' @ ' + x.last_commit.slice(0, 10) : ''}` : '';
 
-    const proposals = s.proposals;
-    $('proposals').innerHTML = proposals ? [
-      ['Open', proposals.open], ['Merged', proposals.merged], ['Closed', proposals.closed],
-    ].map(([status, count]) => `<tr><td>${status}</td><td class="num">${num(count)}</td></tr>`).join('')
-      : '<tr><td colspan="2" class="dim">Counts unavailable</td></tr>';
+    lastStats = s;
 
     renderByName(s.by_name);
 
@@ -665,8 +728,11 @@
   // Force-directed layout, computed once per graph change. Small
   // repositories (tens to a few hundred documents) are what this is for;
   // beyond ~400 nodes only edges of linked documents are drawn.
-  let graphKey = '', graphData = null, graphLayout = null;
-  const scopeColor = (scope) => scope === 'domain' ? '#2563eb' : scope === 'conventions' ? '#16a34a' : '#d97706';
+  let graphKey = '', graphData = null, graphLayout = null, smallLayout = null, served = new Map(), lastStats = null;
+  const scopeColor = (scope) => getComputedStyle(document.documentElement).getPropertyValue('--sc-' + (scope.startsWith('projects/') ? 'projects' : scope)).trim() || '#888';
+  // Stamp strength by age: just served → solid, fading over a day.
+  const stampOpacity = (path) => { const d = served.get(path); if (!d) return 0; const m = (Date.now() - new Date(d.last).getTime()) / 60000; return m < 5 ? 1 : m < 60 ? 0.7 : m < 360 ? 0.4 : 0.2; };
+  const stampSVG = (n, r) => { const o = stampOpacity(n.path); return o ? `<circle class="stamp" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${(r + 3.5).toFixed(1)}" stroke-opacity="${o}"/>` : ''; };
   // Force-directed layout in a W×H box; cached per graph change and
   // shared by the overview panel and the Graph view (which scales it).
   function layoutGraph(g, W, H) {
@@ -697,25 +763,37 @@
   }
   const nodeR = (n) => 4 + Math.min(8, Math.sqrt(n.in + n.out) * 2);
   const nodeLabel = (n) => { const parts = n.path.replace(/\.md$/, '').split('/'); const last = parts[parts.length - 1]; return last.toLowerCase() === 'readme' && parts.length > 1 ? parts[parts.length - 2] : last; };
+  function renderCirculation() {
+    const list = [...served.values()].slice(0, 12);
+    $('circ').innerHTML = list.length ? list.map((d) => {
+      const fresh = (Date.now() - new Date(d.last).getTime()) < 3600e3;
+      return `<li><span class="when ${fresh ? '' : 'old'}" title="${esc(full(d.last))}">${clock(d.last).slice(0, 5)}</span><span class="doc" data-q="${esc(d.path)}" title="${esc(d.path)} · served ${d.count}×">${esc(d.path)}</span><span class="via">${esc(d.via)}${d.count > 1 ? ' · ' + d.count + '×' : ''}</span></li>`;
+    }).join('') : '<li class="dim" style="grid-template-columns:1fr">Nothing served yet. Documents appear here as agents call compile_bundle, search_context or get_document.</li>';
+  }
   function renderGraph(g) {
+    served = new Map((g.served || []).map((d) => [d.path, d]));
+    renderCirculation();
     const key = JSON.stringify([g.nodes.map((n) => n.path), g.edges]);
     const svg = $('graph');
     const hint = `${num(g.nodes.length)} documents · ${num(g.links)} links · ${num(g.orphans.length)} orphans · ${num(g.broken.length)} broken`;
     $('graph-hint').innerHTML = `${hint} · <a href="#graph">open graph view</a>`;
     $('bigGraph-hint').textContent = `${hint} · scroll to zoom, drag to pan, click a node`;
-    if (key === graphKey) return;
-    graphKey = key; graphData = g;
-    if (!g.edges.length) {
+    if (key !== graphKey) {
+      graphKey = key; graphData = g;
+      smallLayout = g.edges.length ? layoutGraph(g, 600, 360) : null;
+      graphLayout = g.edges.length ? layoutGraph(g, 1200, 720) : null;
+    }
+    if (!smallLayout) {
       svg.innerHTML = `<text class="empty-note" x="24" y="40">No links between documents yet. Obsidian-style [[wikilinks]] and relative Markdown links are picked up on the next sync.</text>`;
-      graphLayout = null; renderBigGraph();
+      renderBigGraph();
       return;
     }
-    const { nodes, edges, drawn } = layoutGraph(g, 600, 360);
-    const labelled = drawn.length <= 45 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out)).slice(0, 20);
+    const { nodes, edges, drawn } = smallLayout;
+    const labelled = drawn.length <= 30 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out) || stampOpacity(b.path) - stampOpacity(a.path)).slice(0, 18);
     svg.innerHTML = edges.map(([i, j]) => `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}"/>`).join('')
+      + drawn.map((n) => stampSVG(n, nodeR(n))).join('')
       + drawn.map((n) => `<circle class="node" data-q="${esc(n.title)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${nodeR(n)}" fill="${scopeColor(n.scope)}" tabindex="0"><title>${esc(n.path)} · ${n.in} in / ${n.out} out</title></circle>`).join('')
       + labelled.map((n) => `<text x="${(n.x + nodeR(n) + 3).toFixed(1)}" y="${(n.y + 3).toFixed(1)}">${esc(nodeLabel(n))}</text>`).join('');
-    graphLayout = layoutGraph(g, 1200, 720);
     renderBigGraph();
   }
 
@@ -742,6 +820,7 @@
       const a = nodes[i], b = nodes[j]; const on = sel && (a.path === sel || b.path === sel);
       return `<line class="${on ? 'hl' : ''}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
     }).join('')
+      + drawn.filter((n) => visible.has(n.path)).map((n) => stampSVG(n, nodeR(n) * 1.3)).join('')
       + drawn.filter((n) => visible.has(n.path)).map((n) => `<circle class="node ${hl(n.path) ? 'hl' : ''} ${n.path === sel ? 'sel' : ''}" data-path="${esc(n.path)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${nodeR(n) * 1.3}" fill="${scopeColor(n.scope)}"><title>${esc(n.path)}</title></circle>`).join('')
       + drawn.filter((n) => visible.has(n.path) && (drawn.length <= 120 || hl(n.path) || n.in + n.out >= 3)).map((n) => `<text class="${hl(n.path) ? 'hl' : ''}" x="${(n.x + nodeR(n) * 1.3 + 4).toFixed(1)}" y="${(n.y + 4).toFixed(1)}">${esc(nodeLabel(n))}</text>`).join('');
   }
@@ -752,6 +831,7 @@
     const li = (p) => `<li><a data-path="${esc(p)}">${esc(p)}</a></li>`;
     $('gdetails').innerHTML = `<h3>${esc(n.title)}</h3><div class="path">${esc(n.path)}</div>
       <div class="dim" style="margin-top:6px">${esc(n.scope)}${n.updated_at ? ' · updated ' + esc(new Date(n.updated_at).toLocaleDateString()) : ''}</div>
+      ${served.has(path) ? `<div style="margin-top:6px;color:var(--stamp);font-size:12.5px">Served ${served.get(path).count}× · last ${esc(ago(served.get(path).last))} via ${esc(served.get(path).via)}</div>` : ''}
       <h4>Links to (${out.length})</h4><ul>${out.map(li).join('') || '<li class="dim">—</li>'}</ul>
       <h4>Linked from (${back.length})</h4><ul>${back.map(li).join('') || '<li class="dim">—</li>'}</ul>
       <p style="margin-top:14px"><a class="btn" href="#overview" data-q="${esc(n.title)}" id="gsearch">Search for it</a></p>`;
@@ -770,9 +850,10 @@
     $('gdetails').addEventListener('click', (ev) => { const a = ev.target.closest('a[data-path]'); if (a) { gstate.sel = a.dataset.path; renderBigGraph(); showDetails(a.dataset.path); return; } const s = ev.target.closest('#gsearch'); if (s) { $('q').value = s.dataset.q; setTimeout(() => runSearch(s.dataset.q, $('scopesIn').value, $('maxTok').value), 50); } });
   })();
   function showView() {
-    const v = location.hash === '#graph' ? 'graph' : 'overview';
-    $('view-overview').hidden = v === 'graph';
+    const v = ['#graph', '#instance'].includes(location.hash) ? location.hash.slice(1) : 'overview';
+    $('view-overview').hidden = v !== 'overview';
     $('view-graph').hidden = v !== 'graph';
+    $('view-instance').hidden = v !== 'instance';
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
   }
   window.addEventListener('hashchange', showView);
@@ -781,6 +862,58 @@
     const rows = g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan</span></td></tr>`)
       .concat(g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: ${esc(b.target)}</span></td></tr>`));
     $('links').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="dim">Every document is linked to and every link resolves</td></tr>';
+  }
+  const yn = (b) => b ? '<span class="yes">yes</span>' : '<span class="no">no</span>';
+  const bytes = (n) => n > 1e9 ? (n / 1e9).toFixed(1) + ' GB' : n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : n > 1e3 ? (n / 1e3).toFixed(0) + ' kB' : n + ' B';
+  const repoName = (src) => { if (!src) return 'no source'; const t = src.replace(/\/+$/, '').replace(/\.git$/, ''); return decodeURIComponent(t.split(/[/:]/).pop() || t); };
+  function renderIdentity(i) {
+    $('identRepo').textContent = repoName(i.source);
+    const sync = i.last_sync_at ? `synced ${ago(i.last_sync_at)}` : 'not synced yet';
+    const parts = [
+      i.branch ? `<b>${esc(i.branch)}</b>${i.head_commit ? ' @ ' + esc(i.head_commit.slice(0, 7)) : ''}` : esc(i.source_kind),
+      i.last_sync_error ? `<span style="color:var(--err)">sync failing</span>` : esc(sync),
+      esc(i.embeddings.startsWith('off') ? 'keyword search' : 'hybrid · ' + i.embeddings.replace(/^local\//, '')),
+      esc(i.version),
+    ];
+    $('identMeta').innerHTML = parts.join('<span class="sep">/</span>');
+    document.title = `${repoName(i.source)} · briefd`;
+  }
+  function renderInstance(i) {
+    const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+    const box = (title, rows) => `<section class="panel"><div class="head"><h2>${title}</h2></div><dl>${rows.join('')}</dl></section>`;
+    const p = i.proposals || {};
+    const code = (i.code_repos || []).map((c) => `${esc(c.name)} — ${esc(c.source)}${c.branch ? ' (' + esc(c.branch) + ')' : ''}`).join('<br>') || '<span class="no">none</span>';
+    $('inst').innerHTML = [
+      box('Knowledge source', [
+        row('Repository', esc(i.source || '—')), row('Kind', esc(i.source_kind)), row('Branch', esc(i.branch || '—')),
+        row('Head commit', esc((i.head_commit || '—').slice(0, 12))), row('Last sync', i.last_sync_at ? esc(full(i.last_sync_at)) : '—'),
+        row('Sync error', i.last_sync_error ? `<span style="color:var(--err)">${esc(i.last_sync_error)}</span>` : '<span class="no">none</span>'),
+        row('Sync interval', esc(i.sync_interval)), row('Push webhook', yn(i.webhook)), row('Git authentication', esc(i.git_auth)),
+      ]),
+      box('Retrieval', [
+        row('Embeddings', esc(i.embeddings)), row('Vectors', i.vectors != null ? num(i.vectors) : '—'),
+        row('Default scopes', esc((i.default_scopes || []).join(', '))), row('Default budget', num(i.default_max_tokens) + ' tokens'),
+        row('Max top_k', num(i.max_top_k)), row('Query log', i.query_log ? `${num(i.query_log_records || 0)} records, kept ${i.query_log_days} days` : '<span class="no">off</span>'),
+      ]),
+      box('Access', [
+        row('Listen address', esc(i.listen)), row('API token required', yn(i.auth)), row('/metrics requires token', yn(i.metrics_auth)),
+        row('MCP endpoint', esc(location.origin + '/mcp')),
+      ]),
+      box('Proposals and code', [
+        row('Proposals', i.proposals_enabled ? 'enabled' : '<span class="no">disabled (no writable git source)</span>'),
+        row('Pull requests via', i.forge ? esc(i.forge) + (i.forge_token ? '' : ' <span style="color:var(--err)">(no token)</span>') : '<span class="no">none — branches only</span>'),
+        row('Open / merged / closed', `${num(p.open || 0)} / ${num(p.merged || 0)} / ${num(p.closed || 0)}`),
+        row('Code repositories', code),
+      ]),
+      box('Build', [
+        row('Version', esc(i.version)), row('Commit', esc(i.commit)), row('Built', esc(i.built)),
+        row('Go', esc(i.go)), row('Platform', esc(i.platform)), row('Running since', esc(full(i.started_at))),
+      ]),
+      box('Storage', [
+        row('Database', esc(i.db)), row('Size on disk', bytes(i.db_bytes || 0)),
+        row('Note', '<span class="no">a cache: delete it and briefd rebuilds from git</span>'),
+      ]),
+    ].join('');
   }
   function renderCoverage(c) {
     $('coverage').innerHTML = !c.enabled ? '<tr><td colspan="3" class="dim">No <code>code.repos</code> configured</td></tr>' : c.repos.length ? c.repos.map((r) => `<tr>
@@ -795,6 +928,7 @@
       try { renderGaps(await api('/api/gaps?limit=8')); } catch (_) {}
       try { renderCoverage(await api('/api/coverage')); } catch (_) {}
       try { const g = await api('/api/graph'); renderGraph(g); renderLinks(g); } catch (_) {}
+      try { const i = await api('/api/instance'); renderIdentity(i); renderInstance(i); } catch (_) {}
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {
       if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }
@@ -841,6 +975,7 @@
     runSearch(tr.dataset.q, tr.dataset.scopes, $('maxTok').value);
   };
   $('graph').addEventListener('click', (ev) => { const n = ev.target.closest('circle.node'); if (n) { $('q').value = n.dataset.q; runSearch(n.dataset.q, $('scopesIn').value, $('maxTok').value); } });
+  $('circ').addEventListener('click', (ev) => { const d = ev.target.closest('.doc'); if (d) { location.hash = '#graph'; gstate.sel = d.dataset.q; renderBigGraph(); showDetails(d.dataset.q); } });
   for (const id of ['recent', 'gaps', 'lowconf']) {
     $(id).addEventListener('click', (ev) => rerun(ev.target.closest('tr.clickable')));
     $(id).addEventListener('keydown', (ev) => { if (ev.key === 'Enter') rerun(ev.target.closest('tr.clickable')); });

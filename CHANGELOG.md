@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and broken links; the dashboard draws it and lists the issues;
   `get_document` (MCP and REST) returns `links` and `backlinks`. Documents
   indexed by earlier versions are re-parsed once.
+- Dashboard: "Circulation" — documents retrieval handed to agents in the
+  last 24 hours (in memory), stamped on the graph and faded by age; an
+  Instance view with the running configuration (source, branch and head,
+  git auth method, embeddings, access, proposals, code repositories, build,
+  storage — secrets shown only as set/unset; `GET /api/instance`); a restyled
+  console with the repository identity in the header.
 - Path-aware retrieval (ADR-0008): `compile_bundle` and `search_context`
   take `paths` — the code files the task touches. Documents whose `refs`
   cover them are fused into the ranking ahead of general matches (at most

@@ -40,6 +40,26 @@ type Deps struct {
 	Logger   *slog.Logger
 }
 
+// served records the documents a tool handed out, for the dashboard's
+// "recently served" view.
+func (t *tools) served(name string, paths []string) { t.deps.Metrics.RecordServed(name, paths) }
+
+func chunkDocs(hits []store.ChunkHit) []string {
+	out := make([]string, len(hits))
+	for i, h := range hits {
+		out[i] = h.DocPath
+	}
+	return out
+}
+
+func sectionDocs(secs []store.BundleSection) []string {
+	out := make([]string, len(secs))
+	for i, s := range secs {
+		out[i] = s.DocPath
+	}
+	return out
+}
+
 // logQuery appends to the query log; failures are logged, never returned.
 func (t *tools) logQuery(ctx context.Context, r store.QueryRecord) {
 	if !t.deps.QueryLog {
@@ -209,6 +229,7 @@ func (t *tools) searchContext(ctx context.Context, req *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, SearchContextOutput{}, err
 	}
+	t.served("search_context", chunkDocs(res.Chunks))
 	t.logQuery(ctx, store.QueryRecord{
 		Name: "search_context", Query: in.Query, Scopes: res.Scopes, Mode: res.Mode, Results: len(res.Chunks),
 		TopScore: res.TopScore, Margin: res.Margin, Tokens: res.TotalTokens, Client: clientName(req),
@@ -279,6 +300,7 @@ func (t *tools) compileBundle(ctx context.Context, req *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, out, err
 	}
+	t.served("compile_bundle", sectionDocs(res.Sections))
 	t.logQuery(ctx, store.QueryRecord{
 		Name: "compile_bundle", Query: in.TaskDescription, Scopes: res.Scopes, Mode: t.deps.Searcher.Mode(),
 		Results: len(res.Sections), TopScore: res.TopScore, Margin: res.Margin, Tokens: res.Tokens,
@@ -418,6 +440,7 @@ func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetD
 	if len(in.Scopes) > 0 && !slices.Contains(in.Scopes, doc.Scope) {
 		return nil, GetDocumentOutput{}, fmt.Errorf("document %q is in scope %q, not in the requested scopes", p, doc.Scope)
 	}
+	t.served("get_document", []string{doc.Path})
 	out = GetDocumentOutput{
 		Path: doc.Path, Scope: doc.Scope, Title: doc.Title, Tags: doc.Tags,
 		Content: content, Tokens: tokenizer.Count(content),

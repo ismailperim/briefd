@@ -54,6 +54,9 @@ type Deps struct {
 	// Coverage reports, per followed code repository, which directories no
 	// document's refs cover; nil when no code repositories are configured.
 	Coverage func(ctx context.Context) ([]staleness.RepoCoverage, error)
+	// Instance describes the configuration for GET /api/instance. It must
+	// never include tokens, passwords or key material.
+	Instance func() map[string]any
 	Version  string
 	Logger   *slog.Logger
 }
@@ -104,6 +107,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/gaps", auth(http.HandlerFunc(a.gaps)))
 	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
 	mux.Handle("GET /api/graph", auth(http.HandlerFunc(a.graph)))
+	mux.Handle("GET /api/instance", auth(http.HandlerFunc(a.instance)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
 	}
@@ -237,6 +241,11 @@ func (a *api) search(w http.ResponseWriter, r *http.Request) {
 		Name: "api_search", Query: text, Scopes: res.Scopes,
 		Tokens: res.TotalTokens, Chunks: len(res.Chunks), Omitted: res.Omitted,
 	}, false)
+	paths := make([]string, len(res.Chunks))
+	for i, c := range res.Chunks {
+		paths[i] = c.DocPath
+	}
+	a.deps.Metrics.RecordServed("api_search", paths)
 	a.logQuery(r.Context(), store.QueryRecord{
 		Name: "api_search", Query: text, Scopes: res.Scopes, Mode: res.Mode, Results: len(res.Chunks),
 		TopScore: res.TopScore, Margin: res.Margin, Tokens: res.TotalTokens, Client: q.Get("client"),
@@ -275,6 +284,11 @@ func (a *api) bundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.record(start, metrics.Request{Name: "api_bundle", Query: req.Task, Scopes: res.Scopes, Tokens: res.Tokens, Chunks: len(res.Sections)}, false)
+	bpaths := make([]string, len(res.Sections))
+	for i, s := range res.Sections {
+		bpaths[i] = s.DocPath
+	}
+	a.deps.Metrics.RecordServed("api_bundle", bpaths)
 	a.logQuery(r.Context(), store.QueryRecord{
 		Name: "api_bundle", Query: req.Task, Scopes: res.Scopes, Mode: a.deps.Searcher.Mode(), Results: len(res.Sections),
 		TopScore: res.TopScore, Margin: res.Margin, Tokens: res.Tokens, BundleID: res.ID, Client: req.Client,
@@ -407,7 +421,14 @@ func (a *api) gaps(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// graph returns the document link graph with orphans and broken links.
+// graphResponse is the link graph plus what agents were served recently.
+type graphResponse struct {
+	*store.Graph
+	Served []metrics.Served `json:"served"`
+}
+
+// graph returns the document link graph with orphans and broken links, and
+// the documents retrieval returned in the last 24 hours.
 func (a *api) graph(w http.ResponseWriter, r *http.Request) {
 	g, err := a.deps.Store.LinkGraph(r.Context())
 	if err != nil {
@@ -415,7 +436,30 @@ func (a *api) graph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, g)
+	writeJSON(w, http.StatusOK, graphResponse{Graph: g, Served: a.deps.Metrics.RecentlyServed()})
+}
+
+// instance describes this server's configuration without secrets.
+func (a *api) instance(w http.ResponseWriter, r *http.Request) {
+	info := map[string]any{}
+	if a.deps.Instance != nil {
+		for k, v := range a.deps.Instance() {
+			info[k] = v
+		}
+	}
+	if sync, err := a.deps.Store.GetSyncState(r.Context()); err == nil {
+		info["head_commit"] = sync.LastCommit
+		info["last_sync_at"] = nullableTime(sync.LastSyncAt)
+		info["last_sync_error"] = sync.LastError
+	}
+	if counts, err := a.deps.Store.CountProposals(r.Context()); err == nil {
+		info["proposals"] = counts
+	}
+	if n, _, err := a.deps.Store.QueryLogStats(r.Context()); err == nil {
+		info["query_log_records"] = n
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, info)
 }
 
 // coverage lists, per code repository, the directories no document's refs

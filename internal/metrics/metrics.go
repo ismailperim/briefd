@@ -71,6 +71,8 @@ type Registry struct {
 	embeddingsOn   bool
 
 	cacheHits, cacheMisses int64
+
+	served servedSet
 }
 
 type key struct {
