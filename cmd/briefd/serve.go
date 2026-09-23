@@ -74,6 +74,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	defer rt.close()
 	logger, st, repo, proposals, syncer := rt.logger, rt.st, rt.repo, rt.proposals, rt.syncer
+	rt.restoreCounters(ctx)
+	defer rt.saveCounters()
+	go rt.saveCountersEvery(ctx, 30*time.Second)
 	if cfg.APIToken == "" {
 		logger.Warn("BRIEFD_API_TOKEN is not set; /mcp and /api are unauthenticated")
 	}
@@ -88,6 +91,15 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			if err := syncer.run(ctx, true); err != nil && ctx.Err() == nil {
 				logger.Error("webhook sync failed", "err", err)
 			}
+		},
+		OnSync: func(rebuild bool) {
+			if err := syncer.runWith(ctx, true, rebuild); err != nil && ctx.Err() == nil {
+				logger.Error("manual sync failed", "rebuild", rebuild, "err", err)
+			}
+		},
+		OnResetStats: func(rctx context.Context) error {
+			rt.reg.Reset()
+			return st.DeleteState(rctx, countersKey)
 		},
 		MCP:                mcpserver.Handler(mcpSrv, rt.mcpLogger(cfg)),
 		APIToken:           cfg.APIToken,
@@ -269,6 +281,49 @@ func buildProcess(ctx context.Context, cfg config.Config, stderr io.Writer) (rt 
 
 func (rt *process) close() { rt.st.Close() }
 
+// countersKey is where the dashboard counters are saved between runs.
+const countersKey = "metrics"
+
+// restoreCounters loads the counters saved by a previous run, so tokens
+// served, request counts and the recent log survive restarts.
+func (rt *process) restoreCounters(ctx context.Context) {
+	data, err := rt.st.GetState(ctx, countersKey)
+	if err != nil || data == nil {
+		return
+	}
+	if err := rt.reg.Import(data); err != nil {
+		rt.logger.Warn("saved dashboard counters ignored", "err", err)
+		return
+	}
+	rt.logger.Info("dashboard counters restored", "since", rt.reg.Since().Format(time.RFC3339))
+}
+
+// saveCounters writes the counters; errors are logged, not fatal.
+func (rt *process) saveCounters() {
+	data, err := rt.reg.Export()
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err = rt.st.SetState(ctx, countersKey, data)
+	}
+	if err != nil {
+		rt.logger.Warn("saving dashboard counters failed", "err", err)
+	}
+}
+
+func (rt *process) saveCountersEvery(ctx context.Context, every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			rt.saveCounters()
+		}
+	}
+}
+
 // instanceInfo describes the running configuration for the dashboard.
 // Secrets are reduced to whether they are set; URLs lose any userinfo.
 func instanceInfo(cfg config.Config, rt *process) func() map[string]any {
@@ -447,6 +502,12 @@ type codeRepo struct {
 // embeddings=true it also computes missing vectors, reloading the vector
 // index as batches land.
 func (s *syncer) run(ctx context.Context, embeddings bool) error {
+	return s.runWith(ctx, embeddings, false)
+}
+
+// runWith is run with force: re-parse every document even when its
+// content hash is unchanged (the dashboard's "Rebuild index").
+func (s *syncer) runWith(ctx context.Context, embeddings, force bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	commit := ""
@@ -458,7 +519,7 @@ func (s *syncer) run(ctx context.Context, embeddings bool) error {
 		}
 		commit = head
 	}
-	opts := indexer.Options{Root: s.root, Commit: commit, Logger: s.logger}
+	opts := indexer.Options{Root: s.root, Commit: commit, Logger: s.logger, Force: force}
 	if s.repo != nil {
 		opts.LastModified = s.repo.LastModified
 	}

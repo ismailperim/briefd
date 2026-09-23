@@ -49,6 +49,7 @@ const (
 type Registry struct {
 	startedAt time.Time
 	version   string
+	since     time.Time // counters count from here (start, restore or reset)
 
 	mu       sync.Mutex
 	byName   map[key]*series
@@ -96,6 +97,7 @@ type series struct {
 func New(version string) *Registry {
 	return &Registry{
 		startedAt:   time.Now(),
+		since:       time.Now(),
 		version:     version,
 		byName:      map[key]*series{},
 		recent:      make([]Request, recentSize),
@@ -301,6 +303,7 @@ func (r *Registry) WritePrometheus(w io.Writer) {
 type Snapshot struct {
 	Version       string         `json:"version"`
 	StartedAt     time.Time      `json:"started_at"`
+	CountingSince time.Time      `json:"counting_since"`
 	UptimeSeconds float64        `json:"uptime_seconds"`
 	Totals        Totals         `json:"totals"`
 	ByName        []NameStats    `json:"by_name"`
@@ -365,6 +368,7 @@ func (r *Registry) Snapshot() Snapshot {
 	snap := Snapshot{
 		Version:       r.version,
 		StartedAt:     r.startedAt,
+		CountingSince: r.since,
 		UptimeSeconds: time.Since(r.startedAt).Seconds(),
 		ByName:        []NameStats{},
 		Index:         []ScopeCount{},

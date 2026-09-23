@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and broken links; the dashboard draws it and lists the issues;
   `get_document` (MCP and REST) returns `links` and `backlinks`. Documents
   indexed by earlier versions are re-parsed once.
+- Dashboard counters survive restarts: requests, tokens served, latency,
+  the request log, cache counters and circulation are saved to the database
+  every 30 seconds and on shutdown, and restored on start ("Counting since"
+  on the Activity view). "Reset statistics" (`POST /api/stats/reset`) zeroes
+  them; "Sync now" and "Rebuild index" on the Instance view
+  (`POST /api/sync`, `{"rebuild": true}` re-parses every document) start a
+  sync without waiting for the interval. Actions require a JSON body type so
+  another site cannot trigger them from a browser.
 - Link suggestions: documents that mention another document by name (its
   title, the part before a colon, or its file name) without linking to it
   in either direction. `GET /api/links/suggestions`, computed once per index

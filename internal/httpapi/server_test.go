@@ -523,3 +523,35 @@ func TestDashboardAssets(t *testing.T) {
 		}
 	}
 }
+
+func TestActionsNeedJSON(t *testing.T) {
+	srv := newTestServer(t, testToken)
+	client := &http.Client{Transport: bearerTransport{token: testToken, base: http.DefaultTransport}}
+	// A form-encoded POST (what another site could send without a
+	// preflight) is refused.
+	resp, err := client.Post(srv.URL+"/api/stats/reset", "text/plain", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnsupportedMediaType {
+		t.Errorf("text/plain reset: status %d", resp.StatusCode)
+	}
+	resp, err = client.Post(srv.URL+"/api/stats/reset", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("json reset: status %d", resp.StatusCode)
+	}
+	// No OnSync configured in the test server.
+	resp, err = client.Post(srv.URL+"/api/sync", "application/json", strings.NewReader(`{"rebuild":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Errorf("sync without source: status %d", resp.StatusCode)
+	}
+}

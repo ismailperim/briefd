@@ -43,6 +43,11 @@ type Deps struct {
 	// verified delivery to trigger a sync.
 	WebhookSecret string
 	OnWebhook     func()
+	// OnSync runs a source sync (rebuild: re-parse every document) for the
+	// dashboard's buttons; nil disables POST /api/sync.
+	OnSync func(rebuild bool)
+	// OnResetStats clears the dashboard counters and their saved copy.
+	OnResetStats func(ctx context.Context) error
 	// MCP is the streamable-HTTP MCP handler, mounted at /mcp.
 	MCP http.Handler
 	// APIToken protects /mcp and /api/*; empty disables authentication.
@@ -111,6 +116,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
 	mux.Handle("GET /api/graph", auth(http.HandlerFunc(a.graph)))
 	mux.Handle("GET /api/instance", auth(http.HandlerFunc(a.instance)))
+	mux.Handle("POST /api/sync", auth(http.HandlerFunc(a.syncNow)))
+	mux.Handle("POST /api/stats/reset", auth(http.HandlerFunc(a.resetStats)))
 	mux.Handle("GET /api/links/suggestions", auth(http.HandlerFunc(a.linkSuggestions)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
@@ -491,6 +498,51 @@ func (a *api) linkSuggestions(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"suggestions": a.suggested})
+}
+
+// jsonAction reports whether an action request carries a JSON body type.
+// Browsers cannot send that cross-origin without a preflight, which this
+// server never grants, so a page on another site cannot trigger actions
+// even when the API runs without a token.
+func jsonAction(w http.ResponseWriter, r *http.Request) bool {
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		writeError(w, http.StatusUnsupportedMediaType, "json_required", "send Content-Type: application/json")
+		return false
+	}
+	return true
+}
+
+// syncNow starts a sync in the background: {"rebuild": true} re-parses
+// every document instead of only changed ones.
+func (a *api) syncNow(w http.ResponseWriter, r *http.Request) {
+	if !jsonAction(w, r) {
+		return
+	}
+	if a.deps.OnSync == nil {
+		writeError(w, http.StatusNotImplemented, "sync_unavailable", "no source configured")
+		return
+	}
+	var req struct {
+		Rebuild bool `json:"rebuild"`
+	}
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)
+	go a.deps.OnSync(req.Rebuild)
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "sync started", "rebuild": req.Rebuild})
+}
+
+// resetStats clears the dashboard counters (requests, tokens, latency,
+// recent requests, circulation). The index and logs are untouched.
+func (a *api) resetStats(w http.ResponseWriter, r *http.Request) {
+	if !jsonAction(w, r) {
+		return
+	}
+	if a.deps.OnResetStats == nil {
+		a.deps.Metrics.Reset()
+	} else if err := a.deps.OnResetStats(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "reset_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "counters reset"})
 }
 
 // instance describes this server's configuration without secrets.

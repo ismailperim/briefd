@@ -208,9 +208,12 @@ read-only web dashboard · eval harness + golden set · docker compose + binary 
 (`updated_at`) in attribution lines · knowledge-gap report from a query log ·
 code drift via `refs` globs against `code.repos` history (ADR-0007).
 
+**Added in v0.6:** dashboard actions — trigger a sync or an index rebuild, reset the
+dashboard counters (which otherwise persist across restarts).
+
 **Out:** usage-based relevance tuning · contradiction detection for proposals ·
-multi-repo knowledge sources · `report_usage`-driven ranking · dashboard write
-actions (trigger sync, manage proposals).
+multi-repo knowledge sources · `report_usage`-driven ranking · managing proposals
+from the dashboard.
 
 ## 11. Milestones
 

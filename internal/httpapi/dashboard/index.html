@@ -262,6 +262,14 @@
   .att li.hot b { color: var(--stamp); }
   .att li a { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
   .att li.ok { color: var(--muted); }
+  .actions { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; flex-wrap: wrap; }
+  .actions .btn { margin-left: auto; }
+  .btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--line-strong); font-weight: 500; }
+  .btn.ghost:hover { background: var(--chip); }
+  .acts { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+  .acts .btn { min-height: 32px; padding: 4px 12px; font-family: var(--sans); font-size: 13px; }
+  .msg { color: var(--muted); font-size: 12.5px; }
+  #syncMsg { display: block; margin-top: 6px; font-family: var(--sans); }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
   /* Empty states */
@@ -627,6 +635,7 @@
   </div>
 
   <div id="view-activity" hidden>
+    <div class="actions"><span class="dim" id="since">Counting since —</span><span class="msg" id="statsMsg" role="status"></span><button class="btn ghost" type="button" id="resetStats">Reset statistics</button></div>
     <div class="tiles tiles-2">
     <div class="panel tile">
       <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/></svg>Sections served</div>
@@ -840,6 +849,7 @@
     $('source').textContent = x.source ? `${x.source}${x.last_commit ? ' @ ' + x.last_commit.slice(0, 10) : ''}` : '';
 
     lastStats = s;
+    if (s.counting_since) $('since').textContent = 'Counting since ' + full(s.counting_since);
 
     renderByName(s.by_name);
 
@@ -1127,6 +1137,12 @@
   const repoName = (src) => { if (!src) return 'no source'; const t = src.replace(/\/+$/, '').replace(/\.git$/, ''); return decodeURIComponent(t.split(/[/:]/).pop() || t); };
   // The repository name labels the browser tab; details live under Instance.
   function renderIdentity(i) { document.title = `${repoName(i.source)} · briefd`; }
+  let syncMsg = '';
+  async function post(path, body) {
+    const r = await fetch(path, { method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    if (!r.ok) { let m = 'HTTP ' + r.status; try { m = (await r.json()).message || m; } catch (_) {} throw new Error(m); }
+    return r.json();
+  }
   function renderInstance(i) {
     const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
     const box = (title, rows) => `<section class="panel"><div class="head"><h2>${title}</h2></div><dl>${rows.join('')}</dl></section>`;
@@ -1134,6 +1150,7 @@
     const code = (i.code_repos || []).map((c) => `${esc(c.name)} — ${esc(c.source)}${c.branch ? ' (' + esc(c.branch) + ')' : ''}`).join('<br>') || '<span class="no">none</span>';
     $('inst').innerHTML = [
       box('Knowledge source', [
+        row('Actions', `<span class="acts"><button class="btn ghost" type="button" data-sync="0">Sync now</button><button class="btn ghost" type="button" data-sync="1">Rebuild index</button></span><span class="msg" id="syncMsg" role="status">${esc(syncMsg)}</span>`),
         row('Repository', esc(i.source || '—')), row('Kind', esc(i.source_kind)), row('Branch', esc(i.branch || '—')),
         row('Head commit', esc((i.head_commit || '—').slice(0, 12))), row('Last sync', i.last_sync_at ? esc(full(i.last_sync_at)) : '—'),
         row('Sync error', i.last_sync_error ? `<span style="color:var(--err)">${esc(i.last_sync_error)}</span>` : '<span class="no">none</span>'),
@@ -1227,6 +1244,20 @@
     runSearch(tr.dataset.q, tr.dataset.scopes, $('maxTok').value);
   };
   $('graph').addEventListener('click', (ev) => { const n = ev.target.closest('circle.node'); if (n) { $('q').value = n.dataset.q; runSearch(n.dataset.q, $('scopesIn').value, $('maxTok').value); } });
+  $('inst').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-sync]'); if (!b) return;
+    const rebuild = b.dataset.sync === '1';
+    if (rebuild && !confirm('Re-read every document from the repository? Search keeps working meanwhile.')) return;
+    try { await post('/api/sync', { rebuild }); syncMsg = rebuild ? 'Rebuild started — the sync status updates when it finishes.' : 'Sync started — the sync status updates when it finishes.'; }
+    catch (e) { syncMsg = 'Could not start: ' + e.message; }
+    const m = document.getElementById('syncMsg'); if (m) m.textContent = syncMsg;
+    setTimeout(() => { syncMsg = ''; }, 15000);
+  });
+  $('resetStats').addEventListener('click', async () => {
+    if (!confirm('Reset requests, tokens served, latency, the request log and circulation to zero? The index is not touched.')) return;
+    try { await post('/api/stats/reset'); $('statsMsg').textContent = 'Statistics reset.'; hist.length = 0; refresh(); }
+    catch (e) { $('statsMsg').textContent = 'Could not reset: ' + e.message; }
+  });
   $('circ').addEventListener('click', (ev) => { const d = ev.target.closest('.doc'); if (d) { location.hash = '#graph'; gstate.sel = d.dataset.q; renderBigGraph(); showDetails(d.dataset.q); } });
   for (const id of ['recent', 'gaps', 'lowconf']) {
     $(id).addEventListener('click', (ev) => rerun(ev.target.closest('tr.clickable')));
