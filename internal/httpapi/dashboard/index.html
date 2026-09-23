@@ -572,6 +572,17 @@
   </div>
 
   <div id="view-maintenance" hidden>
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-props">
+      <div class="head"><h2 id="h-props">Proposals</h2><span class="hint">changes agents proposed with propose_update — review and merge them in git</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Document</th><th>Change</th><th>Branch</th><th class="num">Proposed</th><th>Status</th><th></th></tr></thead>
+          <tbody id="props"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
   <div class="grid split">
     <section class="panel" aria-labelledby="h-gaps">
       <div class="head"><h2 id="h-gaps">Knowledge gaps</h2><span class="hint">last 7 days · questions the knowledge base did not answer</span></div>
@@ -932,6 +943,7 @@
   function renderAttention() {
     const items = [
       ['syncErr', 'Sync is failing', '#instance', (v) => v ? 1 : 0],
+      ['proposals', 'proposed knowledge changes waiting for review', '#maintenance'],
       ['gaps', 'questions agents asked that nothing answered (7 days)', '#maintenance'],
       ['drift', 'documents behind the code they govern', '#maintenance'],
       ['broken', 'broken links between documents', '#maintenance'],
@@ -943,11 +955,11 @@
     ].filter(([k]) => attn[k] !== undefined);
     const n = (it) => it[3] ? it[3](attn[it[0]]) : attn[it[0]];
     const hot = items.filter((it) => n(it) > 0);
-    const urgent = (attn.gaps || 0) + (attn.drift || 0) + (attn.broken || 0) + (attn.syncErr ? 1 : 0);
+    const urgent = (attn.proposals || 0) + (attn.gaps || 0) + (attn.drift || 0) + (attn.broken || 0) + (attn.syncErr ? 1 : 0);
     $('attCount').hidden = !urgent; $('attCount').textContent = urgent;
     $('att').innerHTML = hot.length ? hot.map((it) => it[0] === 'syncErr'
       ? `<li class="hot"><b>!</b><span>${esc(it[1])}: ${esc(attn.syncErr)}</span><a href="${it[2]}">details</a></li>`
-      : `<li class="${['gaps', 'drift', 'broken'].includes(it[0]) ? 'hot' : ''}"><b>${num(n(it))}</b><span>${esc(it[1])}</span><a href="${it[2]}">review</a></li>`).join('')
+      : `<li class="${['proposals', 'gaps', 'drift', 'broken'].includes(it[0]) ? 'hot' : ''}"><b>${num(n(it))}</b><span>${esc(it[1])}</span><a href="${it[2]}">review</a></li>`).join('')
       : '<li class="ok">Nothing needs attention: every question was answered, links resolve and no rule lags its code.</li>';
   }
   function renderGaps(g) {
@@ -1137,7 +1149,35 @@
   const repoName = (src) => { if (!src) return 'no source'; const t = src.replace(/\/+$/, '').replace(/\.git$/, ''); return decodeURIComponent(t.split(/[/:]/).pop() || t); };
   // The repository name labels the browser tab; details live under Instance.
   function renderIdentity(i) { document.title = `${repoName(i.source)} · briefd`; }
-  let syncMsg = '';
+  let syncMsg = '', lastInstance = null;
+  // Where to open a pull request for a pushed branch when no forge created
+  // one: GitHub compare, GitLab new merge request, Azure DevOps PR create.
+  function prCreateURL(source, branch, base) {
+    if (!source) return '';
+    let u = source.trim().replace(/\.git$/, '');
+    let m = u.match(/^(?:ssh:\/\/)?(?:[^@/]+@)?([^:/]+)(?::\d+)?[:/](.+)$/);
+    if (/^https?:\/\//.test(u)) { const x = new URL(u); m = [null, x.host, x.pathname.replace(/^\//, '')]; }
+    if (!m) return '';
+    const host = m[1].replace(/^ssh\./, ''), path = m[2].replace(/^v3\//, '');
+    const b = encodeURIComponent(branch), t = encodeURIComponent(base || 'main');
+    if (path.includes('/_git/')) return `https://${host}/${path}/pullrequestcreate?sourceRef=${b}&targetRef=${t}`;
+    if (host.includes('dev.azure.com')) { const p = path.split('/'); return p.length >= 3 ? `https://dev.azure.com/${p[0]}/${p[1]}/_git/${p[2]}/pullrequestcreate?sourceRef=${b}&targetRef=${t}` : ''; }
+    if (host === 'github.com') return `https://github.com/${path}/compare/${t}...${b}`;
+    if (host.includes('gitlab')) return `https://${host}/${path}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${b}`;
+    return '';
+  }
+  function renderProposals(list) {
+    const open = list.filter((p) => p.status === 'open');
+    attn.proposals = open.length;
+    const rows = open.concat(list.filter((p) => p.status !== 'open').slice(0, 5));
+    const base = lastInstance && lastInstance.branch;
+    $('props').innerHTML = rows.length ? rows.map((p) => {
+      const link = p.pr_url ? `<a href="${esc(p.pr_url)}" rel="noopener" target="_blank">View pull request</a>`
+        : p.status === 'open' && lastInstance && prCreateURL(lastInstance.source, p.branch, base) ? `<a href="${esc(prCreateURL(lastInstance.source, p.branch, base))}" rel="noopener" target="_blank">Open a pull request</a>` : '';
+      const badge = p.status === 'open' ? '<span class="badge warn">awaiting review</span>' : p.status === 'merged' ? '<span class="badge ok">merged</span>' : '<span class="badge">closed</span>';
+      return `<tr><td class="q narrow" title="${esc(p.doc_path)}"><span class="mono">${esc(p.doc_path)}</span></td><td class="q" title="${esc(p.description)}">${esc(p.description)}</td><td class="mono dim">${esc(p.branch)}</td><td class="num" title="${esc(full(p.created_at))}">${age(p.created_at)}</td><td>${badge}</td><td>${link}</td></tr>`;
+    }).join('') : '<tr><td colspan="6"><div class="empty"><strong>No proposals yet.</strong> When an agent calls <code>propose_update</code>, its branch shows up here for review.</div></td></tr>';
+  }
   async function post(path, body) {
     const r = await fetch(path, { method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     if (!r.ok) { let m = 'HTTP ' + r.status; try { m = (await r.json()).message || m; } catch (_) {} throw new Error(m); }
@@ -1196,7 +1236,8 @@
       try { renderCoverage(await api('/api/coverage')); } catch (_) {}
       try { suggestions = (await api('/api/links/suggestions')).suggestions; } catch (_) {}
       try { const g = await api('/api/graph'); renderGraph(g); renderLinks(g); } catch (_) {}
-      try { const i = await api('/api/instance'); renderIdentity(i); renderInstance(i); } catch (_) {}
+      try { const i = await api('/api/instance'); lastInstance = i; renderIdentity(i); renderInstance(i); } catch (_) {}
+      try { renderProposals((await api('/api/proposals')).proposals); } catch (_) {}
       renderAttention();
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {

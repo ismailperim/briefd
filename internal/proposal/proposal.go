@@ -110,8 +110,11 @@ const StatusSyncInterval = 10 * time.Minute
 // is rate-limited to once per StatusSyncInterval; calls in between return
 // nil immediately.
 func (s *Service) SyncStatuses(ctx context.Context) error {
-	if s == nil || s.Forge == nil || s.Store == nil {
+	if s == nil || s.Store == nil {
 		return nil
+	}
+	if s.Forge == nil {
+		return s.syncFromGit(ctx)
 	}
 	s.mu.Lock()
 	if time.Since(s.lastStatusSync) < StatusSyncInterval {
@@ -154,4 +157,33 @@ func newID() (string, error) {
 		return "", fmt.Errorf("generating proposal id: %w", err)
 	}
 	return hex.EncodeToString(b[:]), nil
+}
+
+// syncFromGit marks proposals merged once their change is on the followed
+// branch, for sources without a forge (Azure DevOps, Bitbucket, plain git).
+// It runs on every sync: the check is local and cheap. Proposals that are
+// declined stay open until their branch is deleted and a forge is used;
+// git alone cannot tell "closed" from "not merged yet".
+func (s *Service) syncFromGit(ctx context.Context) error {
+	if s.Repo == nil {
+		return nil
+	}
+	proposals, err := s.Store.ListOpenProposals(ctx)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, p := range proposals {
+		landed, err := s.Repo.Landed(p.Commit, p.DocPath)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+			continue
+		}
+		if landed {
+			if err := s.Store.UpdateProposalStatus(ctx, p.ID, "merged"); err != nil {
+				failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+			}
+		}
+	}
+	return errors.Join(failures...)
 }

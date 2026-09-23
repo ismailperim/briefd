@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`POST /api/sync`, `{"rebuild": true}` re-parses every document) start a
   sync without waiting for the interval. Actions require a JSON body type so
   another site cannot trigger them from a browser.
+- Proposals on the dashboard: Maintenance lists open proposals first (then
+  recent merged/closed) with the document, the change, the branch and a link
+  to the pull request — or, without a forge, a link that opens one on
+  GitHub, GitLab or Azure DevOps. They count in Needs attention.
+- Proposal status without a forge: each sync marks a proposal merged once
+  its change is on the followed branch (the commit is an ancestor of HEAD,
+  or HEAD holds exactly the proposed file content, which also covers squash
+  merges).
 - Link suggestions: documents that mention another document by name (its
   title, the part before a colon, or its file name) without linking to it
   in either direction. `GET /api/links/suggestions`, computed once per index

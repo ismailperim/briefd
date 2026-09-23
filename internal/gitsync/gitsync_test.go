@@ -134,6 +134,22 @@ func TestOpenSyncPropose(t *testing.T) {
 		t.Fatalf("second proposal: %+v %v", res2, err)
 	}
 
+	// Not landed until main carries the proposed content; a squash-style
+	// edit with identical content counts as landed.
+	if ok, err := repo.Landed(res2.Commit, "domain/a.md"); err != nil || ok {
+		t.Errorf("landed before merge: %v %v", ok, err)
+	}
+	commit("domain/a.md", "# A\n\nnew\n")
+	if _, _, err := repo.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := repo.Landed(res2.Commit, "domain/a.md"); err != nil || !ok {
+		t.Errorf("landed after squash-style merge: %v %v", ok, err)
+	}
+	if ok, _ := repo.Landed("0123456789012345678901234567890123456789", "domain/a.md"); ok {
+		t.Error("unknown commit should not count as landed")
+	}
+
 	for _, bad := range []string{"../etc/passwd", "domain/../README.md", "README.md", "domain/x.txt", "projects/x"} {
 		if err := ValidateDocPath(bad); err == nil {
 			t.Errorf("ValidateDocPath(%q) should fail", bad)

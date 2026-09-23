@@ -749,3 +749,41 @@ func (r *Repo) Dirs(ctx context.Context, depth int) ([]string, error) {
 	sort.Strings(out)
 	return out, nil
 }
+
+// Landed reports whether a proposal commit's change to docPath is on HEAD:
+// the commit is an ancestor of HEAD (merge or fast-forward), or HEAD holds
+// exactly the proposed content of docPath (squash or rebase merges, or the
+// same edit made by hand).
+func (r *Repo) Landed(commit, docPath string) (bool, error) {
+	head, err := r.repo.Head()
+	if err != nil {
+		return false, fmt.Errorf("gitsync: reading HEAD: %w", err)
+	}
+	headCommit, err := r.repo.CommitObject(head.Hash())
+	if err != nil {
+		return false, fmt.Errorf("gitsync: reading HEAD commit: %w", err)
+	}
+	proposed, err := r.repo.CommitObject(plumbing.NewHash(commit))
+	if err != nil {
+		// The proposal commit was never fetched into this clone (it lives on
+		// its own branch); only the content check can decide.
+		proposed = nil
+	}
+	if proposed != nil {
+		if ok, err := proposed.IsAncestor(headCommit); err == nil && ok {
+			return true, nil
+		}
+	}
+	if proposed == nil {
+		return false, nil
+	}
+	want, err := proposed.File(docPath)
+	if err != nil {
+		return false, nil //nolint:nilerr // the proposal deleted or never had the file
+	}
+	got, err := headCommit.File(docPath)
+	if err != nil {
+		return false, nil //nolint:nilerr // not on HEAD (yet)
+	}
+	return want.Hash == got.Hash, nil
+}
