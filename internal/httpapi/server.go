@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -86,7 +87,7 @@ func New(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/health", a.health)
 	mux.HandleFunc("GET /healthz", a.health) // conventional alias for platform health checks
 	mux.HandleFunc("GET /{$}", a.dashboard)
-	mux.HandleFunc("GET /assets/{file}", dashboardAsset)
+	mux.Handle("GET /assets/", dashboardAssets())
 	auth := bearer(d.APIToken)
 	if d.Metrics != nil {
 		metricsHandler := http.HandlerFunc(a.prometheus)
@@ -131,23 +132,23 @@ func (a *api) record(start time.Time, req metrics.Request, failed bool) {
 	a.deps.Metrics.Record(req)
 }
 
-// dashboardAsset serves the dashboard's embedded font files and their
-// licences. They are versioned with the binary, so they can be cached.
-func dashboardAsset(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("file")
-	data, err := dashboardFS.ReadFile("dashboard/assets/" + name)
-	if err != nil || strings.Contains(name, "/") {
-		http.NotFound(w, r)
-		return
+// dashboardAssets serves the dashboard's embedded font files and their
+// licenses. They are versioned with the binary, so they can be cached;
+// directory listings are not served.
+func dashboardAssets() http.Handler {
+	sub, err := fs.Sub(dashboardFS, "dashboard/assets")
+	if err != nil {
+		panic(err) // the embed directive guarantees the directory exists
 	}
-	switch {
-	case strings.HasSuffix(name, ".woff2"):
-		w.Header().Set("Content-Type", "font/woff2")
-	case strings.HasSuffix(name, ".txt"):
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	}
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	_, _ = w.Write(data)
+	files := http.StripPrefix("/assets/", http.FileServerFS(sub))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		files.ServeHTTP(w, r)
+	})
 }
 
 func (a *api) dashboard(w http.ResponseWriter, _ *http.Request) {
