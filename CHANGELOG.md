@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and broken links; the dashboard draws it and lists the issues;
   `get_document` (MCP and REST) returns `links` and `backlinks`. Documents
   indexed by earlier versions are re-parsed once.
+- Link suggestions: documents that mention another document by name (its
+  title, the part before a colon, or its file name) without linking to it
+  in either direction. `GET /api/links/suggestions`, computed once per index
+  state; listed under Maintenance → "Links to fix" with the wikilink to add.
 - Dashboard: "Circulation" — documents retrieval handed to agents in the
   last 24 hours (in memory), stamped on the graph and faded by age; an
   Instance view with the running configuration (source, branch and head,

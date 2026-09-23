@@ -448,7 +448,7 @@
   </div>
   <div class="grid split">
     <section class="panel" aria-labelledby="h-links">
-      <div class="head"><h2 id="h-links">Orphans and broken links</h2><span class="hint">nothing links here · targets that do not exist</span></div>
+      <div class="head"><h2 id="h-links">Links to fix</h2><span class="hint">broken targets · orphans · mentions without a link</span></div>
       <div class="body flush wrap">
         <table>
           <thead><tr><th>Document</th><th>Issue</th></tr></thead>
@@ -768,6 +768,7 @@
       ['broken', 'broken links between documents', '#maintenance'],
       ['low', 'answered questions with a weak top match', '#maintenance'],
       ['stale', 'documents unchanged for over 6 months', '#maintenance'],
+      ['suggest', 'documents mention another without linking it', '#maintenance'],
       ['orphans', 'documents nothing links to', '#graph'],
       ['blind', 'code directories no document claims', '#maintenance'],
     ].filter(([k]) => attn[k] !== undefined);
@@ -943,10 +944,12 @@
   }
   window.addEventListener('hashchange', showView);
   showView();
+  let suggestions = [];
   function renderLinks(g) {
-    attn.orphans = g.orphans.length; attn.broken = g.broken.length;
-    const rows = g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan</span></td></tr>`)
-      .concat(g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: ${esc(b.target)}</span></td></tr>`));
+    attn.orphans = g.orphans.length; attn.broken = g.broken.length; attn.suggest = suggestions.length;
+    const rows = g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: [[${esc(b.target)}]]</span></td></tr>`)
+      .concat(suggestions.slice(0, 8).map((x) => `<tr><td class="q narrow" title="${esc(x.from)}"><span class="mono">${esc(x.from)}</span></td><td>mentions “${esc(x.mention)}”${x.count > 1 ? ' ' + x.count + '×' : ''} — link <span class="mono">[[${esc(x.to.split('/').pop().replace(/\.md$/, ''))}]]</span></td></tr>`))
+      .concat(g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan — nothing links here</span></td></tr>`));
     $('links').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="dim">Every document is linked to and every link resolves</td></tr>';
   }
   const yn = (b) => b ? '<span class="yes">yes</span>' : '<span class="no">no</span>';
@@ -1004,6 +1007,7 @@
       pushHistory(s); render(s);
       try { renderGaps(await api('/api/gaps?limit=8')); } catch (_) {}
       try { renderCoverage(await api('/api/coverage')); } catch (_) {}
+      try { suggestions = (await api('/api/links/suggestions')).suggestions; } catch (_) {}
       try { const g = await api('/api/graph'); renderGraph(g); renderLinks(g); } catch (_) {}
       try { const i = await api('/api/instance'); renderIdentity(i); renderInstance(i); } catch (_) {}
       renderAttention();

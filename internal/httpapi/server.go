@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ismailperim/briefd/internal/bundle"
@@ -108,6 +109,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
 	mux.Handle("GET /api/graph", auth(http.HandlerFunc(a.graph)))
 	mux.Handle("GET /api/instance", auth(http.HandlerFunc(a.instance)))
+	mux.Handle("GET /api/links/suggestions", auth(http.HandlerFunc(a.linkSuggestions)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
 	}
@@ -188,6 +190,12 @@ func (a *api) stats(w http.ResponseWriter, r *http.Request) {
 
 type api struct {
 	deps Deps
+
+	// Link suggestions scan every document against every other one, so
+	// they are computed once per index state.
+	suggestMu  sync.Mutex
+	suggestFor string
+	suggested  []store.LinkSuggestion
 }
 
 func (a *api) health(w http.ResponseWriter, r *http.Request) {
@@ -437,6 +445,31 @@ func (a *api) graph(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, graphResponse{Graph: g, Served: a.deps.Metrics.RecentlyServed()})
+}
+
+// linkSuggestions lists documents that mention another by name without
+// linking to it, recomputed only when the index changes.
+func (a *api) linkSuggestions(w http.ResponseWriter, r *http.Request) {
+	fp, err := a.deps.Store.GetIndexFingerprint(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "suggestions_failed", err.Error())
+		return
+	}
+	a.suggestMu.Lock()
+	defer a.suggestMu.Unlock()
+	if a.suggestFor != fp || a.suggested == nil {
+		list, err := a.deps.Store.SuggestLinks(r.Context(), 200)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "suggestions_failed", err.Error())
+			return
+		}
+		if list == nil {
+			list = []store.LinkSuggestion{}
+		}
+		a.suggestFor, a.suggested = fp, list
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"suggestions": a.suggested})
 }
 
 // instance describes this server's configuration without secrets.

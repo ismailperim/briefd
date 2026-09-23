@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/ismailperim/briefd/internal/ingest"
@@ -240,4 +243,135 @@ func (s *Store) LinkGraph(ctx context.Context) (*Graph, error) {
 		g.Broken = append(g.Broken, b)
 	}
 	return g, rows.Err()
+}
+
+// LinkSuggestion is a document that mentions another by name without
+// linking to it (in either direction).
+type LinkSuggestion struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Mention string `json:"mention"`
+	Count   int    `json:"count"`
+}
+
+// suggestionStop are names too generic to count as a mention.
+var suggestionStop = map[string]bool{"readme": true, "index": true, "overview": true, "notes": true, "glossary": true, "introduction": true}
+
+// mentionNames lists the phrases that refer to a document: its title, the
+// part of the title before a colon or parenthesis, and its file name with
+// dashes as spaces. Phrases shorter than five letters are too ambiguous.
+func mentionNames(docPath, title string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(n string) {
+		n = strings.ToLower(strings.TrimSpace(n))
+		if len(n) < 5 || seen[n] || suggestionStop[n] {
+			return
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	add(title)
+	if i := strings.IndexAny(title, ":("); i > 0 {
+		add(title[:i])
+	}
+	base := docPath[strings.LastIndex(docPath, "/")+1:]
+	add(strings.ReplaceAll(strings.TrimSuffix(base, ".md"), "-", " "))
+	return out
+}
+
+// SuggestLinks finds documents that mention another document by name but
+// do not link to it and are not linked from it. Mentions are counted as
+// whole words, case-insensitively; the heading lines of a document do not
+// count as mentions of others. Results are ordered by mention count.
+func (s *Store) SuggestLinks(ctx context.Context, limit int) ([]LinkSuggestion, error) {
+	type doc struct{ path, title string }
+	rows, err := s.db.QueryContext(ctx, `SELECT path, title FROM documents ORDER BY path`)
+	if err != nil {
+		return nil, fmt.Errorf("suggesting links: %w", err)
+	}
+	var docs []doc
+	for rows.Next() {
+		var d doc
+		if err := rows.Scan(&d.path, &d.title); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("suggesting links: %w", err)
+		}
+		docs = append(docs, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("suggesting links: %w", err)
+	}
+	linked := map[[2]string]bool{}
+	rows, err = s.db.QueryContext(ctx, `SELECT from_path, to_path FROM doc_links WHERE to_path != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("suggesting links: %w", err)
+	}
+	for rows.Next() {
+		var a, b string
+		if err := rows.Scan(&a, &b); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("suggesting links: %w", err)
+		}
+		linked[[2]string{a, b}], linked[[2]string{b, a}] = true, true
+	}
+	rows.Close()
+	chunks, err := s.AllChunks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	text := map[string]*strings.Builder{}
+	for _, c := range chunks {
+		b := text[c.DocPath]
+		if b == nil {
+			b = &strings.Builder{}
+			text[c.DocPath] = b
+		}
+		for _, line := range strings.Split(c.Content, "\n") {
+			if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+				b.WriteString(strings.ToLower(line))
+				b.WriteByte('\n')
+			}
+		}
+	}
+	var out []LinkSuggestion
+	for _, target := range docs {
+		names := mentionNames(target.path, target.title)
+		if len(names) == 0 {
+			continue
+		}
+		res := make([]*regexp.Regexp, len(names))
+		for i, n := range names {
+			res[i] = regexp.MustCompile(`\b` + regexp.QuoteMeta(n) + `\b`)
+		}
+		for _, src := range docs {
+			if src.path == target.path || linked[[2]string{src.path, target.path}] || text[src.path] == nil {
+				continue
+			}
+			body := text[src.path].String()
+			best, count := "", 0
+			for i, re := range res {
+				if n := len(re.FindAllStringIndex(body, -1)); n > count {
+					best, count = names[i], n
+				}
+			}
+			if count > 0 {
+				out = append(out, LinkSuggestion{From: src.path, To: target.path, Mention: best, Count: count})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		if out[i].From != out[j].From {
+			return out[i].From < out[j].From
+		}
+		return out[i].To < out[j].To
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
