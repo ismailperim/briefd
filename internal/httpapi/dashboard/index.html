@@ -375,16 +375,45 @@
     .sidenav { flex-direction: row; flex-wrap: wrap; } .sidenav .tab { padding: 8px 10px; } .sidenav .tab span:not(.count) { display: none; }
     main { padding: 0 14px 24px; } .topbar { margin: 0 -14px 16px; padding: 14px; }
   }
+
+  /* ---- Top navigation layout (replaces the sidebar) ---- */
+  .shell { display: block; }
+  .side { position: sticky; top: 0; z-index: 10; height: auto; flex-direction: row; align-items: center; gap: 8px; padding: 0 28px; min-height: 60px; box-shadow: 0 1px 3px rgba(20,24,40,.25); }
+  .side .brand { padding: 0 20px 0 0; }
+  .sidenav { flex-direction: row; gap: 4px; }
+  .sidenav .tab { padding: 8px 14px; min-height: 40px; font-size: 14px; }
+  .sidenav .tab.active { background: rgba(255,255,255,.12); }
+  .navstatus { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .navstatus .pill { color: var(--side-text); }
+  .navstatus .pill.ok { color: #7ee2c6; } .navstatus .pill.ok .dot { background: #7ee2c6; }
+  .navstatus .pill.warn { color: #f7c97a; } .navstatus .pill.err { color: #ff9c86; }
+  .navstatus .iconbtn { border-color: rgba(255,255,255,.18); color: #fff; background: transparent; }
+  .navstatus .iconbtn:hover { background: rgba(255,255,255,.1); }
+  .sidefoot { display: none; }
+  #view-graph > .head h2 { display: none; }
+  #view-graph > .head .hint { margin-left: 0; }
+  @media (max-width: 719px) { #view-graph > .head { display: none; } }
+  main { max-width: 1440px; margin: 0 auto; padding: 0 28px 32px; }
+  .topbar { background: transparent; border: 0; box-shadow: none; margin: 0 0 8px; padding: 24px 0 12px; }
+  .topbar h1 { font-size: 20px; }
+  @media (max-width: 899px) {
+    .side { padding: 8px 14px; flex-wrap: wrap; }
+    .navstatus { margin-left: 0; width: 100%; justify-content: space-between; padding-bottom: 4px; }
+    .navstatus #uptime { display: none; }
+    .side .brand .name { display: none; } .side .brand { padding-right: 6px; }
+    .navstatus { width: auto; margin-left: auto; padding: 0; gap: 8px; } .navstatus #sync { display: none; }
+    #bigGraph { height: 62vh; min-height: 340px; }
+    main { padding: 0 14px 24px; } .topbar { padding: 16px 0 8px; }
+  }
 </style>
 </head>
 <body>
 <div class="shell">
-<aside class="side" aria-label="Main">
+<header class="side" aria-label="Main">
   <div class="brand">
     <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="#fff" fill-opacity=".14"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="#fff" stroke-width="1.7"/></svg>
     <span class="name">briefd</span>
   </div>
-  <div class="navlabel">Menu</div>
   <nav class="sidenav" aria-label="Views">
     <a class="tab" href="#overview" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Overview</span></a>
     <a class="tab" href="#graph" data-view="graph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7.1l7.4.8M7 8.3l1.4 7.3M16.4 10l-5.6 6.2"/></svg><span>Graph</span></a>
@@ -392,16 +421,7 @@
     <a class="tab" href="#activity" data-view="activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg><span>Activity</span></a>
     <a class="tab" href="#instance" data-view="instance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg><span>Instance</span></a>
   </nav>
-  <div class="sidefoot">
-    <span class="ver" id="version"></span>
-    <a href="/metrics">Prometheus metrics</a>
-    <a href="https://github.com/ismailperim/briefd#readme" rel="noopener">Documentation</a>
-  </div>
-</aside>
-<main>
-  <header class="topbar">
-    <div class="titles"><h1 id="pageTitle">Overview</h1><p id="pageSub">What your agents are reading, and what needs attention.</p></div>
-    <div class="status">
+  <div class="status navstatus">
       <span class="pill" id="uptime" title="Process uptime">up —</span>
       <span class="pill" id="sync" title="Source synchronisation"><span class="dot"></span><span>sync —</span></span>
       <span class="pill" id="conn" role="status" aria-live="polite" aria-atomic="true"><span class="dot"></span><span>connecting…</span></span>
@@ -409,7 +429,16 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
       </button>
     </div>
-  </header>
+  <div class="sidefoot">
+    <span class="ver" id="version"></span>
+    <a href="/metrics">Prometheus metrics</a>
+    <a href="https://github.com/ismailperim/briefd#readme" rel="noopener">Documentation</a>
+  </div>
+</header>
+<main>
+  <div class="topbar">
+    <div class="titles"><h1 id="pageTitle">Overview</h1><p id="pageSub">What your agents are reading, and what needs attention.</p></div>
+  </div>
 
   <section class="panel notice" id="auth" aria-labelledby="auth-h">
     <div class="body">
