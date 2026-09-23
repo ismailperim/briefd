@@ -128,9 +128,19 @@ func (s *Store) DocumentPaths(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
-// DocumentsWithoutLinkScan lists documents indexed before links existed.
+// LinksVersion identifies the link-extraction rules. Documents stored with
+// an older value are re-parsed on the next index run even when their
+// content is unchanged. Bump it whenever ingest.ExtractLinks or Parse start
+// finding links they did not find before.
+//
+//	1 — wikilinks and relative Markdown links in the body
+//	2 — also wikilinks in front-matter properties (related:, up:, …)
+const LinksVersion = 2
+
+// DocumentsWithoutLinkScan lists documents whose links were extracted by
+// older rules (or not at all).
 func (s *Store) DocumentsWithoutLinkScan(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT path FROM documents WHERE links_scanned = 0`)
+	rows, err := s.db.QueryContext(ctx, `SELECT path FROM documents WHERE links_scanned < ?`, LinksVersion)
 	if err != nil {
 		return nil, fmt.Errorf("listing unscanned documents: %w", err)
 	}

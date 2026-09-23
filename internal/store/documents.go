@@ -53,15 +53,15 @@ func (s *Store) UpsertDocument(ctx context.Context, doc *ingest.Document, commit
 	var docID int64
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO documents (path, scope, title, tags, refs, front_matter, content_hash, updated_commit, indexed_at, links_scanned)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
 			scope = excluded.scope, title = excluded.title, tags = excluded.tags,
 			refs = excluded.refs, front_matter = excluded.front_matter,
 			content_hash = excluded.content_hash, updated_commit = excluded.updated_commit,
-			indexed_at = excluded.indexed_at, links_scanned = 1
+			indexed_at = excluded.indexed_at, links_scanned = excluded.links_scanned
 		RETURNING id`,
 		doc.Path, doc.Scope, doc.Title, string(tags), string(refs), doc.FrontMatter,
-		doc.ContentHash, commit, time.Now().UTC().Format(time.RFC3339),
+		doc.ContentHash, commit, time.Now().UTC().Format(time.RFC3339), LinksVersion,
 	).Scan(&docID)
 	if err != nil {
 		return fmt.Errorf("upserting %s: %w", doc.Path, err)
