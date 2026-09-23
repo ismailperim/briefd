@@ -291,22 +291,116 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
+
+  /* ---- Product skin: sidebar shell, white cards, soft icon badges ---- */
+  :root, :root[data-theme="light"] {
+    --bg: #f3f4f8; --panel: #ffffff; --panel-2: #f8f9fb; --line: #e9ebf0; --line-strong: #d7dbe3;
+    --text: #212529; --text-2: #495057; --muted: #878a99;
+    --accent: #3d4f9f; --accent-2: #5468c2; --accent-soft: #e2e6f5; --on-accent: #ffffff;
+    --ok: #0ab39c; --ok-soft: #daf4f0; --warn: #d9942a; --warn-soft: #fdf1dc; --err: #f06548; --err-soft: #fde8e4; --info: #299cdb;
+    --stamp: #f06548; --stamp-soft: #fde8e4; --chip: #eff1f5; --ring: #3d4f9f;
+    --sc-domain: #4b6cd6; --sc-conventions: #0ab39c; --sc-projects: #e0a13a;
+    --side: #2a3462; --side-2: #333e72; --side-text: #abb3d6; --side-active: #ffffff;
+    --r: 8px; --r-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #1a1d21; --panel: #212529; --panel-2: #262a2f; --line: #2d3238; --line-strong: #393f46;
+    --text: #ced4da; --text-2: #adb5bd; --muted: #878a99; --accent: #7d8fe0; --accent-2: #7d8fe0; --accent-soft: #2a3150; --on-accent: #10131a;
+    --ok: #2fcbb4; --err: #f5826b; --stamp: #f5826b; --chip: #2a2f35; --ring: #7d8fe0;
+    --side: #1f2238; --side-2: #282c48; --side-text: #9aa1c4;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #1a1d21; --panel: #212529; --panel-2: #262a2f; --line: #2d3238; --line-strong: #393f46;
+    --text: #ced4da; --text-2: #adb5bd; --muted: #878a99; --accent: #7d8fe0; --accent-2: #7d8fe0; --accent-soft: #2a3150; --on-accent: #10131a;
+    --ok: #2fcbb4; --err: #f5826b; --stamp: #f5826b; --chip: #2a2f35; --ring: #7d8fe0;
+    --side: #1f2238; --side-2: #282c48; --side-text: #9aa1c4;
+  }
+  body { font-size: 14.5px; }
+  .shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+  .side { position: sticky; top: 0; height: 100vh; background: var(--side); color: var(--side-text); display: flex; flex-direction: column; padding: 18px 12px; }
+  .side .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px; }
+  .side .brand svg { width: 28px; height: 28px; }
+  .side .brand .name { color: #fff; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .side .brand .ver { display: inline; color: var(--side-text); font-family: var(--mono); font-size: 11px; margin-left: auto; }
+  .navlabel { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--side-text); opacity: .7; padding: 0 10px 8px; }
+  .sidenav { display: flex; flex-direction: column; gap: 2px; margin: 0; background: none; padding: 0; }
+  .sidenav .tab { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 6px; border: 0; color: var(--side-text); font-weight: 500; font-size: 14.5px; min-height: 42px; }
+  .sidenav .tab svg { width: 18px; height: 18px; flex: none; }
+  .sidenav .tab:hover { color: #fff; background: var(--side-2); text-decoration: none; }
+  .sidenav .tab.active { color: var(--side-active); background: var(--side-2); border: 0; }
+  .sidenav .tab .count { margin-left: auto; background: var(--err); }
+  .sidefoot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding: 12px 10px 0; border-top: 1px solid var(--side-2); }
+  .sidefoot a { color: var(--side-text); font-size: 12.5px; }
+  main { max-width: none; margin: 0; padding: 0 28px 32px; min-width: 0; }
+  .topbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0 -28px 24px; padding: 18px 28px; background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 1px 2px rgba(56,65,74,.06); }
+  .topbar .titles { margin-right: auto; }
+  .topbar h1 { margin: 0; font-size: 18px; font-weight: 650; }
+  .topbar p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+  header.topbar { border-bottom: 1px solid var(--line); }
+  .panel { background: var(--panel); border: 0; border-radius: var(--r); box-shadow: 0 1px 2px rgba(56,65,74,.12); }
+  .panel > .head { padding: 14px 20px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .panel h2 { font-size: 15px; font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; font-family: var(--sans); }
+  .grid { gap: 20px; margin-bottom: 20px; }
+  td, th { padding: 10px 20px; }
+  th { background: var(--panel-2); color: var(--muted); font-weight: 600; }
+  .circ, .att { padding: 4px 20px 14px; }
+  .circ .doc, .circ .when { font-family: var(--sans); }
+  .att li b { font-family: var(--sans); }
+  /* KPI cards with a soft icon badge */
+  .tiles { gap: 20px; background: transparent; border: 0; overflow: visible; margin-bottom: 20px; }
+  .tiles .tile { position: relative; background: var(--panel); border: 0; border-radius: var(--r); margin: 0; min-height: 118px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(56,65,74,.12); }
+  .tile .label { order: 0; text-transform: uppercase; letter-spacing: .04em; font-size: 12px; font-weight: 600; color: var(--muted); padding-right: 52px; }
+  .tile .label svg { display: block; position: absolute; right: 20px; bottom: 18px; width: 44px; height: 44px; padding: 11px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
+  .tiles .tile:nth-child(2) .label svg { background: var(--ok-soft); color: var(--ok); }
+  .tiles .tile:nth-child(3) .label svg { background: var(--warn-soft); color: var(--warn); }
+  .tiles .tile:nth-child(4) .label svg { background: var(--ok-soft); color: var(--ok); }
+  .tiles .tile:nth-child(5) .label svg { background: var(--chip); color: var(--text-2); }
+  .tile .value { order: 1; margin-top: 10px; font-family: var(--sans); font-size: 26px; font-weight: 650; color: var(--text); padding-right: 56px; }
+  .tile .value.green { color: var(--ok); }
+  .tile svg.spark { order: 2; width: calc(100% - 60px); }
+  .tile .sub { order: 3; font-family: var(--sans); color: var(--muted); padding-right: 56px; }
+  .btn { background: var(--accent); color: var(--on-accent); border-radius: var(--r-sm); }
+  input[type=text], input[type=password], input[type=number], input[type=search] { border-color: var(--line-strong); background: var(--panel); border-radius: var(--r-sm); }
+  .pill { font-family: var(--sans); }
+  .sidefoot .ver { display: block; font-family: var(--mono); font-size: 11px; color: var(--side-text); opacity: .75; overflow-wrap: anywhere; }
+  th.num { font-family: var(--sans); }
+  #view-maintenance .grid.split { grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1200px) { #view-maintenance .grid.split { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  #view-maintenance .q.narrow { max-width: 240px; }
+  @media (max-width: 560px) { .tile .label svg { display: none; } .tile .label, .tile .value, .tile .sub { padding-right: 0; } .tile svg.spark { width: 100%; } .tiles .tile { min-height: 0; } }
+  @media (max-width: 899px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; height: auto; padding: 10px 12px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .side .brand { padding: 0 8px 0 4px; } .side .brand .ver, .navlabel, .sidefoot { display: none; }
+    .sidenav { flex-direction: row; flex-wrap: wrap; } .sidenav .tab { padding: 8px 10px; } .sidenav .tab span:not(.count) { display: none; }
+    main { padding: 0 14px 24px; } .topbar { margin: 0 -14px 16px; padding: 14px; }
+  }
 </style>
 </head>
 <body>
+<div class="shell">
+<aside class="side" aria-label="Main">
+  <div class="brand">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="#fff" fill-opacity=".14"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="#fff" stroke-width="1.7"/></svg>
+    <span class="name">briefd</span>
+  </div>
+  <div class="navlabel">Menu</div>
+  <nav class="sidenav" aria-label="Views">
+    <a class="tab" href="#overview" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Overview</span></a>
+    <a class="tab" href="#graph" data-view="graph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7.1l7.4.8M7 8.3l1.4 7.3M16.4 10l-5.6 6.2"/></svg><span>Graph</span></a>
+    <a class="tab" href="#maintenance" data-view="maintenance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span>Maintenance</span><span class="count" id="attCount" hidden></span></a>
+    <a class="tab" href="#activity" data-view="activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg><span>Activity</span></a>
+    <a class="tab" href="#instance" data-view="instance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg><span>Instance</span></a>
+  </nav>
+  <div class="sidefoot">
+    <span class="ver" id="version"></span>
+    <a href="/metrics">Prometheus metrics</a>
+    <a href="https://github.com/ismailperim/briefd#readme" rel="noopener">Documentation</a>
+  </div>
+</aside>
 <main>
-  <header>
-    <div class="brand">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="var(--accent)"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="var(--on-accent)" stroke-width="1.7"/></svg>
-      <h1>briefd <span class="ver" id="version"></span></h1>
-    </div>
-    <nav class="tabs" aria-label="Views">
-      <a class="tab" href="#overview" data-view="overview">Overview</a>
-      <a class="tab" href="#graph" data-view="graph">Graph</a>
-      <a class="tab" href="#maintenance" data-view="maintenance">Maintenance <span class="count" id="attCount" hidden></span></a>
-      <a class="tab" href="#activity" data-view="activity">Activity</a>
-      <a class="tab" href="#instance" data-view="instance">Instance</a>
-    </nav>
+  <header class="topbar">
+    <div class="titles"><h1 id="pageTitle">Overview</h1><p id="pageSub">What your agents are reading, and what needs attention.</p></div>
     <div class="status">
       <span class="pill" id="uptime" title="Process uptime">up —</span>
       <span class="pill" id="sync" title="Source synchronisation"><span class="dot"></span><span>sync —</span></span>
@@ -405,7 +499,6 @@
   </div>
 
   <div id="view-maintenance" hidden>
-    <p class="lede">What the knowledge base is missing or getting wrong. Work through it top to bottom.</p>
   <div class="grid split">
     <section class="panel" aria-labelledby="h-gaps">
       <div class="head"><h2 id="h-gaps">Knowledge gaps</h2><span class="hint">last 7 days · questions the knowledge base did not answer</span></div>
@@ -545,6 +638,7 @@
     </div>
   </section>
 </main>
+</div>
 
 <script>
 (() => {
@@ -940,7 +1034,15 @@
     $('view-activity').hidden = v !== 'activity';
     $('view-graph').hidden = v !== 'graph';
     $('view-instance').hidden = v !== 'instance';
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
+    document.querySelectorAll('.tab').forEach((t) => { const on = t.dataset.view === v; t.classList.toggle('active', on); if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); });
+    const titles = {
+      overview: ['Overview', 'What your agents are reading, and what needs attention.'],
+      graph: ['Knowledge graph', 'Documents, the links between them, and what was served in the last 24 hours.'],
+      maintenance: ['Maintenance', 'What the knowledge base is missing or getting wrong. Work through it top to bottom.'],
+      activity: ['Activity', 'Requests, latency and index size.'],
+      instance: ['Instance', 'How this server is configured. Secrets are never shown.'],
+    };
+    $('pageTitle').textContent = titles[v][0]; $('pageSub').textContent = titles[v][1];
   }
   window.addEventListener('hashchange', showView);
   showView();
