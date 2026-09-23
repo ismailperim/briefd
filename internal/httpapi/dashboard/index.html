@@ -405,13 +405,39 @@
     #bigGraph { height: 62vh; min-height: 340px; }
     main { padding: 0 14px 24px; } .topbar { padding: 16px 0 8px; }
   }
+
+  /* ---- White two-row header on a soft grey page ---- */
+  :root, :root[data-theme="light"] { --bg: #f3f3f9; }
+  .side { --gutter: max(28px, calc((100vw - 1440px) / 2 + 28px)); position: sticky; top: 0; z-index: 10; background: var(--panel); color: var(--text); flex-wrap: wrap; gap: 0; padding: 0 var(--gutter); min-height: 0; box-shadow: 0 1px 2px rgba(56,65,74,.08); }
+  header.side { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; align-items: center; }
+  .side .brand { order: 0; padding: 0; min-height: 64px; }
+  .side .brand .name { color: var(--text); font-size: 20px; }
+  .navstatus { order: 1; margin-left: auto; }
+  .navstatus .pill { color: var(--muted); }
+  .navstatus .pill.ok { color: var(--ok); } .navstatus .pill.ok .dot { background: var(--ok); }
+  .navstatus .pill.warn { color: var(--warn); } .navstatus .pill.err { color: var(--err); }
+  .navstatus .iconbtn { border-color: var(--line); color: var(--text-2); background: var(--panel); }
+  .navstatus .iconbtn:hover { background: var(--chip); }
+  .sidenav { order: 2; width: 100%; gap: 6px; border-top: 1px solid var(--line); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); width: calc(100% + 2 * var(--gutter)); }
+  .sidenav .tab { color: var(--text-2); padding: 14px 12px; min-height: 0; border-radius: 0; border-bottom: 2px solid transparent; font-weight: 500; }
+  .sidenav .tab svg { width: 17px; height: 17px; color: var(--muted); }
+  .sidenav .tab:hover { color: var(--accent); background: transparent; }
+  .sidenav .tab:hover svg, .sidenav .tab.active svg { color: var(--accent); }
+  .sidenav .tab.active { color: var(--accent); background: transparent; border: 0; border-bottom: 2px solid var(--accent); }
+  .topbar { padding: 22px 0 10px; }
+  .topbar h1 { font-size: 17px; font-weight: 600; }
+  @media (max-width: 899px) {
+    .side { --gutter: 14px; padding: 0 14px; }
+    .side .brand { min-height: 54px; }
+    .sidenav .tab { padding: 10px 12px; }
+  }
 </style>
 </head>
 <body>
 <div class="shell">
 <header class="side" aria-label="Main">
   <div class="brand">
-    <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="#fff" fill-opacity=".14"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="#fff" stroke-width="1.7"/></svg>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="var(--on-accent)" stroke-width="1.7"/></svg>
     <span class="name">briefd</span>
   </div>
   <nav class="sidenav" aria-label="Views">
