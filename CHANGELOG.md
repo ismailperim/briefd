@@ -76,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cloning from Azure DevOps (cloud and Server) failed with "object not
+  found": go-git does not advertise `multi_ack` by default and Azure DevOps
+  serves no pack without it. briefd now enables it for Azure DevOps URLs,
+  as go-git's own Azure DevOps example does.
 - Container image: `BRIEFD_LISTEN` is no longer baked into the image, so a
   platform-provided `PORT` (Glama, Render, Fly, …) is honored as documented.
 - `briefd serve` starts BM25-only, with an error in the log, when the local

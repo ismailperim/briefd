@@ -113,7 +113,7 @@ container. briefd sends the token as the password with username `briefd`
 |---|---|---|---|
 | GitHub | `https://github.com/org/knowledge.git` | fine-grained PAT, *Contents: read* (write for proposals) | `forge.type: github` opens pull requests |
 | GitLab | `https://gitlab.example.com/team/knowledge.git` | project/group token, `read_repository` (+ `write_repository`); `forge.token` needs the `api` scope | `forge.type: gitlab` opens merge requests (`forge.api_url` defaults to `https://<git host>/api/v4`) |
-| Azure DevOps | `https://dev.azure.com/org/project/_git/knowledge` or `https://ado.example.com/collection/project/_git/knowledge` | PAT, *Code: Read* (+ Write) | branch is pushed; open the PR yourself |
+| Azure DevOps | `https://dev.azure.com/org/project/_git/knowledge` or `https://ado.example.com/collection/project/_git/knowledge` | PAT, *Code: Read* (+ Write), or an SSH key | branch is pushed; open the PR yourself. Azure DevOps needs the `multi_ack` capability, which briefd enables automatically for `/_git/` URLs |
 | Bitbucket | `https://bitbucket.org/team/knowledge.git` | app password / access token | branch is pushed |
 | Any SSH remote | `git@host:team/knowledge.git` | `git.ssh_key` (a key file) or the agent | as above |
 

@@ -242,3 +242,18 @@ func TestBareCloneChangesSince(t *testing.T) {
 		t.Errorf("Dirs depth 1 = %v", dirs)
 	}
 }
+
+func TestIsAzureDevOps(t *testing.T) {
+	for u, want := range map[string]bool{
+		"https://dev.azure.com/org/project/_git/knowledge":           true,
+		"git@ssh.dev.azure.com:v3/org/project/knowledge":             true,
+		"https://org.visualstudio.com/project/_git/knowledge":        true,
+		"ssh://ado.example.com:22/Collection/Project/_git/knowledge": true,
+		"https://github.com/org/knowledge.git":                       false,
+		"git@gitlab.example.com:team/knowledge.git":                  false,
+	} {
+		if got := isAzureDevOps(u); got != want {
+			t.Errorf("isAzureDevOps(%q) = %v, want %v", u, got, want)
+		}
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -48,6 +49,25 @@ type Config struct {
 	// Bare clones without a worktree: history only, for code repositories
 	// whose files briefd never reads.
 	Bare bool
+}
+
+// isAzureDevOps reports whether u points at Azure DevOps (cloud or Server):
+// dev.azure.com, *.visualstudio.com, or the "/_git/" path every Azure
+// DevOps repository URL contains.
+func isAzureDevOps(u string) bool {
+	return strings.Contains(u, "/_git/") || strings.Contains(u, "dev.azure.com") || strings.Contains(u, ".visualstudio.com")
+}
+
+// allowAzureDevOps lets go-git negotiate with Azure DevOps. Azure DevOps
+// only serves packs to clients that support multi_ack, which go-git leaves
+// out of its advertised capabilities by default; without it a clone ends
+// with "object not found". go-git's own Azure DevOps example lifts the
+// restriction the same way. The setting is process-wide and only applied
+// when an Azure DevOps remote is used.
+func allowAzureDevOps(u string) {
+	if isAzureDevOps(u) {
+		transport.UnsupportedCapabilities = []capability.Capability{capability.ThinPack}
+	}
 }
 
 // IsGitURL reports whether source names a git remote rather than a directory.
@@ -80,6 +100,7 @@ func Open(ctx context.Context, cfg Config, logger *slog.Logger) (*Repo, error) {
 	if err != nil {
 		return nil, err
 	}
+	allowAzureDevOps(cfg.URL)
 	r := &Repo{cfg: cfg, auth: auth, logger: logger}
 
 	repo, err := git.PlainOpen(cfg.Dir)
@@ -142,6 +163,7 @@ func OpenLocal(dir string, cfg Config, logger *slog.Logger) (*Repo, error) {
 	if remote, err := repo.Remote("origin"); err == nil && len(remote.Config().URLs) > 0 {
 		cfg.URL = remote.Config().URLs[0]
 	}
+	allowAzureDevOps(cfg.URL)
 	auth, err := authFor(cfg)
 	if err != nil {
 		return nil, err
