@@ -89,7 +89,7 @@ func New(d Deps) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_document",
-		Description: "Return one knowledge document in full (title, tags, Markdown, last-updated date) by the doc_path given in search or bundle results. Use it when a section is not enough, or before proposing an update to that document. Read-only; not-found for unknown paths, forbidden outside the requested scopes.",
+		Description: "Return one knowledge document in full (title, tags, Markdown, last-updated date, and the documents it links to and is linked from) by the doc_path given in search or bundle results. Use it when a section is not enough, to follow a link, or before proposing an update. Read-only; not-found for unknown paths, forbidden outside the requested scopes.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.getDocument)
 
@@ -393,6 +393,10 @@ type GetDocumentOutput struct {
 	Tags    []string `json:"tags"`
 	Content string   `json:"content"`
 	Tokens  int      `json:"tokens"`
+	// Links are documents this one links to; Backlinks link to it. Both
+	// are doc_paths usable with get_document.
+	Links     []string `json:"links,omitempty"`
+	Backlinks []string `json:"backlinks,omitempty"`
 }
 
 func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetDocumentInput) (_ *mcp.CallToolResult, out GetDocumentOutput, err error) {
@@ -418,7 +422,22 @@ func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetD
 		Path: doc.Path, Scope: doc.Scope, Title: doc.Title, Tags: doc.Tags,
 		Content: content, Tokens: tokenizer.Count(content),
 	}
-	text := fmt.Sprintf("# %s\n\nSource: %s (%s)\n\n%s", doc.Title, doc.Path, doc.Scope, content)
+	if links, backlinks, err := t.deps.Store.LinksOf(ctx, doc.Path); err == nil {
+		for _, l := range links {
+			out.Links = append(out.Links, l.Path)
+		}
+		for _, l := range backlinks {
+			out.Backlinks = append(out.Backlinks, l.Path)
+		}
+	}
+	text := fmt.Sprintf("# %s\n\nSource: %s (%s)", doc.Title, doc.Path, doc.Scope)
+	if len(out.Links) > 0 {
+		text += "\nLinks to: " + strings.Join(out.Links, ", ")
+	}
+	if len(out.Backlinks) > 0 {
+		text += "\nLinked from: " + strings.Join(out.Backlinks, ", ")
+	}
+	text += "\n\n" + content
 	return textResult(text), out, nil
 }
 

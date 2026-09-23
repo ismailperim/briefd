@@ -25,6 +25,9 @@ type Document struct {
 	// ContentHash is a SHA-256 of the file as read from disk.
 	ContentHash string
 	Chunks      []Chunk
+	// Links are the document's wikilinks and relative Markdown links, as
+	// written; the indexer resolves them against the whole repository.
+	Links []Link
 }
 
 // Parse builds a Document from file contents. relPath must already be
@@ -48,6 +51,7 @@ func Parse(relPath string, src []byte) (*Document, error) {
 		FrontMatter: raw,
 		ContentHash: hashHex(src),
 		Chunks:      chunks,
+		Links:       ExtractLinks(body),
 	}, nil
 }
 

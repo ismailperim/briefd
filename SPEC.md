@@ -54,6 +54,11 @@ refs: ["services/payment/**"]  # code paths this doc governs; commits to them af
 ---
 ```
 
+Documents may link to each other with Obsidian-style `[[wikilinks]]` or relative
+Markdown links; briefd resolves them (by path, or by file name anywhere in the
+repository), exposes links and backlinks on `get_document`, and reports orphans
+and broken links on the dashboard.
+
 ## 3. Interfaces
 
 ### 3.1 MCP tools (primary interface, streamable HTTP)

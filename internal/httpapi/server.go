@@ -103,6 +103,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/proposals", auth(http.HandlerFunc(a.listProposals)))
 	mux.Handle("GET /api/gaps", auth(http.HandlerFunc(a.gaps)))
 	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
+	mux.Handle("GET /api/graph", auth(http.HandlerFunc(a.graph)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
 	}
@@ -406,6 +407,17 @@ func (a *api) gaps(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// graph returns the document link graph with orphans and broken links.
+func (a *api) graph(w http.ResponseWriter, r *http.Request) {
+	g, err := a.deps.Store.LinkGraph(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "graph_failed", err.Error())
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, g)
+}
+
 // coverage lists, per code repository, the directories no document's refs
 // claim — the knowledge base's blind spots (ADR-0008).
 func (a *api) coverage(w http.ResponseWriter, r *http.Request) {
@@ -495,6 +507,16 @@ func (a *api) document(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "scope_mismatch", "document is outside the requested scopes")
 		return
 	}
+	links, backlinks, err := a.deps.Store.LinksOf(r.Context(), doc.Path)
+	if err != nil {
+		a.deps.Logger.Error("links failed", "path", path, "err", err)
+	}
+	if links == nil {
+		links = []store.LinkRef{}
+	}
+	if backlinks == nil {
+		backlinks = []store.LinkRef{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"path":       doc.Path,
 		"scope":      doc.Scope,
@@ -503,6 +525,8 @@ func (a *api) document(w http.ResponseWriter, r *http.Request) {
 		"content":    content,
 		"indexed_at": doc.IndexedAt,
 		"updated_at": nullableTime(doc.UpdatedAt),
+		"links":      links,
+		"backlinks":  backlinks,
 	})
 }
 

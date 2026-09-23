@@ -210,6 +210,16 @@ refs: ["services/payment/**"]  # code paths this doc governs
 [`testdata/knowledge/`](testdata/knowledge/) is a complete example (a fictional payments
 platform) and doubles as the evaluation corpus.
 
+### Obsidian vaults and links
+
+A knowledge repository can be an Obsidian vault. briefd reads `[[wikilinks]]` (including
+`[[note|alias]]` and `[[note#heading]]`) and relative Markdown links, resolves them the way
+Obsidian does (by path, or by file name anywhere in the repository), and builds a link graph:
+the dashboard draws it, `get_document` returns each document's links and backlinks so an agent
+can follow them, and orphans (nothing links here) and broken links (the target does not exist)
+are listed as maintenance signals next to gaps and coverage. Folder scopes still apply —
+`domain/`, `conventions/`, `projects/<name>/` — so keep the vault's top level in that shape.
+
 ## Running it for real
 
 ```sh

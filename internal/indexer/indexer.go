@@ -70,6 +70,11 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 	if err != nil {
 		return Stats{}, err
 	}
+	// Documents indexed before links were tracked are re-parsed once.
+	unscanned, err := st.DocumentsWithoutLinkScan(ctx)
+	if err != nil {
+		return Stats{}, err
+	}
 
 	var stats Stats
 	present := make(map[string]bool, len(files))
@@ -87,7 +92,7 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		if err != nil {
 			return stats, err
 		}
-		if !opts.Force && known[f.RelPath] == doc.ContentHash {
+		if !opts.Force && known[f.RelPath] == doc.ContentHash && !unscanned[f.RelPath] {
 			stats.Skipped++
 			continue
 		}
@@ -118,6 +123,11 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 
 	if err := resolveAges(ctx, st, opts, changed, abs); err != nil {
 		return stats, err
+	}
+	if stats.Indexed > 0 || stats.Deleted > 0 {
+		if err := st.ResolveLinks(ctx); err != nil {
+			return stats, err
+		}
 	}
 
 	if opts.Embedder != nil {

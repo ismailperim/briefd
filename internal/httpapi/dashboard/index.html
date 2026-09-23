@@ -140,6 +140,11 @@
   .badge.ok { background: var(--ok-soft); color: var(--ok); }
   .badge.err { background: var(--err-soft); color: var(--err); }
   .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  #graph { display: block; background: var(--panel); }
+  #graph line { stroke: var(--line-strong); stroke-width: 1; }
+  #graph circle { cursor: pointer; stroke: var(--panel); stroke-width: 1.5; }
+  #graph text { font: 10px var(--sans); fill: var(--muted); pointer-events: none; }
+  #graph .empty-note { font: 13px var(--sans); fill: var(--muted); }
   .badge svg { width: 12px; height: 12px; }
 
   /* Empty states */
@@ -258,6 +263,24 @@
         <table>
           <thead><tr><th>Question</th><th>Scopes</th><th class="num">Times</th><th class="num">Margin</th></tr></thead>
           <tbody id="lowconf"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid split">
+    <section class="panel" aria-labelledby="h-graph">
+      <div class="head"><h2 id="h-graph">Knowledge graph</h2><span class="hint" id="graph-hint">documents and the links between them</span></div>
+      <div class="body flush">
+        <svg id="graph" viewBox="0 0 600 360" width="100%" height="360" role="img" aria-label="Document link graph"></svg>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="h-links">
+      <div class="head"><h2 id="h-links">Orphans and broken links</h2><span class="hint">nothing links here · targets that do not exist</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Document</th><th>Issue</th></tr></thead>
+          <tbody id="links"></tbody>
         </table>
       </div>
     </section>
@@ -595,6 +618,56 @@
       `<td class="num mono" title="top ${x.top_score.toFixed(3)}">${x.margin.toFixed(3)}</td>`)).join('')
       : `<tr><td colspan="4" class="dim">${g.logged ? 'No answered questions yet' : 'No queries logged yet'}</td></tr>`;
   }
+  // Force-directed layout, computed once per graph change. Small
+  // repositories (tens to a few hundred documents) are what this is for;
+  // beyond ~400 nodes only edges of linked documents are drawn.
+  let graphKey = '';
+  const scopeColor = (scope) => scope === 'domain' ? '#2563eb' : scope === 'conventions' ? '#16a34a' : '#d97706';
+  function renderGraph(g) {
+    const key = JSON.stringify([g.nodes.map((n) => n.path), g.edges]);
+    const svg = $('graph');
+    $('graph-hint').textContent = `${num(g.nodes.length)} documents · ${num(g.links)} links · ${num(g.orphans.length)} orphans · ${num(g.broken.length)} broken`;
+    if (key === graphKey) return;
+    graphKey = key;
+    const W = 600, H = 360;
+    if (!g.edges.length) {
+      svg.innerHTML = `<text class="empty-note" x="24" y="40">No links between documents yet. Obsidian-style [[wikilinks]] and relative Markdown links are picked up on the next sync.</text>`;
+      return;
+    }
+    const idx = new Map(g.nodes.map((n, i) => [n.path, i]));
+    const nodes = g.nodes.map((n, i) => ({ ...n, x: W / 2 + Math.cos(i) * 120, y: H / 2 + Math.sin(i * 1.7) * 90, vx: 0, vy: 0 }));
+    const edges = g.edges.map((e) => [idx.get(e.from), idx.get(e.to)]).filter(([a, b]) => a !== undefined && b !== undefined);
+    const linked = new Set(edges.flat());
+    const drawn = nodes.length > 400 ? nodes.filter((_, i) => linked.has(i)) : nodes;
+    for (let it = 0; it < 220; it++) {
+      const k = it < 60 ? 0.9 : 0.5;
+      for (const a of drawn) { a.fx = 0; a.fy = 0; }
+      for (let i = 0; i < drawn.length; i++) for (let j = i + 1; j < drawn.length; j++) {
+        const a = drawn[i], b = drawn[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01, d = Math.sqrt(d2);
+        const f = 2600 / d2; dx /= d; dy /= d; a.fx += dx * f; a.fy += dy * f; b.fx -= dx * f; b.fy -= dy * f;
+      }
+      for (const [i, j] of edges) {
+        const a = nodes[i], b = nodes[j]; const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+        const f = (d - 85) * 0.02; a.fx += dx / d * f; a.fy += dy / d * f; b.fx -= dx / d * f; b.fy -= dy / d * f;
+      }
+      for (const a of drawn) {
+        a.fx += (W / 2 - a.x) * 0.008; a.fy += (H / 2 - a.y) * 0.008;
+        a.vx = (a.vx + a.fx) * k; a.vy = (a.vy + a.fy) * k;
+        a.x = Math.max(14, Math.min(W - 14, a.x + a.vx)); a.y = Math.max(14, Math.min(H - 14, a.y + a.vy));
+      }
+    }
+    const r = (n) => 4 + Math.min(8, Math.sqrt(n.in + n.out) * 2);
+    const labelled = drawn.length <= 45 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out)).slice(0, 20);
+    const label = (n) => { const parts = n.path.replace(/\.md$/, '').split('/'); const last = parts[parts.length - 1]; return last.toLowerCase() === 'readme' && parts.length > 1 ? parts[parts.length - 2] : last; };
+    svg.innerHTML = edges.map(([i, j]) => `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}"/>`).join('')
+      + drawn.map((n) => `<circle class="node" data-q="${esc(n.title)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r(n)}" fill="${scopeColor(n.scope)}" tabindex="0"><title>${esc(n.path)} · ${n.in} in / ${n.out} out</title></circle>`).join('')
+      + labelled.map((n) => `<text x="${(n.x + r(n) + 3).toFixed(1)}" y="${(n.y + 3).toFixed(1)}">${esc(label(n))}</text>`).join('');
+  }
+  function renderLinks(g) {
+    const rows = g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan</span></td></tr>`)
+      .concat(g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: ${esc(b.target)}</span></td></tr>`));
+    $('links').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="dim">Every document is linked to and every link resolves</td></tr>';
+  }
   function renderCoverage(c) {
     $('coverage').innerHTML = !c.enabled ? '<tr><td colspan="3" class="dim">No <code>code.repos</code> configured</td></tr>' : c.repos.length ? c.repos.map((r) => `<tr>
       <td class="mono">${esc(r.repo)}</td><td class="num">${num(r.covered)} / ${num(r.dirs)}</td>
@@ -607,6 +680,7 @@
       pushHistory(s); render(s);
       try { renderGaps(await api('/api/gaps?limit=8')); } catch (_) {}
       try { renderCoverage(await api('/api/coverage')); } catch (_) {}
+      try { const g = await api('/api/graph'); renderGraph(g); renderLinks(g); } catch (_) {}
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {
       if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }
@@ -652,6 +726,7 @@
     $('searchForm').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     runSearch(tr.dataset.q, tr.dataset.scopes, $('maxTok').value);
   };
+  $('graph').addEventListener('click', (ev) => { const n = ev.target.closest('circle.node'); if (n) { $('q').value = n.dataset.q; runSearch(n.dataset.q, $('scopesIn').value, $('maxTok').value); } });
   for (const id of ['recent', 'gaps', 'lowconf']) {
     $(id).addEventListener('click', (ev) => rerun(ev.target.closest('tr.clickable')));
     $(id).addEventListener('keydown', (ev) => { if (ev.key === 'Enter') rerun(ev.target.closest('tr.clickable')); });

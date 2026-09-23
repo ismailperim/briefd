@@ -23,7 +23,7 @@ func TestRunIncremental(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("domain/a.md", "# A\n\n## One\n\nalpha\n")
+	write("domain/a.md", "# A\n\n## One\n\nalpha, see [[b]] and [c](../conventions/c.md) and [[nowhere]]\n")
 	write("domain/b.md", "# B\n\n## Two\n\nbeta\n")
 	write("conventions/c.md", "# C\n\n## Three\n\ngamma\n")
 
@@ -39,6 +39,24 @@ func TestRunIncremental(t *testing.T) {
 	}
 	if stats.Scanned != 3 || stats.Indexed != 3 || stats.Skipped != 0 || stats.Deleted != 0 || stats.Chunks != 3 {
 		t.Fatalf("first run stats = %+v", stats)
+	}
+
+	// Links are resolved across the repository: a → b, a → c; one broken.
+	g, err := st.LinkGraph(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Edges) != 2 || g.Edges[0].To != "conventions/c.md" || g.Edges[1].To != "domain/b.md" {
+		t.Errorf("edges = %+v", g.Edges)
+	}
+	if len(g.Broken) != 1 || g.Broken[0].Target != "nowhere" {
+		t.Errorf("broken = %+v", g.Broken)
+	}
+	if len(g.Orphans) != 1 || g.Orphans[0].Path != "domain/a.md" {
+		t.Errorf("orphans = %+v", g.Orphans)
+	}
+	if out, back, _ := st.LinksOf(ctx, "domain/b.md"); len(out) != 0 || len(back) != 1 || back[0].Path != "domain/a.md" {
+		t.Errorf("links of b: out=%+v back=%+v", out, back)
 	}
 
 	// Without a git resolver, document ages come from file mtimes.
@@ -71,13 +89,16 @@ func TestRunIncremental(t *testing.T) {
 	}
 
 	// One edit, one delete.
-	write("domain/a.md", "# A\n\n## One\n\nalpha changed\n")
+	write("domain/a.md", "# A\n\n## One\n\nalpha changed, see [[b]] and [c](../conventions/c.md) and [[nowhere]]\n")
 	if err := os.Remove(filepath.Join(root, "domain", "b.md")); err != nil {
 		t.Fatal(err)
 	}
 	stats, err = Run(ctx, st, Options{Root: root, Commit: "c2"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if g, _ := st.LinkGraph(ctx); len(g.Edges) != 1 || len(g.Broken) != 2 {
+		t.Errorf("after deleting b: edges=%+v broken=%+v", g.Edges, g.Broken)
 	}
 	if stats.Indexed != 1 || stats.Skipped != 1 || stats.Deleted != 1 {
 		t.Fatalf("third run stats = %+v", stats)
