@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -150,4 +151,43 @@ func (s *Store) DeleteAllBundles(ctx context.Context) error {
 		return fmt.Errorf("clearing bundles: %w", err)
 	}
 	return nil
+}
+
+// ChunksByDoc returns every chunk of the given documents that lies in one
+// of the scopes, ordered by document path and position.
+func (s *Store) ChunksByDoc(ctx context.Context, docPaths, scopes []string) ([]ChunkHit, error) {
+	if len(docPaths) == 0 || len(scopes) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(docPaths)+len(scopes))
+	dp := make([]string, len(docPaths))
+	for i, p := range docPaths {
+		dp[i] = "?"
+		args = append(args, p)
+	}
+	sp := make([]string, len(scopes))
+	for i, sc := range scopes {
+		sp[i] = "?"
+		args = append(args, sc)
+	}
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT c.id, d.path, d.scope, c.title, c.heading_path, c.content, c.tokens, d.updated_at
+		FROM chunks c JOIN documents d ON d.id = c.doc_id
+		WHERE d.path IN (%s) AND d.scope IN (%s)
+		ORDER BY d.path, c.position`, strings.Join(dp, ","), strings.Join(sp, ",")), args...)
+	if err != nil {
+		return nil, fmt.Errorf("loading document chunks: %w", err)
+	}
+	defer rows.Close()
+	var out []ChunkHit
+	for rows.Next() {
+		var h ChunkHit
+		var updated string
+		if err := rows.Scan(&h.ChunkID, &h.DocPath, &h.Scope, &h.Title, &h.HeadingPath, &h.Content, &h.Tokens, &updated); err != nil {
+			return nil, fmt.Errorf("loading document chunks: %w", err)
+		}
+		h.UpdatedAt = parseTime(updated)
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }

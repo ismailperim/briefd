@@ -58,10 +58,10 @@ refs: ["services/payment/**"]  # code paths this doc governs; commits to them af
 
 ### 3.1 MCP tools (primary interface, streamable HTTP)
 
-1. `search_context(query, max_tokens?=2000, scopes?, top_k?=8)`
+1. `search_context(query, max_tokens?=2000, scopes?, top_k?=8, paths?)`
    → ranked chunks: `[{chunk_id, doc_path, heading, content, score, tokens}]`,
    total ≤ `max_tokens`.
-2. `compile_bundle(task_description, max_tokens?=2000, scopes?)`
+2. `compile_bundle(task_description, max_tokens?=2000, scopes?, paths?)` — `paths` are code paths the task touches; documents whose `refs` cover them lead (ADR-0008)
    → single assembled context block: deduplicated, ordered (domain → conventions →
    project), with per-chunk source attribution and `bundle_id`. Deterministic: same
    task + same knowledge state (repo commit hash) ⇒ byte-identical bundle (cacheable,

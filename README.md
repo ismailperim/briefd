@@ -171,8 +171,8 @@ when the agent runs on the machine that holds the checkout.
 
 | Tool | What it does |
 |---|---|
-| `compile_bundle(task_description, max_tokens?, scopes?)` | One deduplicated context block within the budget, ordered domain → conventions → project, with a source line per section and a `bundle_id`. Deterministic and cached. |
-| `search_context(query, max_tokens?, scopes?, top_k?)` | Ranked sections that fit the budget, for inspection. |
+| `compile_bundle(task_description, max_tokens?, scopes?, paths?)` | One deduplicated context block within the budget, ordered domain → conventions → project, with a source line per section and a `bundle_id`. Deterministic and cached. |
+| `search_context(query, max_tokens?, scopes?, top_k?, paths?)` | Ranked sections that fit the budget, for inspection. `paths` (code paths being edited) pull the documents whose `refs` cover them to the top. |
 | `get_document(doc_path, scopes?)` | One document in full. |
 | `list_scopes()` | Scopes with document/section counts. |
 | `propose_update(doc_path, change_description, new_content)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. |
@@ -292,6 +292,12 @@ The attribution line then reads `(updated 2026-03-01; code changed since: 3 comm
 2026-06-01)`, the dashboard lists the documents most behind, and `briefd_documents_behind_code`
 is exported. The agent reading a stale rule is often the right one to fix it with
 `propose_update`. Design in [ADR-0007](docs/adr/0007-code-drift-via-refs.md).
+
+The same `refs` work the other way round: pass `paths` (the files the task touches) to
+`compile_bundle` and the rules that govern them lead the bundle, and the dashboard's
+**Coverage** panel lists the directories of each code repository that no document claims —
+the knowledge base's blind spots ([ADR-0008](docs/adr/0008-code-linking-not-code-rag.md)).
+briefd does not index code itself; your agent's grep and LSP do that better.
 
 ## Retrieval quality
 

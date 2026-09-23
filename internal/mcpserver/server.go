@@ -166,6 +166,7 @@ type SearchContextInput struct {
 	MaxTokens int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the returned sections (default 2000, must be positive). The result never exceeds it; lower-ranked sections are omitted first."`
 	Scopes    []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to search, e.g. [\"domain\",\"conventions\",\"projects/ledger-service\"]. Default: domain and conventions. Use list_scopes to see the project scopes."`
 	TopK      int      `json:"top_k,omitempty" jsonschema:"Maximum number of sections to return before the token budget applies (default 8, server-capped)."`
+	Paths     []string `json:"paths,omitempty" jsonschema:"Repository-relative code paths you are working on (e.g. [\"services/payment/refund.go\"]). Documents whose refs cover them are pulled to the top."`
 }
 
 // SearchContextOutput is the structured search_context result.
@@ -203,7 +204,7 @@ func (t *tools) searchContext(ctx context.Context, req *mcp.CallToolRequest, in 
 		return nil, SearchContextOutput{}, errors.New("max_tokens and top_k must be positive")
 	}
 	res, err := t.deps.Searcher.Search(ctx, search.Query{
-		Text: in.Query, Scopes: in.Scopes, TopK: in.TopK, MaxTokens: in.MaxTokens,
+		Text: in.Query, Scopes: in.Scopes, TopK: in.TopK, MaxTokens: in.MaxTokens, Paths: in.Paths,
 	})
 	if err != nil {
 		return nil, SearchContextOutput{}, err
@@ -249,6 +250,7 @@ type CompileBundleInput struct {
 	TaskDescription string   `json:"task_description" jsonschema:"What you are about to do, in one or two sentences, in any language (e.g. 'add partial refunds to the merchant portal'). Required; a sentence retrieves better than keywords."`
 	MaxTokens       int      `json:"max_tokens,omitempty" jsonschema:"Token budget for the whole bundle including its header and source lines (default 2000, must be positive). Never exceeded."`
 	Scopes          []string `json:"scopes,omitempty" jsonschema:"Knowledge scopes to draw from, e.g. [\"domain\",\"conventions\",\"projects/ledger-service\"]. Default: domain and conventions. Add the project scope when working inside a project."`
+	Paths           []string `json:"paths,omitempty" jsonschema:"Repository-relative code paths the task touches (e.g. [\"services/payment/refund.go\"]). Rules whose refs cover them come first in the bundle."`
 }
 
 // CompileBundleOutput is the structured compile_bundle result.
@@ -273,7 +275,7 @@ func (t *tools) compileBundle(ctx context.Context, req *mcp.CallToolRequest, in 
 	if in.MaxTokens < 0 {
 		return nil, out, errors.New("max_tokens must be positive")
 	}
-	res, err := t.deps.Compiler.Compile(ctx, bundle.Request{Task: in.TaskDescription, Scopes: in.Scopes, MaxTokens: in.MaxTokens})
+	res, err := t.deps.Compiler.Compile(ctx, bundle.Request{Task: in.TaskDescription, Scopes: in.Scopes, MaxTokens: in.MaxTokens, Paths: in.Paths})
 	if err != nil {
 		return nil, out, err
 	}

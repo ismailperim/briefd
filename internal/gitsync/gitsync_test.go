@@ -234,4 +234,11 @@ func TestBareCloneChangesSince(t *testing.T) {
 	if changes, _, _ = repo.ChangesSince(ctx, cut, 0); len(changes) != 3 {
 		t.Errorf("after sync: %d changes, want 3", len(changes))
 	}
+	dirs, err := repo.Dirs(ctx, 2)
+	if err != nil || strings.Join(dirs, ",") != "services,services/payment" {
+		t.Errorf("Dirs = %v err=%v", dirs, err)
+	}
+	if dirs, _ := repo.Dirs(ctx, 1); strings.Join(dirs, ",") != "services" {
+		t.Errorf("Dirs depth 1 = %v", dirs)
+	}
 }

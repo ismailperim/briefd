@@ -26,4 +26,5 @@ Template:
 | [0004](0004-hybrid-fusion-tuning.md) | Hybrid fusion: AND-first BM25 and weighted RRF | accepted |
 | [0005](0005-git-access-via-go-git.md) | Git access via go-git; proposals as in-memory commits | accepted |
 | [0006](0006-multilingual-default-model.md) | Multilingual embeddings by default (multilingual-e5-small) | accepted |
+| [0008](0008-code-linking-not-code-rag.md) | Link knowledge to code through `refs` (path-aware bundles, coverage); no code indexing | accepted |
 | [0007](0007-code-drift-via-refs.md) | Code drift: knowledge that lags the code it governs (`refs` × `code.repos`) | accepted |

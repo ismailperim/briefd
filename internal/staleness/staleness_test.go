@@ -60,3 +60,24 @@ func TestCompute(t *testing.T) {
 		t.Errorf("Since = %v, want %v", s, day(10))
 	}
 }
+
+func TestGoverningAndCoverage(t *testing.T) {
+	docs := []store.DocRefs{
+		{Path: "domain/refunds.md", Refs: []string{"services/ledger/refund/**"}},
+		{Path: "conventions/retries.md", Refs: []string{"platform/retry/**"}},
+	}
+	gov := Governing(docs, []string{"services/ledger/refund/partial.go"})
+	if len(gov) != 1 || gov[0].Path != "domain/refunds.md" {
+		t.Errorf("Governing = %+v", gov)
+	}
+	if got := Governing(docs, []string{"README.md"}); len(got) != 0 {
+		t.Errorf("unclaimed path governed by %+v", got)
+	}
+	cov := Coverage("payments", []string{"apps", "platform", "platform/retry", "services", "services/ledger", "services/ledger/refund"}, docs)
+	if cov.Dirs != 6 || cov.Covered != 2 {
+		t.Errorf("coverage = %+v", cov)
+	}
+	if len(cov.Uncovered) != 4 || cov.Uncovered[0] != "apps" {
+		t.Errorf("uncovered = %v", cov.Uncovered)
+	}
+}

@@ -681,3 +681,49 @@ func allChangedPaths(c *object.Commit) ([]string, error) {
 	sort.Strings(out)
 	return out, nil
 }
+
+// Dirs lists the directories in HEAD's tree up to depth (1 = top level),
+// as repository-relative paths, sorted. Hidden directories are skipped.
+func (r *Repo) Dirs(ctx context.Context, depth int) ([]string, error) {
+	ref, err := r.repo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: reading HEAD: %w", err)
+	}
+	c, err := r.repo.CommitObject(ref.Hash())
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: reading HEAD commit: %w", err)
+	}
+	tree, err := c.Tree()
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: reading HEAD tree: %w", err)
+	}
+	var out []string
+	var walk func(t *object.Tree, prefix string, level int) error
+	walk = func(t *object.Tree, prefix string, level int) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		for _, e := range t.Entries {
+			if e.Mode != filemode.Dir || strings.HasPrefix(e.Name, ".") {
+				continue
+			}
+			p := prefix + e.Name
+			out = append(out, p)
+			if level < depth {
+				sub, err := t.Tree(e.Name)
+				if err != nil {
+					return err
+				}
+				if err := walk(sub, p+"/", level+1); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := walk(tree, "", 1); err != nil {
+		return nil, fmt.Errorf("gitsync: listing directories: %w", err)
+	}
+	sort.Strings(out)
+	return out, nil
+}

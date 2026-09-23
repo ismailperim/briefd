@@ -23,12 +23,14 @@ user spelled out).
 
 ## How to use it
 
-1. `compile_bundle(task_description, max_tokens?, scopes?)` — describe the
-   task in one or two sentences ("add partial refunds to the merchant
-   portal"), not keywords. Default scopes are `domain` and `conventions`;
-   add `projects/<name>` when working inside that project (`list_scopes`
-   shows the names). The bundle never exceeds the budget; 2000 tokens is a
-   good default, 1000 for a small task.
+1. `compile_bundle(task_description, max_tokens?, scopes?, paths?)` —
+   describe the task in one or two sentences ("add partial refunds to the
+   merchant portal"), not keywords, and pass `paths`: the repository-relative
+   files you are about to edit. Rules that claim those files come first.
+   Default scopes are `domain` and `conventions`; add `projects/<name>` when
+   working inside that project (`list_scopes` shows the names). The bundle
+   never exceeds the budget; 2000 tokens is a good default, 1000 for a
+   small task.
 2. Read the bundle before writing code. Each section starts with
    `## path — heading (updated YYYY-MM-DD)`. Treat a section that says
    `code changed since: N commits` with suspicion: the code it governs moved

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/ingest"
 	"github.com/ismailperim/briefd/internal/store"
 )
@@ -110,5 +111,50 @@ func TestSearchBudgetProperty(t *testing.T) {
 		if sum != res.TotalTokens {
 			t.Fatalf("TotalTokens %d != sum %d", res.TotalTokens, sum)
 		}
+	}
+}
+
+// Paths pull the documents whose refs cover them to the top, even for a
+// task whose wording does not retrieve them first.
+func TestSearchPathsGovern(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "p.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := indexer.Run(ctx, st, indexer.Options{Root: "../../testdata/knowledge"}); err != nil {
+		t.Fatal(err)
+	}
+	s := New(st, Options{})
+	plain, err := s.Search(ctx, Query{Text: "settlement batch is late", TopK: 5, MaxTokens: 100000})
+	if err != nil || len(plain.Chunks) == 0 {
+		t.Fatalf("plain search: %v", err)
+	}
+	if plain.Chunks[0].DocPath == "domain/rules/refunds.md" {
+		t.Skip("refunds already ranks first without paths; pick another query")
+	}
+	governed, err := s.Search(ctx, Query{Text: "settlement batch is late", TopK: 10, MaxTokens: 100000,
+		Paths: []string{"services/ledger/refund/partial.go"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if governed.Chunks[0].DocPath != "domain/rules/refunds.md" {
+		t.Errorf("first result with paths = %s, want domain/rules/refunds.md", governed.Chunks[0].DocPath)
+	}
+	// The original top hit is still there, just not first; and unclaimed
+	// paths change nothing.
+	found := false
+	for _, c := range governed.Chunks {
+		if c.ChunkID == plain.Chunks[0].ChunkID {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the plain top hit disappeared")
+	}
+	same, _ := s.Search(ctx, Query{Text: "settlement batch is late", TopK: 5, MaxTokens: 100000, Paths: []string{"nothing/claims/this.go"}})
+	if same.Chunks[0].ChunkID != plain.Chunks[0].ChunkID {
+		t.Error("unclaimed paths should not change the ranking")
 	}
 }

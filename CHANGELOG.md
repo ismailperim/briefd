@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Path-aware retrieval (ADR-0008): `compile_bundle` and `search_context`
+  take `paths` — the code files the task touches. Documents whose `refs`
+  cover them are fused into the ranking ahead of general matches (at most
+  three sections per document, six in total); the bundle cache key includes
+  the path set. REST: `paths` in `POST /api/bundle` and `?paths=` on
+  `/api/search`.
+- Coverage: `GET /api/coverage` and a dashboard panel list, per followed
+  code repository, the directories no document's `refs` claim.
+
+### Added
+
 - `briefd demo`: serves the built-in sample knowledge base (the fictional
   payments platform from `testdata/knowledge`, embedded in the binary) with
   the dashboard and MCP tools — try briefd without a repository.

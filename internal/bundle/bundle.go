@@ -40,6 +40,8 @@ type Request struct {
 	Task      string
 	Scopes    []string
 	MaxTokens int
+	// Paths are the code paths being worked on (see search.Query.Paths).
+	Paths []string
 }
 
 // Result is a compiled bundle plus cache provenance.
@@ -104,7 +106,8 @@ func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
 	if v := c.searcher.Vectors(); v != nil {
 		model = v.Model()
 	}
-	key := cacheKey(task, scopes, maxTokens, fingerprint, model)
+	paths := normalizePaths(req.Paths)
+	key := cacheKey(task, scopes, maxTokens, fingerprint, model, paths)
 	budget := search.Budget(maxTokens)
 
 	if b := c.lruGet(key); b != nil {
@@ -122,7 +125,7 @@ func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
 	}
 	c.report(false)
 
-	b, err = c.compile(ctx, task, scopes, maxTokens, fingerprint, model, key)
+	b, err = c.compile(ctx, task, scopes, paths, maxTokens, fingerprint, model, key)
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +136,8 @@ func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
 	return &Result{Bundle: b, Budget: budget, Cached: false}, nil
 }
 
-func (c *Compiler) compile(ctx context.Context, task string, scopes []string, maxTokens int, fingerprint, model, key string) (*store.Bundle, error) {
-	res, err := c.searcher.Search(ctx, search.Query{Text: task, Scopes: scopes, TopK: candidates, MaxTokens: 1 << 30})
+func (c *Compiler) compile(ctx context.Context, task string, scopes, paths []string, maxTokens int, fingerprint, model, key string) (*store.Bundle, error) {
+	res, err := c.searcher.Search(ctx, search.Query{Text: task, Scopes: scopes, Paths: paths, TopK: candidates, MaxTokens: 1 << 30})
 	if err != nil {
 		return nil, err
 	}
@@ -330,10 +333,27 @@ func normalizeScopes(scopes, def []string) []string {
 	return out
 }
 
-func cacheKey(task string, scopes []string, maxTokens int, fingerprint, model string) string {
+func cacheKey(task string, scopes []string, maxTokens int, fingerprint, model string, paths []string) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "v1\x00%s\x00%s\x00%d\x00%s\x00%s", task, strings.Join(scopes, ","), maxTokens, fingerprint, model)
+	fmt.Fprintf(h, "v2\x00%s\x00%s\x00%d\x00%s\x00%s\x00%s", task, strings.Join(scopes, ","), maxTokens, fingerprint, model, strings.Join(paths, "\x01"))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// normalizePaths trims, drops empties and duplicates, and sorts, so the
+// same set of paths in any order hits the same cache entry.
+func normalizePaths(paths []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range paths {
+		p = strings.TrimPrefix(strings.TrimSpace(strings.ReplaceAll(p, "\\", "/")), "./")
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // termSet returns the sorted unique search terms of content.

@@ -23,6 +23,7 @@ import (
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
+	"github.com/ismailperim/briefd/internal/staleness"
 	"github.com/ismailperim/briefd/internal/store"
 )
 
@@ -50,6 +51,9 @@ type Deps struct {
 	MetricsRequireAuth bool
 	// QueryLog records /api/search and /api/bundle calls for GET /api/gaps.
 	QueryLog bool
+	// Coverage reports, per followed code repository, which directories no
+	// document's refs cover; nil when no code repositories are configured.
+	Coverage func(ctx context.Context) ([]staleness.RepoCoverage, error)
 	Version  string
 	Logger   *slog.Logger
 }
@@ -98,6 +102,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/proposals", auth(http.HandlerFunc(a.proposals)))
 	mux.Handle("GET /api/proposals", auth(http.HandlerFunc(a.listProposals)))
 	mux.Handle("GET /api/gaps", auth(http.HandlerFunc(a.gaps)))
+	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
 	if d.WebhookSecret != "" {
 		mux.HandleFunc("POST /webhook/git", a.webhook)
 	}
@@ -219,6 +224,7 @@ func (a *api) search(w http.ResponseWriter, r *http.Request) {
 		Scopes:    splitList(q.Get("scopes")),
 		TopK:      topK,
 		MaxTokens: maxTokens,
+		Paths:     splitList(q.Get("paths")),
 	})
 	if err != nil {
 		a.record(start, metrics.Request{Name: "api_search", Query: text}, true)
@@ -243,6 +249,8 @@ type bundleRequest struct {
 	Scopes    []string `json:"scopes"`
 	// Client is an optional caller name recorded in the query log.
 	Client string `json:"client"`
+	// Paths are code paths the task touches (see search.Query.Paths).
+	Paths []string `json:"paths"`
 }
 
 func (a *api) bundle(w http.ResponseWriter, r *http.Request) {
@@ -258,7 +266,7 @@ func (a *api) bundle(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "task is required and max_tokens must be positive")
 		return
 	}
-	res, err := a.deps.Compiler.Compile(r.Context(), bundle.Request{Task: req.Task, Scopes: req.Scopes, MaxTokens: req.MaxTokens})
+	res, err := a.deps.Compiler.Compile(r.Context(), bundle.Request{Task: req.Task, Scopes: req.Scopes, MaxTokens: req.MaxTokens, Paths: req.Paths})
 	if err != nil {
 		a.record(start, metrics.Request{Name: "api_bundle", Query: req.Task}, true)
 		a.deps.Logger.Error("bundle failed", "err", err)
@@ -393,6 +401,24 @@ func (a *api) gaps(w http.ResponseWriter, r *http.Request) {
 	}
 	if low != nil {
 		resp.LowConfidence = low
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// coverage lists, per code repository, the directories no document's refs
+// claim — the knowledge base's blind spots (ADR-0008).
+func (a *api) coverage(w http.ResponseWriter, r *http.Request) {
+	resp := map[string]any{"enabled": a.deps.Coverage != nil, "repos": []staleness.RepoCoverage{}}
+	if a.deps.Coverage != nil {
+		repos, err := a.deps.Coverage(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "coverage_failed", err.Error())
+			return
+		}
+		if repos != nil {
+			resp["repos"] = repos
+		}
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, resp)

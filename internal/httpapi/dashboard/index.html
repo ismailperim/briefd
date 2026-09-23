@@ -282,6 +282,15 @@
         </table>
       </div>
     </section>
+    <section class="panel" aria-labelledby="h-coverage">
+      <div class="head"><h2 id="h-coverage">Coverage</h2><span class="hint">code directories no document's <code>refs</code> claim</span></div>
+      <div class="body flush wrap">
+        <table>
+          <thead><tr><th>Repository</th><th class="num">Covered</th><th>Blind spots</th></tr></thead>
+          <tbody id="coverage"></tbody>
+        </table>
+      </div>
+    </section>
     <section class="panel" aria-labelledby="h-proposals">
       <div class="head"><h2 id="h-proposals">Proposals</h2><span class="hint">forge pull request status</span></div>
       <div class="body flush wrap">
@@ -586,11 +595,18 @@
       `<td class="num mono" title="top ${x.top_score.toFixed(3)}">${x.margin.toFixed(3)}</td>`)).join('')
       : `<tr><td colspan="4" class="dim">${g.logged ? 'No answered questions yet' : 'No queries logged yet'}</td></tr>`;
   }
+  function renderCoverage(c) {
+    $('coverage').innerHTML = !c.enabled ? '<tr><td colspan="3" class="dim">No <code>code.repos</code> configured</td></tr>' : c.repos.length ? c.repos.map((r) => `<tr>
+      <td class="mono">${esc(r.repo)}</td><td class="num">${num(r.covered)} / ${num(r.dirs)}</td>
+      <td class="q" title="${esc(r.uncovered.join(', '))}"><span class="mono dim">${esc(r.uncovered.slice(0, 6).join(', '))}${r.uncovered.length > 6 ? ` +${r.uncovered.length - 6}` : ''}</span></td></tr>`).join('')
+      : '<tr><td colspan="3" class="dim">No repositories</td></tr>';
+  }
   async function refresh() {
     try {
       const s = await api('/api/stats');
       pushHistory(s); render(s);
       try { renderGaps(await api('/api/gaps?limit=8')); } catch (_) {}
+      try { renderCoverage(await api('/api/coverage')); } catch (_) {}
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {
       if (e.message !== 'unauthorized') { setPill('conn', 'err', 'offline'); $('conn').querySelector('.dot').classList.remove('live'); }

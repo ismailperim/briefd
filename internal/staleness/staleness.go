@@ -119,3 +119,48 @@ func globToRegexp(glob string) string {
 	sb.WriteString(`$`)
 	return sb.String()
 }
+
+// Governing returns the documents whose refs cover at least one of the
+// paths, in the order the documents were given.
+func Governing(docs []store.DocRefs, paths []string) []store.DocRefs {
+	var out []store.DocRefs
+	for _, d := range docs {
+		matchers := compile(d.Refs)
+		if firstMatch(matchers, paths) != "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// RepoCoverage reports which directories of a code repository are governed
+// by at least one document's refs.
+type RepoCoverage struct {
+	Repo string `json:"repo"`
+	// Dirs is the number of directories examined (up to the configured
+	// depth); Covered how many of them at least one ref reaches.
+	Dirs    int `json:"dirs"`
+	Covered int `json:"covered"`
+	// Uncovered lists directories no document claims — the knowledge
+	// base's blind spots for this repository.
+	Uncovered []string `json:"uncovered"`
+}
+
+// Coverage matches directories against every document's refs. A directory
+// counts as covered when some ref matches the directory itself or a file
+// directly under it.
+func Coverage(repo string, dirs []string, docs []store.DocRefs) RepoCoverage {
+	var matchers []*regexp.Regexp
+	for _, d := range docs {
+		matchers = append(matchers, compile(d.Refs)...)
+	}
+	cov := RepoCoverage{Repo: repo, Dirs: len(dirs), Uncovered: []string{}}
+	for _, dir := range dirs {
+		if firstMatch(matchers, []string{dir, dir + "/file"}) != "" {
+			cov.Covered++
+		} else {
+			cov.Uncovered = append(cov.Uncovered, dir)
+		}
+	}
+	return cov
+}

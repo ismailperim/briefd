@@ -91,6 +91,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		Metrics:            rt.reg,
 		MetricsRequireAuth: cfg.Metrics.RequireAuth,
 		QueryLog:           cfg.QueryLog.Enabled,
+		Coverage:           rt.syncer.coverageFunc(),
 		Version:            version,
 		Logger:             logger,
 	})
@@ -263,6 +264,32 @@ func buildProcess(ctx context.Context, cfg config.Config, stderr io.Writer) (rt 
 }
 
 func (rt *process) close() { rt.st.Close() }
+
+// coverageDepth is how deep into a code repository's tree coverage looks:
+// top-level directories and their children (e.g. services/payment).
+const coverageDepth = 2
+
+// coverageFunc returns nil when no code repositories are configured.
+func (s *syncer) coverageFunc() func(ctx context.Context) ([]staleness.RepoCoverage, error) {
+	if len(s.code) == 0 {
+		return nil
+	}
+	return func(ctx context.Context) ([]staleness.RepoCoverage, error) {
+		docs, err := s.st.DocumentsWithRefs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]staleness.RepoCoverage, 0, len(s.code))
+		for _, cr := range s.code {
+			dirs, err := cr.repo.Dirs(ctx, coverageDepth)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", cr.name, err)
+			}
+			out = append(out, staleness.Coverage(cr.name, dirs, docs))
+		}
+		return out, nil
+	}
+}
 
 // startSync embeds in the background and, when configured, keeps the
 // source in sync on an interval.

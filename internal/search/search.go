@@ -6,10 +6,12 @@ package search
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/ismailperim/briefd/internal/embed"
+	"github.com/ismailperim/briefd/internal/staleness"
 	"github.com/ismailperim/briefd/internal/store"
 )
 
@@ -47,6 +49,12 @@ type Options struct {
 
 // Query describes a search request.
 type Query struct {
+	// Paths are repository-relative code paths the caller is working on.
+	// Documents whose refs cover them are pulled up: their best sections
+	// join the ranking as if a third retriever had put them first, so the
+	// rules governing the file being edited come before general matches
+	// (ADR-0008).
+	Paths     []string
 	Text      string
 	Scopes    []string
 	TopK      int
@@ -190,6 +198,9 @@ func (s *Searcher) Search(ctx context.Context, q Query) (Result, error) {
 		return res, err
 	}
 	res.TopScore, res.Margin = conf.top, conf.margin
+	if hits, err = s.governed(ctx, hits, q.Paths, scopes); err != nil {
+		return res, err
+	}
 	if err := s.store.AttachDrift(ctx, hits); err != nil {
 		return res, err
 	}
@@ -413,3 +424,84 @@ var stopWords = func() map[string]bool {
 	}
 	return m
 }()
+
+// Governing documents contribute at most this many sections each, and
+// this many in total, so one long document cannot crowd out the task.
+// Their list is weighted above the retrieval list so that, when a path is
+// claimed, its rules lead even when the wording of the task did not
+// retrieve them; a section both lists agree on scores highest of all.
+const (
+	governedPerDoc = 3
+	governedTotal  = 6
+	governedWeight = 1.5
+)
+
+// governed re-ranks hits for the code paths being edited: sections of
+// documents whose refs cover a path are fused in as a second ranked list.
+// A governed section that retrieval also found ends up on top; one that
+// retrieval missed still enters near the top. Without paths, or when no
+// document claims them, hits are returned unchanged.
+func (s *Searcher) governed(ctx context.Context, hits []store.ChunkHit, paths, scopes []string) ([]store.ChunkHit, error) {
+	if len(paths) == 0 {
+		return hits, nil
+	}
+	docs, err := s.store.DocumentsWithRefs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	gov := staleness.Governing(docs, paths)
+	if len(gov) == 0 {
+		return hits, nil
+	}
+	docPaths := make([]string, len(gov))
+	for i, d := range gov {
+		docPaths[i] = d.Path
+	}
+	chunks, err := s.store.ChunksByDoc(ctx, docPaths, scopes)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]store.ChunkHit, len(hits)+len(chunks))
+	rank := make(map[string]int, len(hits))
+	main := make([]string, len(hits))
+	for i, h := range hits {
+		byID[h.ChunkID] = h
+		rank[h.ChunkID] = i
+		main[i] = h.ChunkID
+	}
+	// Per document: the sections retrieval ranked, in that order, then the
+	// rest in document order; keep the first few of each.
+	perDoc := map[string][]store.ChunkHit{}
+	for _, c := range chunks {
+		perDoc[c.DocPath] = append(perDoc[c.DocPath], c)
+	}
+	var governing []string
+	for _, p := range docPaths {
+		cs := perDoc[p]
+		sort.SliceStable(cs, func(i, j int) bool {
+			ri, oki := rank[cs[i].ChunkID]
+			rj, okj := rank[cs[j].ChunkID]
+			if oki != okj {
+				return oki
+			}
+			return oki && ri < rj
+		})
+		for i, c := range cs {
+			if i == governedPerDoc || len(governing) == governedTotal {
+				break
+			}
+			if _, ok := byID[c.ChunkID]; !ok {
+				byID[c.ChunkID] = c
+			}
+			governing = append(governing, c.ChunkID)
+		}
+	}
+	fused := RRFWeighted(RRFK, RankedList{IDs: main, Weight: 1}, RankedList{IDs: governing, Weight: governedWeight})
+	out := make([]store.ChunkHit, 0, len(fused))
+	for _, f := range fused {
+		h := byID[f.ID]
+		h.Score = f.Score
+		out = append(out, h)
+	}
+	return out, nil
+}
