@@ -51,3 +51,18 @@ func TestResolver(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFrontMatterLinks(t *testing.T) {
+	src := []byte("---\ntitle: A\nrelated:\n  - \"[[b]]\"\n  - \"[[c|C]]\"\n---\n# A\n\n## One\n\nsee [[d]]\n")
+	doc, err := Parse("domain/a.md", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, l := range doc.Links {
+		got = append(got, l.Target)
+	}
+	if len(got) != 3 || got[0] != "b" || got[1] != "c" || got[2] != "d" {
+		t.Errorf("links = %v, want [b c d]", got)
+	}
+}

@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Links between documents: Obsidian-style `[[wikilinks]]` and relative
+- Links between documents: Obsidian-style `[[wikilinks]]` (in the body or in
+  front-matter properties such as `related:`) and relative
   Markdown links are extracted at index time and resolved like Obsidian
   (by path or by file name). `GET /api/graph` returns the graph with orphans
   and broken links; the dashboard draws it and lists the issues;

@@ -212,7 +212,7 @@ platform) and doubles as the evaluation corpus.
 
 ### Obsidian vaults and links
 
-A knowledge repository can be an Obsidian vault. briefd reads `[[wikilinks]]` (including
+A knowledge repository can be an Obsidian vault. briefd reads `[[wikilinks]]` in the text and in front-matter properties such as `related:` (including
 `[[note|alias]]` and `[[note#heading]]`) and relative Markdown links, resolves them the way
 Obsidian does (by path, or by file name anywhere in the repository), and builds a link graph:
 the dashboard draws it, `get_document` returns each document's links and backlinks so an agent

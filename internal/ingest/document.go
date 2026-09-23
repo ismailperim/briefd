@@ -51,7 +51,9 @@ func Parse(relPath string, src []byte) (*Document, error) {
 		FrontMatter: raw,
 		ContentHash: hashHex(src),
 		Chunks:      chunks,
-		Links:       ExtractLinks(body),
+		// Obsidian treats [[wikilinks]] in front-matter properties
+		// (related:, up:, …) as links too.
+		Links: ExtractLinks([]byte(raw + "\n" + string(body))),
 	}, nil
 }
 
