@@ -1072,6 +1072,9 @@
       instance: ['Instance', 'How this server is configured. Secrets are never shown.'],
     };
     $('pageTitle').textContent = titles[v][0]; $('pageSub').textContent = titles[v][1];
+    // View hashes (#graph, …) also match element ids; switching views must
+    // start at the top instead of scrolling to that element.
+    window.scrollTo(0, 0);
   }
   window.addEventListener('hashchange', showView);
   showView();
