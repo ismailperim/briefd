@@ -338,7 +338,11 @@ func instanceInfo(cfg config.Config, rt *process) func() map[string]any {
 func redactURL(u string) string {
 	if i := strings.Index(u, "://"); i > 0 {
 		rest := u[i+3:]
-		if at := strings.Index(rest, "@"); at >= 0 && (strings.Index(rest, "/") < 0 || at < strings.Index(rest, "/")) {
+		host := rest
+		if slash := strings.Index(rest, "/"); slash >= 0 {
+			host = rest[:slash]
+		}
+		if at := strings.LastIndex(host, "@"); at >= 0 {
 			return u[:i+3] + rest[at+1:]
 		}
 	}

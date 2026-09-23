@@ -39,3 +39,17 @@ func TestRun(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://user:tok@git.example.com/team/kb.git": "https://git.example.com/team/kb.git",
+		"ssh://git@host:22/p/_git/kb":                  "ssh://host:22/p/_git/kb",
+		"https://github.com/o/r.git":                   "https://github.com/o/r.git",
+		"https://host/path/with@sign":                  "https://host/path/with@sign",
+		"/srv/knowledge":                               "/srv/knowledge",
+	} {
+		if got := redactURL(in); got != want {
+			t.Errorf("redactURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
