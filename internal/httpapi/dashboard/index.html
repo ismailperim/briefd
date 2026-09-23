@@ -140,6 +140,31 @@
   .badge.ok { background: var(--ok-soft); color: var(--ok); }
   .badge.err { background: var(--err-soft); color: var(--err); }
   .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .tabs { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--chip); }
+  .tab { padding: 4px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-2); text-decoration: none; }
+  .tab.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  #view-graph .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); }
+  #view-graph .toolbar input[type=search] { flex: 1 1 200px; min-width: 160px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel-2); color: var(--text); font: 13.5px var(--sans); }
+  .chip-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text-2); font-size: 12.5px; cursor: pointer; user-select: none; }
+  .chip-toggle .sw { width: 9px; height: 9px; border-radius: 50%; }
+  .chip-toggle.off { opacity: .45; }
+  .gwrap { display: grid; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 960px) { .gwrap { grid-template-columns: minmax(0, 1fr) 320px; } }
+  #bigGraph { display: block; width: 100%; height: calc(100vh - 230px); min-height: 420px; background: var(--panel); cursor: grab; touch-action: none; }
+  #bigGraph.dragging { cursor: grabbing; }
+  #bigGraph line { stroke: var(--line-strong); stroke-width: 1; }
+  #bigGraph circle { cursor: pointer; stroke: var(--panel); stroke-width: 1.5; }
+  #bigGraph text { font: 11px var(--sans); fill: var(--text-2); pointer-events: none; }
+  #bigGraph.focus line { stroke-opacity: .12; } #bigGraph.focus circle { opacity: .18; } #bigGraph.focus text { opacity: .18; }
+  #bigGraph.focus line.hl { stroke: var(--accent); stroke-opacity: 1; stroke-width: 1.6; }
+  #bigGraph.focus circle.hl, #bigGraph.focus text.hl { opacity: 1; }
+  #bigGraph circle.sel { stroke: var(--text); stroke-width: 2.5; }
+  .gdetails { border-left: 1px solid var(--line); padding: var(--s3); font-size: 13.5px; overflow: auto; max-height: calc(100vh - 230px); }
+  @media (max-width: 959px) { .gdetails { border-left: 0; border-top: 1px solid var(--line); max-height: none; } }
+  .gdetails h3 { margin: 0 0 4px; font-size: 15px; } .gdetails .path { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .gdetails h4 { margin: var(--s3) 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .gdetails ul { margin: 0; padding: 0; list-style: none; } .gdetails li { padding: 3px 0; font-family: var(--mono); font-size: 12px; }
+  .gdetails li a { color: var(--info); text-decoration: none; cursor: pointer; }
   #graph { display: block; background: var(--panel); }
   #graph line { stroke: var(--line-strong); stroke-width: 1; }
   #graph circle { cursor: pointer; stroke: var(--panel); stroke-width: 1.5; }
@@ -183,6 +208,10 @@
       <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="var(--accent)"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="var(--on-accent)" stroke-width="1.7"/></svg>
       <h1>briefd <span class="ver" id="version"></span></h1>
     </div>
+    <nav class="tabs" aria-label="Views">
+      <a class="tab" href="#overview" data-view="overview">Overview</a>
+      <a class="tab" href="#graph" data-view="graph">Graph</a>
+    </nav>
     <div class="status" role="status" aria-live="polite">
       <span class="pill" id="uptime" title="Process uptime">up —</span>
       <span class="pill" id="sync" title="Source synchronisation"><span class="dot"></span><span>sync —</span></span>
@@ -206,6 +235,7 @@
     </div>
   </section>
 
+  <div id="view-overview">
   <div class="tiles" id="tiles">
     <div class="panel tile">
       <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Requests</div>
@@ -390,6 +420,20 @@
     <span>MCP endpoint <code>/mcp</code></span>
     <span id="refreshed"></span>
   </footer>
+  </div>
+
+  <section id="view-graph" class="panel" hidden aria-labelledby="h-graph-view">
+    <div class="head"><h2 id="h-graph-view">Knowledge graph</h2><span class="hint" id="bigGraph-hint">documents and the links between them · scroll to zoom, drag to pan, click a node</span></div>
+    <div class="toolbar" id="gtoolbar">
+      <input id="gfind" type="search" placeholder="find a document…" autocomplete="off" aria-label="Find a document in the graph">
+      <span id="gscopes"></span>
+      <button class="btn" type="button" id="gfit">Fit</button>
+    </div>
+    <div class="gwrap">
+      <svg id="bigGraph" viewBox="0 0 1200 720" role="img" aria-label="Document link graph"><g id="gview"></g></svg>
+      <aside class="gdetails" id="gdetails"><div class="dim">Click a node to see its links and backlinks.</div></aside>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -621,34 +665,27 @@
   // Force-directed layout, computed once per graph change. Small
   // repositories (tens to a few hundred documents) are what this is for;
   // beyond ~400 nodes only edges of linked documents are drawn.
-  let graphKey = '';
+  let graphKey = '', graphData = null, graphLayout = null;
   const scopeColor = (scope) => scope === 'domain' ? '#2563eb' : scope === 'conventions' ? '#16a34a' : '#d97706';
-  function renderGraph(g) {
-    const key = JSON.stringify([g.nodes.map((n) => n.path), g.edges]);
-    const svg = $('graph');
-    $('graph-hint').textContent = `${num(g.nodes.length)} documents · ${num(g.links)} links · ${num(g.orphans.length)} orphans · ${num(g.broken.length)} broken`;
-    if (key === graphKey) return;
-    graphKey = key;
-    const W = 600, H = 360;
-    if (!g.edges.length) {
-      svg.innerHTML = `<text class="empty-note" x="24" y="40">No links between documents yet. Obsidian-style [[wikilinks]] and relative Markdown links are picked up on the next sync.</text>`;
-      return;
-    }
+  // Force-directed layout in a W×H box; cached per graph change and
+  // shared by the overview panel and the Graph view (which scales it).
+  function layoutGraph(g, W, H) {
     const idx = new Map(g.nodes.map((n, i) => [n.path, i]));
-    const nodes = g.nodes.map((n, i) => ({ ...n, x: W / 2 + Math.cos(i) * 120, y: H / 2 + Math.sin(i * 1.7) * 90, vx: 0, vy: 0 }));
+    const nodes = g.nodes.map((n, i) => ({ ...n, x: W / 2 + Math.cos(i) * W * 0.2, y: H / 2 + Math.sin(i * 1.7) * H * 0.25, vx: 0, vy: 0 }));
     const edges = g.edges.map((e) => [idx.get(e.from), idx.get(e.to)]).filter(([a, b]) => a !== undefined && b !== undefined);
     const linked = new Set(edges.flat());
     const drawn = nodes.length > 400 ? nodes.filter((_, i) => linked.has(i)) : nodes;
+    const rep = 2600 * (W * H) / (600 * 360), rest = 85 * Math.sqrt((W * H) / (600 * 360));
     for (let it = 0; it < 220; it++) {
       const k = it < 60 ? 0.9 : 0.5;
       for (const a of drawn) { a.fx = 0; a.fy = 0; }
       for (let i = 0; i < drawn.length; i++) for (let j = i + 1; j < drawn.length; j++) {
         const a = drawn[i], b = drawn[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01, d = Math.sqrt(d2);
-        const f = 2600 / d2; dx /= d; dy /= d; a.fx += dx * f; a.fy += dy * f; b.fx -= dx * f; b.fy -= dy * f;
+        const f = rep / d2; dx /= d; dy /= d; a.fx += dx * f; a.fy += dy * f; b.fx -= dx * f; b.fy -= dy * f;
       }
       for (const [i, j] of edges) {
         const a = nodes[i], b = nodes[j]; const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-        const f = (d - 85) * 0.02; a.fx += dx / d * f; a.fy += dy / d * f; b.fx -= dx / d * f; b.fy -= dy / d * f;
+        const f = (d - rest) * 0.02; a.fx += dx / d * f; a.fy += dy / d * f; b.fx -= dx / d * f; b.fy -= dy / d * f;
       }
       for (const a of drawn) {
         a.fx += (W / 2 - a.x) * 0.008; a.fy += (H / 2 - a.y) * 0.008;
@@ -656,13 +693,90 @@
         a.x = Math.max(14, Math.min(W - 14, a.x + a.vx)); a.y = Math.max(14, Math.min(H - 14, a.y + a.vy));
       }
     }
-    const r = (n) => 4 + Math.min(8, Math.sqrt(n.in + n.out) * 2);
-    const labelled = drawn.length <= 45 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out)).slice(0, 20);
-    const label = (n) => { const parts = n.path.replace(/\.md$/, '').split('/'); const last = parts[parts.length - 1]; return last.toLowerCase() === 'readme' && parts.length > 1 ? parts[parts.length - 2] : last; };
-    svg.innerHTML = edges.map(([i, j]) => `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}"/>`).join('')
-      + drawn.map((n) => `<circle class="node" data-q="${esc(n.title)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r(n)}" fill="${scopeColor(n.scope)}" tabindex="0"><title>${esc(n.path)} · ${n.in} in / ${n.out} out</title></circle>`).join('')
-      + labelled.map((n) => `<text x="${(n.x + r(n) + 3).toFixed(1)}" y="${(n.y + 3).toFixed(1)}">${esc(label(n))}</text>`).join('');
+    return { nodes, edges, drawn };
   }
+  const nodeR = (n) => 4 + Math.min(8, Math.sqrt(n.in + n.out) * 2);
+  const nodeLabel = (n) => { const parts = n.path.replace(/\.md$/, '').split('/'); const last = parts[parts.length - 1]; return last.toLowerCase() === 'readme' && parts.length > 1 ? parts[parts.length - 2] : last; };
+  function renderGraph(g) {
+    const key = JSON.stringify([g.nodes.map((n) => n.path), g.edges]);
+    const svg = $('graph');
+    const hint = `${num(g.nodes.length)} documents · ${num(g.links)} links · ${num(g.orphans.length)} orphans · ${num(g.broken.length)} broken`;
+    $('graph-hint').innerHTML = `${hint} · <a href="#graph">open graph view</a>`;
+    $('bigGraph-hint').textContent = `${hint} · scroll to zoom, drag to pan, click a node`;
+    if (key === graphKey) return;
+    graphKey = key; graphData = g;
+    if (!g.edges.length) {
+      svg.innerHTML = `<text class="empty-note" x="24" y="40">No links between documents yet. Obsidian-style [[wikilinks]] and relative Markdown links are picked up on the next sync.</text>`;
+      graphLayout = null; renderBigGraph();
+      return;
+    }
+    const { nodes, edges, drawn } = layoutGraph(g, 600, 360);
+    const labelled = drawn.length <= 45 ? drawn : [...drawn].sort((a, b) => (b.in + b.out) - (a.in + a.out)).slice(0, 20);
+    svg.innerHTML = edges.map(([i, j]) => `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}"/>`).join('')
+      + drawn.map((n) => `<circle class="node" data-q="${esc(n.title)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${nodeR(n)}" fill="${scopeColor(n.scope)}" tabindex="0"><title>${esc(n.path)} · ${n.in} in / ${n.out} out</title></circle>`).join('')
+      + labelled.map((n) => `<text x="${(n.x + nodeR(n) + 3).toFixed(1)}" y="${(n.y + 3).toFixed(1)}">${esc(nodeLabel(n))}</text>`).join('');
+    graphLayout = layoutGraph(g, 1200, 720);
+    renderBigGraph();
+  }
+
+  // ---- Graph view: full-size layout with pan/zoom, scope filter, find and details.
+  const gstate = { scopesOff: new Set(), find: '', sel: null, tx: 0, ty: 0, k: 1 };
+  function scopeGroup(scope) { return scope.startsWith('projects/') ? 'projects' : scope; }
+  function renderBigGraph() {
+    const view = $('gview');
+    if (!graphLayout) { view.innerHTML = `<text class="empty-note" x="40" y="60">No links between documents yet. Obsidian-style [[wikilinks]] and relative Markdown links are picked up on the next sync.</text>`; $('gscopes').innerHTML = ''; return; }
+    const { nodes, edges, drawn } = graphLayout;
+    const groups = [...new Set(nodes.map((n) => scopeGroup(n.scope)))].sort();
+    $('gscopes').innerHTML = groups.map((s) => `<span class="chip-toggle ${gstate.scopesOff.has(s) ? 'off' : ''}" data-scope="${esc(s)}" role="button" tabindex="0"><span class="sw" style="background:${scopeColor(s)}"></span>${esc(s)}</span>`).join('');
+    const visible = new Set(drawn.filter((n) => !gstate.scopesOff.has(scopeGroup(n.scope))).map((n) => n.path));
+    const q = gstate.find.trim().toLowerCase();
+    const matches = q ? new Set(nodes.filter((n) => n.path.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)).map((n) => n.path)) : null;
+    const sel = gstate.sel;
+    const neigh = new Set();
+    if (sel) { neigh.add(sel); for (const [i, j] of edges) { if (nodes[i].path === sel) neigh.add(nodes[j].path); if (nodes[j].path === sel) neigh.add(nodes[i].path); } }
+    const focus = sel || matches;
+    const hl = (p) => focus ? (sel ? neigh.has(p) : matches.has(p)) : false;
+    view.setAttribute('transform', `translate(${gstate.tx} ${gstate.ty}) scale(${gstate.k})`);
+    $('bigGraph').classList.toggle('focus', !!focus);
+    view.innerHTML = edges.filter(([i, j]) => visible.has(nodes[i].path) && visible.has(nodes[j].path)).map(([i, j]) => {
+      const a = nodes[i], b = nodes[j]; const on = sel && (a.path === sel || b.path === sel);
+      return `<line class="${on ? 'hl' : ''}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+    }).join('')
+      + drawn.filter((n) => visible.has(n.path)).map((n) => `<circle class="node ${hl(n.path) ? 'hl' : ''} ${n.path === sel ? 'sel' : ''}" data-path="${esc(n.path)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${nodeR(n) * 1.3}" fill="${scopeColor(n.scope)}"><title>${esc(n.path)}</title></circle>`).join('')
+      + drawn.filter((n) => visible.has(n.path) && (drawn.length <= 120 || hl(n.path) || n.in + n.out >= 3)).map((n) => `<text class="${hl(n.path) ? 'hl' : ''}" x="${(n.x + nodeR(n) * 1.3 + 4).toFixed(1)}" y="${(n.y + 4).toFixed(1)}">${esc(nodeLabel(n))}</text>`).join('');
+  }
+  function showDetails(path) {
+    const g = graphData; if (!g) return;
+    const n = g.nodes.find((x) => x.path === path); if (!n) return;
+    const out = g.edges.filter((e) => e.from === path).map((e) => e.to), back = g.edges.filter((e) => e.to === path).map((e) => e.from);
+    const li = (p) => `<li><a data-path="${esc(p)}">${esc(p)}</a></li>`;
+    $('gdetails').innerHTML = `<h3>${esc(n.title)}</h3><div class="path">${esc(n.path)}</div>
+      <div class="dim" style="margin-top:6px">${esc(n.scope)}${n.updated_at ? ' · updated ' + esc(new Date(n.updated_at).toLocaleDateString()) : ''}</div>
+      <h4>Links to (${out.length})</h4><ul>${out.map(li).join('') || '<li class="dim">—</li>'}</ul>
+      <h4>Linked from (${back.length})</h4><ul>${back.map(li).join('') || '<li class="dim">—</li>'}</ul>
+      <p style="margin-top:14px"><a class="btn" href="#overview" data-q="${esc(n.title)}" id="gsearch">Search for it</a></p>`;
+  }
+  (function wireGraphView() {
+    const svg = $('bigGraph');
+    let drag = null;
+    svg.addEventListener('mousedown', (ev) => { drag = { x: ev.clientX, y: ev.clientY, tx: gstate.tx, ty: gstate.ty, moved: false }; svg.classList.add('dragging'); });
+    window.addEventListener('mousemove', (ev) => { if (!drag) return; const s = 1200 / svg.getBoundingClientRect().width; gstate.tx = drag.tx + (ev.clientX - drag.x) * s; gstate.ty = drag.ty + (ev.clientY - drag.y) * s; if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 3) drag.moved = true; $('gview').setAttribute('transform', `translate(${gstate.tx} ${gstate.ty}) scale(${gstate.k})`); });
+    window.addEventListener('mouseup', () => { if (drag) { svg.classList.remove('dragging'); } drag = null; });
+    svg.addEventListener('wheel', (ev) => { ev.preventDefault(); const rect = svg.getBoundingClientRect(); const s = 1200 / rect.width; const px = (ev.clientX - rect.left) * s, py = (ev.clientY - rect.top) * s; const f = ev.deltaY < 0 ? 1.15 : 1 / 1.15; const k2 = Math.max(0.3, Math.min(6, gstate.k * f)); gstate.tx = px - (px - gstate.tx) * (k2 / gstate.k); gstate.ty = py - (py - gstate.ty) * (k2 / gstate.k); gstate.k = k2; $('gview').setAttribute('transform', `translate(${gstate.tx} ${gstate.ty}) scale(${gstate.k})`); }, { passive: false });
+    svg.addEventListener('click', (ev) => { if (drag && drag.moved) return; const c = ev.target.closest('circle.node'); gstate.sel = c ? c.dataset.path : null; renderBigGraph(); if (c) showDetails(c.dataset.path); });
+    $('gscopes').addEventListener('click', (ev) => { const t = ev.target.closest('.chip-toggle'); if (!t) return; const s = t.dataset.scope; gstate.scopesOff.has(s) ? gstate.scopesOff.delete(s) : gstate.scopesOff.add(s); renderBigGraph(); });
+    $('gfind').addEventListener('input', (ev) => { gstate.find = ev.target.value; gstate.sel = null; renderBigGraph(); });
+    $('gfit').addEventListener('click', () => { gstate.tx = 0; gstate.ty = 0; gstate.k = 1; renderBigGraph(); });
+    $('gdetails').addEventListener('click', (ev) => { const a = ev.target.closest('a[data-path]'); if (a) { gstate.sel = a.dataset.path; renderBigGraph(); showDetails(a.dataset.path); return; } const s = ev.target.closest('#gsearch'); if (s) { $('q').value = s.dataset.q; setTimeout(() => runSearch(s.dataset.q, $('scopesIn').value, $('maxTok').value), 50); } });
+  })();
+  function showView() {
+    const v = location.hash === '#graph' ? 'graph' : 'overview';
+    $('view-overview').hidden = v === 'graph';
+    $('view-graph').hidden = v !== 'graph';
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
+  }
+  window.addEventListener('hashchange', showView);
+  showView();
   function renderLinks(g) {
     const rows = g.orphans.slice(0, 6).map((o) => `<tr><td class="q narrow"><span class="mono">${esc(o.path)}</span></td><td><span class="badge warn">orphan</span></td></tr>`)
       .concat(g.broken.slice(0, 6).map((b) => `<tr><td class="q narrow" title="${esc(b.from)}"><span class="mono">${esc(b.from)}</span></td><td><span class="badge err">broken: ${esc(b.target)}</span></td></tr>`));
