@@ -28,7 +28,7 @@ import (
 	"github.com/ismailperim/briefd/internal/store"
 )
 
-//go:embed dashboard/index.html
+//go:embed dashboard/index.html dashboard/assets
 var dashboardFS embed.FS
 
 // Deps are the collaborators the HTTP layer needs.
@@ -86,6 +86,7 @@ func New(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/health", a.health)
 	mux.HandleFunc("GET /healthz", a.health) // conventional alias for platform health checks
 	mux.HandleFunc("GET /{$}", a.dashboard)
+	mux.HandleFunc("GET /assets/{file}", dashboardAsset)
 	auth := bearer(d.APIToken)
 	if d.Metrics != nil {
 		metricsHandler := http.HandlerFunc(a.prometheus)
@@ -128,6 +129,25 @@ func (a *api) record(start time.Time, req metrics.Request, failed bool) {
 	req.Duration = time.Since(start)
 	req.Error = failed
 	a.deps.Metrics.Record(req)
+}
+
+// dashboardAsset serves the dashboard's embedded font files and their
+// licences. They are versioned with the binary, so they can be cached.
+func dashboardAsset(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("file")
+	data, err := dashboardFS.ReadFile("dashboard/assets/" + name)
+	if err != nil || strings.Contains(name, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	switch {
+	case strings.HasSuffix(name, ".woff2"):
+		w.Header().Set("Content-Type", "font/woff2")
+	case strings.HasSuffix(name, ".txt"):
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	}
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(data)
 }
 
 func (a *api) dashboard(w http.ResponseWriter, _ *http.Request) {

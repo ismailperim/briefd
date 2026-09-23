@@ -501,3 +501,25 @@ func TestKnowledgeGaps(t *testing.T) {
 		t.Errorf("days=0: status %d", resp.StatusCode)
 	}
 }
+
+func TestDashboardAssets(t *testing.T) {
+	srv := newTestServer(t, testToken)
+	resp, err := http.Get(srv.URL + "/assets/hanken-grotesk-latin.woff2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "font/woff2" {
+		t.Errorf("font: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	for _, p := range []string{"/assets/missing.woff2", "/assets/..%2findex.html"} {
+		resp, err := http.Get(srv.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", p, resp.StatusCode)
+		}
+	}
+}

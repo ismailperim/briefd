@@ -24,8 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   last 24 hours (in memory), stamped on the graph and faded by age; an
   Instance view with the running configuration (source, branch and head,
   git auth method, embeddings, access, proposals, code repositories, build,
-  storage — secrets shown only as set/unset; `GET /api/instance`); a restyled
-  console with the repository identity in the header.
+  storage — secrets shown only as set/unset; `GET /api/instance`); a new
+  layout with a white navigation header, Overview / Graph / Maintenance /
+  Activity / Instance views, figure cards and a Needs attention summary. The
+  Hanken Grotesk font (OFL) and Lucide icons (ISC) are embedded in the
+  binary; see `THIRD_PARTY_NOTICES.md`.
 - Path-aware retrieval (ADR-0008): `compile_bundle` and `search_context`
   take `paths` — the code files the task touches. Documents whose `refs`
   cover them are fused into the ranking ahead of general matches (at most
