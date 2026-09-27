@@ -31,11 +31,11 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: go, javascript
-      - uses: github/codeql-action/autobuild@v3
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/autobuild@v4
+      - uses: github/codeql-action/analyze@v4
 
   dependency-review:
     name: Dependency review
@@ -65,7 +65,7 @@ jobs:
           output: trivy.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy.sarif
       - name: Fail on high/critical
