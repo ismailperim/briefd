@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configured forge type takes precedence. The source is operator
   configuration, so this was not reachable by agents or API callers.
 
+### Changed
+
+- `github.com/ncruces/go-sqlite3` 0.35.5 → 0.35.6; CI actions updated
+  (setup-go v7, cache v6, CodeQL v4, dependency-review v5, setup-qemu v4).
+
 ## [0.6.0] — 2026-09-23
 
 ### Added
