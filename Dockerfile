@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 RUN mkdir -p /out/data && chown 65532:65532 /out/data
 
 # briefd is pure Go: no libc, no git binary, no ONNX runtime needed.
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 LABEL org.opencontainers.image.source="https://github.com/ismailperim/briefd" \
       org.opencontainers.image.description="briefd: git-backed team knowledge served to coding agents as token-budgeted bundles over MCP" \
       org.opencontainers.image.licenses="Apache-2.0" \

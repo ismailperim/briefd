@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Container image: based on `distroless/static-debian13` (was debian12, now
+  in Debian LTS), which carries the current timezone database
+  (Trivy DLA-4792-1). The binary is static, so nothing else changes.
 - Dashboard: the "Open a pull request" link matched forge hosts by
   substring, so a source such as `dev.azure.com.example.net` counted as
   Azure DevOps (CodeQL js/incomplete-url-substring-sanitization). Hosts are
