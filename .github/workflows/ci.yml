@@ -54,7 +54,7 @@ jobs:
           go-version: stable   # latest patch release: security fixes land in the stdlib
           check-latest: true
       - name: Cache embedding model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/briefd/models
           key: models-e5-small-1a55775f
