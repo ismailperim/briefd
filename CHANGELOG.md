@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `golang.org/x/net` 0.58.0 → 0.61.0: HTTP/2 denial of service through
+  excessive SETTINGS frames (CVE-2026-78669). briefd serves HTTP/1.1 and
+  HTTP/2 through `net/http`, which vendors its own copy; the module is a
+  dependency of the MCP SDK and go-git. Also go-git 5.19.3, x/sys 0.49.0.
+
 ## [0.6.1] — 2026-10-01
 
 ### Security
