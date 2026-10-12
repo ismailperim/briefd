@@ -19,6 +19,7 @@
   <a href="https://github.com/ismailperim/briefd/pkgs/container/briefd"><img alt="Container" src="https://img.shields.io/badge/ghcr.io-briefd-0f172a?logo=docker"></a>
   <a href="https://registry.modelcontextprotocol.io/?search=briefd"><img alt="MCP Registry" src="https://img.shields.io/badge/MCP%20Registry-io.github.ismailperim%2Fbriefd-22c55e"></a>
   <a href="https://glama.ai/mcp/servers/ismailperim/briefd"><img alt="Glama score" src="https://glama.ai/mcp/servers/ismailperim/briefd/badges/score.svg"></a>
+  <a href="https://m8ven.ai/mcp/ismailperim-briefd-1dokca?s=readme"><img alt="M8ven Score" src="https://m8ven.ai/badge/mcp/ismailperim-briefd-1dokca?v=1732761aee2bf2bc86b2cd9098b654a5"></a>
 </p>
 
 ---
