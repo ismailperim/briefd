@@ -7,8 +7,8 @@ toolchain go1.27.1
 require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/ncruces/go-sqlite3 v0.35.6
-	github.com/yuin/goldmark v1.8.6
+	github.com/ncruces/go-sqlite3 v0.36.0
+	github.com/yuin/goldmark v1.8.7
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
 	gonum.org/v1/gonum v0.17.0
@@ -28,7 +28,7 @@ require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
-	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v6 v6.4.35401 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
