@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -101,7 +102,9 @@ func New(cfg Config) *Client {
 	if timeout == 0 {
 		timeout = 15 * time.Second
 	}
-	return &Client{cfg: cfg, base: strings.TrimRight(cfg.BaseURL, "/"), http: &http.Client{Timeout: timeout}}
+	// Accept the site URL with or without the /wiki context path.
+	base := strings.TrimSuffix(strings.TrimRight(cfg.BaseURL, "/"), "/wiki")
+	return &Client{cfg: cfg, base: base, http: &http.Client{Timeout: timeout}}
 }
 
 // Spaces returns the allowed space keys (nil = all).
@@ -384,6 +387,6 @@ func quote(s string) string {
 
 // cleanExcerpt drops Confluence's highlight markers and collapses space.
 func cleanExcerpt(s string) string {
-	s = strings.NewReplacer("@@@hl@@@", "", "@@@endhl@@@", "").Replace(s)
+	s = html.UnescapeString(strings.NewReplacer("@@@hl@@@", "", "@@@endhl@@@", "").Replace(s))
 	return strings.Join(strings.Fields(s), " ")
 }

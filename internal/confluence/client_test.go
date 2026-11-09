@@ -22,7 +22,7 @@ func fakeSite(t *testing.T) (*httptest.Server, *string, *string) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{
 			map[string]any{
 				"content":      map[string]any{"id": "101", "title": "Chargeback flow", "space": map[string]any{"key": "PAY"}, "_links": map[string]any{"webui": "/spaces/PAY/pages/101/Chargeback+flow"}},
-				"excerpt":      "Disputes open a @@@hl@@@chargeback@@@endhl@@@\n case",
+				"excerpt":      "Disputes &amp; open a @@@hl@@@chargeback@@@endhl@@@\n case",
 				"lastModified": "2026-10-01T10:00:00.000Z",
 			},
 			map[string]any{"title": "a space, not a page"},
@@ -73,7 +73,7 @@ func TestSearchAndPage(t *testing.T) {
 	if want := `type = page AND siteSearch ~ "chargeback \"flow\"" AND space IN ("PAY")`; *cql != want {
 		t.Errorf("cql = %s\nwant  %s", *cql, want)
 	}
-	if len(hits) != 1 || hits[0].ID != "101" || hits[0].Space != "PAY" || hits[0].Excerpt != "Disputes open a chargeback case" ||
+	if len(hits) != 1 || hits[0].ID != "101" || hits[0].Space != "PAY" || hits[0].Excerpt != "Disputes & open a chargeback case" ||
 		hits[0].URL != srv.URL+"/wiki/spaces/PAY/pages/101/Chargeback+flow" || hits[0].UpdatedAt.IsZero() {
 		t.Errorf("hits = %+v", hits)
 	}
@@ -133,7 +133,7 @@ func TestValidate(t *testing.T) {
 
 func TestToMarkdown(t *testing.T) {
 	src := `<div class="wrap"><h1>Refunds</h1>
-<p>Refunds go through the <a href="https://example.com/ledger">ledger</a> and take <em>two</em> days.</p>
+<p>Refunds go through the <a href="https://example.com/ledger">ledger</a> and take <em>two</em> days. Set it in the <span>.csproj</span>-file.</p>
 <ul><li>Partial refunds<ul><li>allowed once</li></ul></li><li>Full refunds</li></ul>
 <ol><li>Open</li><li>Close</li></ol>
 <table><tbody><tr><th>Code</th><th>Meaning</th></tr><tr><td>R1</td><td>a|b</td></tr></tbody></table>
@@ -142,7 +142,7 @@ y := 2</pre>
 <blockquote><p>Never retry a 4xx.</p></blockquote>
 <script>alert(1)</script><img src="x.png"></div>`
 	want := "# Refunds\n\n" +
-		"Refunds go through the [ledger](https://example.com/ledger) and take _two_ days.\n\n" +
+		"Refunds go through the [ledger](https://example.com/ledger) and take _two_ days. Set it in the .csproj-file.\n\n" +
 		"- Partial refunds\n  - allowed once\n- Full refunds\n\n" +
 		"1. Open\n2. Close\n\n" +
 		"| Code | Meaning |\n| --- | --- |\n| R1 | a\\|b |\n\n" +

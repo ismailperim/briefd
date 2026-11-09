@@ -130,7 +130,7 @@ func (w *mdWriter) listBlock(n *html.Node) {
 			}
 			text.WriteString(w.inlineNode(c))
 		}
-		sb.WriteString(indent + marker + tightPunct.ReplaceAllString(strings.TrimSpace(collapse(text.String())), "$1") + "\n")
+		sb.WriteString(indent + marker + strings.TrimSpace(collapse(text.String())) + "\n")
 		sb.WriteString(nested.String())
 	}
 	w.list = w.list[:len(w.list)-1]
@@ -143,15 +143,18 @@ func (w *mdWriter) listBlock(n *html.Node) {
 
 // inline renders n's children as one line of Markdown.
 func (w *mdWriter) inline(n *html.Node) string {
+	return strings.TrimSpace(collapse(w.inlineRaw(n)))
+}
+
+// inlineRaw concatenates n's children, keeping the whitespace the HTML
+// itself carries: inline elements such as <span> add none of their own.
+func (w *mdWriter) inlineRaw(n *html.Node) string {
 	var sb strings.Builder
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		sb.WriteString(w.inlineNode(c))
 	}
-	return tightPunct.ReplaceAllString(strings.TrimSpace(collapse(sb.String())), "$1")
+	return sb.String()
 }
-
-// tightPunct removes the space inline wrappers leave before punctuation.
-var tightPunct = regexp.MustCompile(` ([.,;:!?)])`)
 
 func (w *mdWriter) inlineNode(n *html.Node) string {
 	switch n.Type {
@@ -167,27 +170,63 @@ func (w *mdWriter) inlineNode(n *html.Node) string {
 	case atom.Br:
 		return " "
 	case atom.Strong, atom.B:
-		return wrap("**", w.inline(n))
+		return w.wrap("**", n)
 	case atom.Em, atom.I:
-		return wrap("_", w.inline(n))
+		return w.wrap("_", n)
 	case atom.Code:
-		if t := strings.TrimSpace(textOf(n)); t != "" {
-			return " `" + t + "` "
+		raw := collapse(textOf(n))
+		if t := strings.TrimSpace(raw); t != "" {
+			return edges(raw, "`"+t+"`")
 		}
-		return ""
+		return raw
 	case atom.A:
-		text := w.inline(n)
+		raw := w.inlineRaw(n)
+		text := strings.TrimSpace(collapse(raw))
 		href := attr(n, "href")
 		if text == "" || href == "" || strings.HasPrefix(href, "#") || strings.HasPrefix(href, "javascript:") {
-			return " " + text + " "
+			return raw
 		}
-		return " [" + text + "](" + href + ") "
+		return edges(raw, "["+text+"]("+href+")")
 	case atom.Ul, atom.Ol, atom.Table, atom.Pre:
 		sub := &mdWriter{}
 		sub.block(n)
 		return " " + collapse(tidy(sub.sb.String())) + " "
 	}
-	return " " + w.inline(n) + " "
+	if isBlock(n) {
+		return " " + w.inline(n) + " "
+	}
+	return w.inlineRaw(n)
+}
+
+// wrap puts mark around n's text, keeping surrounding whitespace outside.
+func (w *mdWriter) wrap(mark string, n *html.Node) string {
+	raw := collapse(w.inlineRaw(n))
+	t := strings.TrimSpace(raw)
+	if t == "" {
+		return raw
+	}
+	return edges(raw, mark+t+mark)
+}
+
+// edges re-attaches raw's leading and trailing space to s.
+func edges(raw, s string) string {
+	if strings.HasPrefix(raw, " ") {
+		s = " " + s
+	}
+	if strings.HasSuffix(raw, " ") {
+		s += " "
+	}
+	return s
+}
+
+func isBlock(n *html.Node) bool {
+	switch n.DataAtom {
+	case atom.P, atom.Div, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6, atom.Li, atom.Tr, atom.Td, atom.Th,
+		atom.Blockquote, atom.Hr, atom.Section, atom.Article, atom.Header, atom.Footer, atom.Main, atom.Nav,
+		atom.Aside, atom.Figure, atom.Figcaption, atom.Dl, atom.Dt, atom.Dd:
+		return true
+	}
+	return false
 }
 
 func table(w *mdWriter, n *html.Node) string {
@@ -300,13 +339,6 @@ func attr(n *html.Node, key string) string {
 		}
 	}
 	return ""
-}
-
-func wrap(mark, s string) string {
-	if s == "" {
-		return ""
-	}
-	return " " + mark + s + mark + " "
 }
 
 var spaces = regexp.MustCompile(`[ \t\r\n\x{00a0}]+`)
