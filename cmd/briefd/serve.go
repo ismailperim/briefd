@@ -19,6 +19,7 @@ import (
 
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/config"
+	"github.com/ismailperim/briefd/internal/confluence"
 	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/httpapi"
@@ -379,6 +380,7 @@ func instanceInfo(cfg config.Config, rt *process) func() map[string]any {
 			"query_log_days":     cfg.QueryLog.RetentionDays,
 			"code_repos":         code,
 			"embeddings":         "off (BM25 only)",
+			"confluence":         confluenceInfo(cfg.Confluence),
 		}
 		if rt.searcher.Hybrid() {
 			v := rt.searcher.Vectors()
@@ -387,6 +389,21 @@ func instanceInfo(cfg config.Config, rt *process) func() map[string]any {
 		}
 		return info
 	}
+}
+
+// confluenceInfo describes the Confluence connection without secrets.
+func confluenceInfo(c confluence.Config) map[string]any {
+	if !c.Enabled() {
+		return nil
+	}
+	auth := "caller credentials only"
+	switch {
+	case c.Email != "" && c.UserCredentials:
+		auth = "caller credentials, else service account"
+	case c.Email != "":
+		auth = "service account"
+	}
+	return map[string]any{"site": redactURL(c.BaseURL), "spaces": c.Spaces, "auth": auth}
 }
 
 // redactURL drops userinfo (user:token@) from a URL-shaped source.
@@ -465,9 +482,13 @@ func (rt *process) mcpLogger(cfg config.Config) *slog.Logger {
 
 // mcpServer builds the MCP server over this process.
 func (rt *process) mcpServer(cfg config.Config) *mcp.Server {
+	var conf *confluence.Client
+	if cfg.Confluence.Enabled() {
+		conf = confluence.New(cfg.Confluence)
+	}
 	return mcpserver.New(mcpserver.Deps{
 		Store: rt.st, Searcher: rt.searcher, Compiler: rt.compiler, Proposals: rt.proposals, Metrics: rt.reg,
-		QueryLog: cfg.QueryLog.Enabled, Version: version, Logger: rt.mcpLogger(cfg),
+		QueryLog: cfg.QueryLog.Enabled, Confluence: conf, Version: version, Logger: rt.mcpLogger(cfg),
 	})
 }
 

@@ -190,3 +190,28 @@ func TestCompileBudgetProperty(t *testing.T) {
 		}
 	}
 }
+
+func TestFitNeverExceedsBudget(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	words := []string{"settlement", "batch", "ledger", "ödeme", "iade", "x", "```", "|---|", "\n", "\n\n", "42"}
+	for range 300 {
+		var sb strings.Builder
+		for range rng.Intn(800) {
+			sb.WriteString(words[rng.Intn(len(words))] + " ")
+		}
+		budget := rng.Intn(400)
+		out, truncated, ok := Fit(sb.String(), budget)
+		if !ok {
+			if budget >= minTruncatedTokens+tokenizer.Count(truncationMarker) {
+				t.Fatalf("budget %d rejected", budget)
+			}
+			continue
+		}
+		if n := tokenizer.Count(out); n > budget {
+			t.Fatalf("Fit used %d tokens, budget %d", n, budget)
+		}
+		if truncated != strings.HasSuffix(out, truncationMarker) {
+			t.Fatalf("truncated=%v but marker presence differs", truncated)
+		}
+	}
+}

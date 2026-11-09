@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/ismailperim/briefd/internal/confluence"
 	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/embed/minilm"
 	"github.com/ismailperim/briefd/internal/gitsync"
@@ -46,6 +47,8 @@ type Config struct {
 	// Code lists the code repositories whose history is compared against
 	// documents' `refs` globs to detect knowledge that lags the code.
 	Code Code `yaml:"code"`
+	// Confluence enables live Confluence Cloud search tools (ADR-0009).
+	Confluence confluence.Config `yaml:"confluence"`
 }
 
 // Code configures code-drift detection (ADR-0007).
@@ -137,6 +140,7 @@ func Default() Config {
 		},
 		Embeddings: embed.Default(),
 		Git:        Git{AuthorName: "briefd", AuthorEmail: "briefd@localhost"},
+		Confluence: confluence.Config{UserCredentials: true},
 	}
 }
 
@@ -260,6 +264,19 @@ func (c *Config) applyEnv() error {
 	str("EMBEDDINGS_MODEL_DIR", &c.Embeddings.ModelDir)
 	str("EMBEDDINGS_URL", &c.Embeddings.URL)
 	str("EMBEDDINGS_API_KEY", &c.Embeddings.APIKey)
+	str("CONFLUENCE_BASE_URL", &c.Confluence.BaseURL)
+	str("CONFLUENCE_EMAIL", &c.Confluence.Email)
+	str("CONFLUENCE_TOKEN", &c.Confluence.Token)
+	if v, ok := os.LookupEnv("BRIEFD_CONFLUENCE_SPACES"); ok {
+		c.Confluence.Spaces = splitList(v)
+	}
+	if v, ok := os.LookupEnv("BRIEFD_CONFLUENCE_USER_CREDENTIALS"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("BRIEFD_CONFLUENCE_USER_CREDENTIALS: %w", err)
+		}
+		c.Confluence.UserCredentials = b
+	}
 	if v, ok := os.LookupEnv("BRIEFD_EMBEDDINGS_ENABLED"); ok {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
@@ -324,6 +341,9 @@ func (c *Config) Validate() error {
 	case "ollama", "openai", "openai-compatible", "none":
 	default:
 		return fmt.Errorf("config: unknown embeddings.provider %q", c.Embeddings.Provider)
+	}
+	if err := c.Confluence.Validate(); err != nil {
+		return fmt.Errorf("config: %w", err)
 	}
 	if c.Embeddings.BatchSize < 0 {
 		return errors.New("config: embeddings.batch_size must be >= 0")

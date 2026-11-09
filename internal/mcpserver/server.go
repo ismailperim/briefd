@@ -16,6 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ismailperim/briefd/internal/bundle"
+	"github.com/ismailperim/briefd/internal/confluence"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
@@ -36,8 +37,11 @@ type Deps struct {
 	// QueryLog records search_context / compile_bundle calls in the store
 	// for the knowledge-gap report.
 	QueryLog bool
-	Version  string
-	Logger   *slog.Logger
+	// Confluence enables the live confluence_search / confluence_page tools
+	// (ADR-0009); nil leaves them out of the tool list.
+	Confluence *confluence.Client
+	Version    string
+	Logger     *slog.Logger
 }
 
 // served records the documents a tool handed out, for the dashboard's
@@ -125,6 +129,9 @@ func New(d Deps) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.suggestLinks)
 
+	if d.Confluence != nil {
+		t.addConfluence(srv)
+	}
 	return srv
 }
 

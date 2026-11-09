@@ -179,6 +179,7 @@ when the agent runs on the machine that holds the checkout.
 | `propose_update(doc_path, change_description, new_content)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. |
 | `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback: which sections helped. An empty list marks the question as a knowledge gap. |
 | `suggest_links(doc_path?, limit?)` | Links the knowledge base is missing (a document names another without linking it) and broken links — for an agent tidying the knowledge base via `propose_update`. |
+| `confluence_search(query, spaces?, limit?, max_tokens?)`, `confluence_page(id, max_tokens?)` | *Optional.* Live Confluence Cloud search and page reads, converted to compact Markdown within the budget. Listed only when Confluence is configured; see below. |
 
 The same operations are available over REST (`/api/search`, `POST /api/bundle`, `/api/docs/{path}`,
 `/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/gaps`, `/api/health`, `/api/stats`)
@@ -275,6 +276,29 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `code.repos` | — | *(none)* | code repositories (URL or path) compared against documents' `refs` for drift |
 
 `briefd model pull` pre-fetches the embedding model for offline or image-build use.
+
+**Confluence (optional, live).** Teams whose knowledge also lives in Confluence Cloud can let
+agents search it through the same MCP endpoint ([ADR-0009](docs/adr/0009-live-confluence-tools.md)):
+
+```yaml
+confluence:
+  base_url: https://your-site.atlassian.net   # BRIEFD_CONFLUENCE_BASE_URL
+  spaces: [ENG, PAY]                          # BRIEFD_CONFLUENCE_SPACES; empty = every space the account sees
+  email: ""                                   # BRIEFD_CONFLUENCE_EMAIL  ┐ optional service account
+  token: ""                                   # BRIEFD_CONFLUENCE_TOKEN  ┘ (Atlassian API token)
+  user_credentials: true                      # callers may send their own account in headers
+```
+
+Each person can use their own Atlassian account, so they only see what Confluence lets them see:
+
+```sh
+claude mcp add --transport http briefd https://briefd.example.com/mcp \
+  --header "Authorization: Bearer $BRIEFD_API_TOKEN" \
+  --header "X-Confluence-Email: you@example.com" --header "X-Confluence-Token: $ATLASSIAN_API_TOKEN"
+```
+
+Results are read live and never indexed or stored; the reviewed knowledge base stays the
+source briefd compiles bundles from. Confluence Data Center / Server are not supported yet.
 
 ## Dashboard and metrics
 

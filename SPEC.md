@@ -79,6 +79,12 @@ and broken links on the dashboard.
 6. `report_usage(bundle_id, useful_chunk_ids)` — optional feedback signal (v0.2 uses it
    for relevance tuning; v0.1 only stores it).
 7. `suggest_links(doc_path?, limit?)` — read-only: documents that mention another by name without a link, and broken links (dismissed suggestions excluded).
+8. `confluence_search(query, spaces?, limit?=10, max_tokens?=1000)` and
+   `confluence_page(id, max_tokens?=3000)` — only when `confluence.base_url` is set
+   (ADR-0009). Live, read-only Confluence Cloud search (CQL `siteSearch`) and page
+   reads converted to Markdown, within `max_tokens`. Limited to `confluence.spaces`;
+   callers may send `X-Confluence-Email` / `X-Confluence-Token` to use their own
+   account. Nothing is indexed, cached or logged.
 
 ### 3.2 REST (secondary)
 

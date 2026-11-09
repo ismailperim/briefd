@@ -403,6 +403,21 @@ func jaccard(a, b []string) float64 {
 	return float64(inter) / float64(len(a)+len(b)-inter)
 }
 
+// Fit returns s unchanged when it fits within budget tokens, otherwise its
+// longest line-bounded prefix plus the truncation marker, never exceeding
+// budget. It is how live sources (ADR-0009) apply the same budget rule as
+// bundles; ok is false when not even a useful head fits.
+func Fit(s string, budget int) (out string, truncated, ok bool) {
+	if tokenizer.Count(s) <= budget {
+		return s, false, true
+	}
+	room := budget - tokenizer.Count(truncationMarker)
+	if room < minTruncatedTokens {
+		return "", true, false
+	}
+	return truncate(s, room) + truncationMarker, true, true
+}
+
 // truncate returns the longest prefix of s, cut at a line boundary where
 // possible, that fits within tokens.
 func truncate(s string, tokens int) string {

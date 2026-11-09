@@ -47,6 +47,14 @@ forge:                     # optional: open a pull / merge request for each prop
   repo: ""                 # BRIEFD_FORGE_REPO: owner/name (GitHub) or group/subgroup/name (GitLab); derived from source when empty
   api_url: ""              # BRIEFD_FORGE_API_URL: GitHub Enterprise, or GitLab default https://<git host>/api/v4
 
+confluence:                # optional: live Confluence Cloud search tools (ADR-0009)
+  base_url: ""             # BRIEFD_CONFLUENCE_BASE_URL, e.g. https://your-site.atlassian.net; empty = off
+  spaces: []               # BRIEFD_CONFLUENCE_SPACES (comma-separated keys); empty = every space the account sees
+  email: ""                # BRIEFD_CONFLUENCE_EMAIL  ┐ optional service account; keep the token in the env
+  token: ""                # BRIEFD_CONFLUENCE_TOKEN  ┘
+  user_credentials: true   # BRIEFD_CONFLUENCE_USER_CREDENTIALS: honor X-Confluence-Email / X-Confluence-Token headers
+  timeout: 15s
+
 search:
   default_scopes: [domain, conventions]   # BRIEFD_DEFAULT_SCOPES (comma-separated)
   default_max_tokens: 2000                # BRIEFD_DEFAULT_MAX_TOKENS

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Live Confluence Cloud tools (ADR-0009): `confluence_search` and
+  `confluence_page`, listed only when `confluence.base_url` is set. Pages
+  are converted to compact Markdown and cut to `max_tokens` by the bundle
+  packer; searches can be limited to an allow-list of spaces. Callers can
+  send their own Atlassian account in `X-Confluence-Email` /
+  `X-Confluence-Token` headers, or the instance uses an optional service
+  account. Nothing from Confluence is indexed or stored. The dashboard's
+  Instance view shows whether it is on.
+
 ### Security
 
 - `golang.org/x/net` 0.58.0 → 0.61.0: HTTP/2 denial of service through
