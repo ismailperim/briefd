@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `X-Confluence-Token` headers, or the instance uses an optional service
   account. Nothing from Confluence is indexed or stored. The dashboard's
   Instance view shows whether it is on.
+- Dashboard graph: documents are coloured, filtered and clustered by area —
+  each folder under `domain/` or `conventions/`, plus projects — instead of
+  by scope alone, so a knowledge base with several domains no longer draws
+  as one blob. Alt-click an area to show only it; a switch shows all links,
+  links within areas, or only links between areas.
+- Maintenance: "Links to fix" and "Needs attention" flag over-linked
+  documents (more than 12 outgoing links), which usually carry a catch-all
+  `related:` list.
 
 ### Security
 

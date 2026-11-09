@@ -309,11 +309,15 @@ source briefd compiles bundles from. Confluence Data Center / Server are not sup
 - **Overview** — requests, tokens served and saved, index and sync; the knowledge graph with the
   documents agents were served in the last 24 hours stamped on it; the circulation list; and
   **Needs attention**, one line per maintenance signal, worst first.
-- **Graph** — every document and link, zoom and pan (mouse or keyboard), scope filters, search;
-  select a document to see its links, backlinks and how often it was served
+- **Graph** — every document and link, zoom and pan (mouse or keyboard), search. Documents are
+  coloured and clustered by area — each folder under `domain/` or `conventions/` (e.g.
+  `domain/payments`, `domain/lending`), plus one for projects — with a filter per area (Alt-click
+  to show only one) and a switch between all links, links within areas and links between them.
+  Select a document to see its links, backlinks and how often it was served
   (`#graph=<doc path>` links straight to it).
 - **Maintenance** — proposals awaiting review, knowledge gaps, documents behind the code, the
-  oldest documents, links to fix and code coverage.
+  oldest documents, links to fix (broken, over-linked — more than 12 outgoing links, usually a
+  catch-all `related:` list — missing, orphans) and code coverage.
 - **Activity** — latency and volume per tool, the index by scope and the request log; counters
   persist across restarts and can be reset.
 - **Instance** — the running configuration (secrets shown only as set/unset), with Sync now and
