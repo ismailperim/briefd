@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   organisation policy, the config file per chat session type
   (`~/.copilot/mcp-config.json` vs `.vscode/mcp.json`) and Agent mode. The
   dashboard links to it; it needs no token and contains none.
+- Dashboard and setup page: a "Star on GitHub" link in the header (a plain
+  link; nothing is loaded from GitHub).
 
 ## [0.7.0] — 2026-11-09
 
