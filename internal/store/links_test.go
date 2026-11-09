@@ -22,10 +22,10 @@ func TestSuggestLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("domain/snapshot-server.md", "# SnapshotServer\n\n## Role\n\nKeeps the latest quote.\n")
-	write("domain/outage.md", "# Outage handling\n\n## Steps\n\nRestart the SnapshotServer first, then check the SnapshotServer log.\n")
-	write("domain/linked.md", "# Linked\n\n## Body\n\nThe snapshotserver is covered in [[snapshot-server]].\n")
-	write("domain/heading-only.md", "# About\n\n## SnapshotServer notes\n\nNothing else.\n")
+	write("domain/fx-rate-cache.md", "# FxRateCache\n\n## Role\n\nKeeps the latest FX rates.\n")
+	write("domain/incident.md", "# Incident runbook\n\n## Steps\n\nRestart the FxRateCache first, then check the FxRateCache log.\n")
+	write("domain/linked.md", "# Linked\n\n## Body\n\nThe fxratecache is covered in [[fx-rate-cache]].\n")
+	write("domain/heading-only.md", "# About\n\n## FxRateCache notes\n\nNothing else.\n")
 	st, err := store.Open(filepath.Join(t.TempDir(), "s.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -39,12 +39,12 @@ func TestSuggestLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got) != 1 {
-		t.Fatalf("suggestions = %+v, want one (outage → snapshot-server)", got)
+		t.Fatalf("suggestions = %+v, want one (incident → fx-rate-cache)", got)
 	}
-	if s := got[0]; s.From != "domain/outage.md" || s.To != "domain/snapshot-server.md" || s.Mention != "snapshotserver" || s.Count != 2 {
+	if s := got[0]; s.From != "domain/incident.md" || s.To != "domain/fx-rate-cache.md" || s.Mention != "fxratecache" || s.Count != 2 {
 		t.Errorf("suggestion = %+v", s)
 	}
-	if err := st.IgnoreLinkSuggestion(ctx, "domain/outage.md", "domain/snapshot-server.md"); err != nil {
+	if err := st.IgnoreLinkSuggestion(ctx, "domain/incident.md", "domain/fx-rate-cache.md"); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := st.SuggestLinks(ctx, 10); len(got) != 0 {
