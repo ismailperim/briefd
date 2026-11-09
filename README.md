@@ -77,7 +77,7 @@ and run side by side.
 | Staleness | Unknown | Dates on every section; drift against the code it governs |
 | What it can't answer | Silently absent | Listed on the dashboard as a backlog |
 | Footprint | Runtime + engine + several ports | One static binary, one SQLite file, one port (or stdio) |
-| Tool surface | Dozens of tools, thousands of tokens per session | 7 tools, ~2.8k tokens per session |
+| Tool surface | Dozens of tools, thousands of tokens per session | 7 tools, ~2.8k tokens per session (+2 if Confluence is configured) |
 
 Use a memory tool so your agent remembers what it tried last week. Use briefd so every agent on
 the team applies the same rules — and so someone notices when a rule falls behind the code.
@@ -274,6 +274,7 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `search.default_max_tokens` | `BRIEFD_DEFAULT_MAX_TOKENS` | `2000` | |
 | `query_log.retention_days` | `BRIEFD_QUERY_LOG_RETENTION_DAYS` | `30` | feeds the knowledge-gap report; `query_log.enabled: false` turns it off |
 | `code.repos` | — | *(none)* | code repositories (URL or path) compared against documents' `refs` for drift |
+| `confluence.base_url` | `BRIEFD_CONFLUENCE_*` | *(off)* | live Confluence Cloud search tools; see below |
 
 `briefd model pull` pre-fetches the embedding model for offline or image-build use.
 

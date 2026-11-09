@@ -225,7 +225,17 @@ re-embeds automatically.
   database lives.
 - What agents retrieve (a bundle, ~2k tokens) is sent to the model provider
   by the agent, exactly as `CLAUDE.md` content is today — briefd itself sends
-  nothing anywhere.
+  nothing anywhere, except Confluence search requests when you configure it.
+- **Confluence (optional).** The `confluence_search` / `confluence_page`
+  tools call your Confluence Cloud site live (read-only GET requests) and
+  store nothing. Prefer per-person credentials: leave `confluence.email` /
+  `token` empty and have each person add `X-Confluence-Email` and
+  `X-Confluence-Token` (an Atlassian API token) to their MCP headers, so they
+  see only what Confluence lets them see. A service account
+  (`BRIEFD_CONFLUENCE_EMAIL` / `BRIEFD_CONFLUENCE_TOKEN`, from a secret store,
+  never committed) is shared by everyone who holds the briefd token; restrict
+  it with `confluence.spaces`. Headers are never logged or stored. Serve
+  briefd over TLS when callers send credentials.
 
 ## Operations: upgrades, backups, monitoring
 
@@ -257,6 +267,17 @@ Distribute one snippet to the team; it is the same for every project:
       "headers": { "Authorization": "Bearer <token>" }
     }
   }
+}
+```
+
+With Confluence enabled and per-person credentials, each person adds their own
+account to the headers:
+
+```json
+"headers": {
+  "Authorization": "Bearer <token>",
+  "X-Confluence-Email": "you@example.com",
+  "X-Confluence-Token": "<your Atlassian API token>"
 }
 ```
 

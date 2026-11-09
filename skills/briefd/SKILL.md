@@ -43,7 +43,13 @@ user spelled out).
    complete new content, and explain the evidence for the reviewer. It opens
    a branch / pull request; it never changes what is served until a human
    merges. Never edit the knowledge repository directly.
-5. `report_usage(bundle_id, useful_chunk_ids)` when the task is done: the
+5. `confluence_search(query)` and `confluence_page(id)`, when the server
+   offers them, for what the knowledge base does not cover: they read
+   Confluence live and are less curated, so prefer the bundle when both
+   answer. Keep `max_tokens` small and read only the pages you need. If a
+   Confluence page holds a rule the team relies on, suggest capturing it with
+   `propose_update`.
+6. `report_usage(bundle_id, useful_chunk_ids)` when the task is done: the
    chunk ids that actually helped, or an empty list if nothing did — the
    empty list is how maintainers learn what the knowledge base is missing.
 
