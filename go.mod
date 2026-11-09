@@ -2,14 +2,14 @@ module github.com/ismailperim/briefd
 
 go 1.26.0
 
-toolchain go1.27.1
+toolchain go1.27.3
 
 require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/ncruces/go-sqlite3 v0.35.6
 	github.com/yuin/goldmark v1.8.6
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
 	gonum.org/v1/gonum v0.17.0

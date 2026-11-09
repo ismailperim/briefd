@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- `golang.org/x/net` 0.61.0 → 0.62.0: quadratic complexity when the HTML
+  parser coalesces text nodes (GO-2026-6860, CVE-2026-78661). Reachable
+  through the new Confluence page converter; a hostile page could make a
+  request slow. Toolchain go1.27.3 (standard library fixes in `net/http`,
+  `crypto/tls`, `crypto/x509`).
 - `golang.org/x/net` 0.58.0 → 0.61.0: HTTP/2 denial of service through
   excessive SETTINGS frames (CVE-2026-78669). briefd serves HTTP/1.1 and
   HTTP/2 through `net/http`, which vendors its own copy; the module is a
