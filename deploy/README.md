@@ -256,7 +256,14 @@ re-embeds automatically.
 
 ## Connecting agents
 
-Distribute one snippet to the team; it is the same for every project:
+Send the team `https://<your briefd>/setup`: a public page (no token required or shown)
+with per-tool instructions — Claude Code, GitHub Copilot in VS Code / CLI / JetBrains /
+Visual Studio, Cursor, Codex, OpenCode, Gemini CLI, Windsurf / Devin, Claude Desktop —
+filled in with the server's URL, the token taken from an environment variable. For
+**Copilot Business / Enterprise**, an organisation owner must first enable the
+*MCP servers in Copilot* policy (off by default), and chats must be in **Agent** mode.
+
+The generic snippet, the same for every project:
 
 ```json
 {

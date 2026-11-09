@@ -555,3 +555,19 @@ func TestActionsNeedJSON(t *testing.T) {
 		t.Errorf("sync without source: status %d", resp.StatusCode)
 	}
 }
+
+func TestSetupPageIsPublicAndTokenFree(t *testing.T) {
+	srv := newTestServer(t, "s3cret-token")
+	resp, err := http.Get(srv.URL + "/setup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Connect your coding agent") {
+		t.Fatalf("GET /setup = %d", resp.StatusCode)
+	}
+	if strings.Contains(string(body), "s3cret-token") {
+		t.Error("setup page leaks the API token")
+	}
+}

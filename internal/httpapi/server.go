@@ -29,7 +29,7 @@ import (
 	"github.com/ismailperim/briefd/internal/store"
 )
 
-//go:embed dashboard/index.html dashboard/assets
+//go:embed dashboard/index.html dashboard/setup.html dashboard/assets
 var dashboardFS embed.FS
 
 // Deps are the collaborators the HTTP layer needs.
@@ -92,6 +92,9 @@ func New(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/health", a.health)
 	mux.HandleFunc("GET /healthz", a.health) // conventional alias for platform health checks
 	mux.HandleFunc("GET /{$}", a.dashboard)
+	// The setup page explains how to connect agents; like the dashboard
+	// shell it is static, needs no token and contains none.
+	mux.HandleFunc("GET /setup", a.setup)
 	mux.Handle("GET /assets/", dashboardAssets())
 	auth := bearer(d.APIToken)
 	if d.Metrics != nil {
@@ -167,6 +170,17 @@ func (a *api) dashboard(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(page)
+}
+
+func (a *api) setup(w http.ResponseWriter, _ *http.Request) {
+	page, err := dashboardFS.ReadFile("dashboard/setup.html")
+	if err != nil {
+		http.Error(w, "setup page unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(page)
 }
 

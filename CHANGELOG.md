@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `GET /setup`: a public page that walks people through connecting their
+  coding agent — Claude Code, GitHub Copilot (VS Code, CLI, JetBrains,
+  Visual Studio), Cursor, Codex, OpenCode, Gemini CLI, Windsurf / Devin and
+  Claude Desktop — with snippets filled in for the server's URL, the token
+  read from an environment variable, optional Confluence headers and a local
+  (stdio) variant. It covers the Copilot steps that trip people up: the
+  organisation policy, the config file per chat session type
+  (`~/.copilot/mcp-config.json` vs `.vscode/mcp.json`) and Agent mode. The
+  dashboard links to it; it needs no token and contains none.
+
 ## [0.7.0] — 2026-11-09
 
 ### Added

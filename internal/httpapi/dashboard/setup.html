@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect briefd</title>
+<meta name="description" content="How to connect Claude Code, GitHub Copilot, Cursor, Codex, OpenCode, Gemini CLI, Windsurf and Claude Desktop to this briefd server.">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d4f9f'/><path d='M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z' fill='none' stroke='%23f9fafb' stroke-width='1.7'/></svg>">
+<style>
+  @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(assets/hanken-grotesk-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(assets/hanken-grotesk-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  :root, :root[data-theme="light"] {
+    --bg: #f3f4f8; --panel: #ffffff; --panel-2: #f8f9fb; --line: #e9ebf0; --line-strong: #d7dbe3;
+    --text: #212529; --text-2: #495057; --muted: #6c7080;
+    --accent: #3d4f9f; --accent-soft: #e2e6f5; --on-accent: #ffffff;
+    --warn: #9a5b00; --warn-soft: #fdf1dc; --ok: #087f6f; --ok-soft: #daf4f0;
+    --code-bg: #f4f5f9; --ring: #3d4f9f;
+    --sans: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #1a1d21; --panel: #212529; --panel-2: #262a2f; --line: #2d3238; --line-strong: #393f46;
+    --text: #ced4da; --text-2: #adb5bd; --muted: #969aa8; --accent: #8e9ee6; --accent-soft: #2a3150; --on-accent: #10131a;
+    --warn: #e3a64a; --warn-soft: #33260f; --ok: #2fcbb4; --ok-soft: #15291f; --code-bg: #1b1e22; --ring: #8e9ee6;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #1a1d21; --panel: #212529; --panel-2: #262a2f; --line: #2d3238; --line-strong: #393f46;
+    --text: #ced4da; --text-2: #adb5bd; --muted: #969aa8; --accent: #8e9ee6; --accent-soft: #2a3150; --on-accent: #10131a;
+    --warn: #e3a64a; --warn-soft: #33260f; --ok: #2fcbb4; --ok-soft: #15291f; --code-bg: #1b1e22; --ring: #8e9ee6;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 var(--sans); }
+  a { color: var(--accent); }
+  code { font: 13px var(--mono); background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+  header.top { background: var(--panel); border-bottom: 1px solid var(--line); }
+  header.top .in { max-width: 1040px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header.top .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--text); text-decoration: none; }
+  header.top .sp { flex: 1; }
+  header.top a.dash { font-size: 14px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; font-weight: 650; letter-spacing: -.01em; }
+  .lede { color: var(--text-2); margin: 0 0 24px; max-width: 70ch; }
+  h2 { font-size: 17px; margin: 0 0 4px; font-weight: 650; }
+  h3 { font-size: 15px; margin: 22px 0 6px; font-weight: 650; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin-bottom: 18px; }
+  .panel > p:first-of-type { margin-top: 4px; }
+  .step-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 700; margin-right: 8px; vertical-align: 1px; }
+  .urlrow { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; margin-top: 10px; }
+  .urlrow code { font-size: 15px; padding: 8px 12px; display: flex; align-items: center; flex: 1 1 280px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-top: 12px; }
+  .opts label { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; color: var(--text-2); }
+  .opts input[type=text] { font: 13px var(--mono); padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel-2); color: var(--text); min-width: 260px; }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 18px; }
+  .tab { border: 1px solid var(--line-strong); background: var(--panel); color: var(--text-2); border-radius: 999px; padding: 7px 14px; font: 14px var(--sans); cursor: pointer; min-height: 36px; }
+  .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .tab:focus-visible, .btn:focus-visible, .copy:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .client h2 { font-size: 20px; }
+  .client .sub { color: var(--muted); margin: 0 0 8px; }
+  ol.steps { padding-left: 22px; margin: 10px 0; }
+  ol.steps > li { margin: 10px 0; padding-left: 4px; }
+  .file { font: 12.5px var(--mono); color: var(--muted); margin: 8px 0 -2px; }
+  .code { position: relative; margin: 8px 0; }
+  .code pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; padding-right: 72px; overflow-x: auto; font: 13px/1.55 var(--mono); color: var(--text); white-space: pre; }
+  .code pre code { background: none; border: 0; padding: 0; font: inherit; }
+  .copy, .btn { position: absolute; top: 8px; right: 8px; font: 12.5px var(--sans); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text-2); cursor: pointer; }
+  .btn { position: static; padding: 8px 14px; font-size: 14px; }
+  .callout { border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 14px; }
+  .callout.warn { background: var(--warn-soft); color: var(--text); border-left: 3px solid var(--warn); }
+  .callout.ok { background: var(--ok-soft); border-left: 3px solid var(--ok); }
+  .callout strong { font-weight: 650; }
+  ul.tight { margin: 6px 0; padding-left: 20px; }
+  ul.tight li { margin: 4px 0; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .dim { color: var(--muted); }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  @media (max-width: 640px) { main { padding: 20px 16px 48px; } header.top .in { padding: 12px 16px; } .panel { padding: 16px; } h1 { font-size: 22px; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <a class="brand" href="./"><svg width="26" height="26" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="#3d4f9f"/><path d="M4.5 4h4.2a2.2 2.2 0 0 1 0 4.4H4.5zM4.5 8.4h4.9a2.3 2.3 0 0 1 0 4.6H4.5z" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/></svg>briefd</a>
+  <span class="sp"></span>
+  <a class="dash" href="./">Dashboard →</a>
+</div></header>
+<main>
+  <h1>Connect your coding agent</h1>
+  <p class="lede">briefd serves your team's knowledge to coding agents over MCP. Pick your tool below and follow the steps; every snippet is filled in for this server. The token is never part of this page — ask whoever runs briefd for it and keep it in an environment variable.</p>
+
+  <section class="panel" aria-labelledby="s1">
+    <h2 id="s1"><span class="step-n">1</span>This server</h2>
+    <p id="urlLabel">MCP endpoint (streamable HTTP):</p>
+    <div class="urlrow"><code id="mcpUrl">…</code><button class="btn" type="button" data-copy-text="mcpUrl">Copy</button></div>
+    <div class="opts">
+      <label><input type="radio" name="mode" value="remote" checked> Shared server (this URL)</label>
+      <label><input type="radio" name="mode" value="local"> Local, on my machine (<code>briefd mcp</code>)</label>
+      <label id="confOpt"><input type="checkbox" id="conf"> I use Confluence through briefd</label>
+    </div>
+    <div class="opts" id="localOpts" hidden>
+      <label>Knowledge folder <input type="text" id="srcDir" value="/abs/path/to/knowledge" spellcheck="false" aria-label="Absolute path of the knowledge folder"></label>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="s2" id="envPanel">
+    <h2 id="s2"><span class="step-n">2</span>Put the token in your environment</h2>
+    <p>Every snippet below reads <code>BRIEFD_TOKEN</code><span class="confOnly" hidden>, <code>CONFLUENCE_EMAIL</code> and <code>CONFLUENCE_TOKEN</code> (your Atlassian account email and an <a href="https://id.atlassian.com/manage-profile/security/api-tokens" rel="noopener" target="_blank">Atlassian API token</a>)</span> from the environment, so no secret ends up in a config file or in git.</p>
+    <div class="grid2">
+      <div><h3>macOS / Linux</h3><div class="code" data-snippet="envUnix"></div>
+        <p class="dim" style="font-size:13.5px">Add the lines to <code>~/.zshrc</code> or <code>~/.bashrc</code>. Editors started from the Dock or a launcher do not read that file: start them from a terminal (<code>code .</code>, <code>cursor .</code>), or on macOS also run the <code>launchctl setenv</code> lines and restart the editor.</p></div>
+      <div><h3>Windows (PowerShell)</h3><div class="code" data-snippet="envWin"></div>
+        <p class="dim" style="font-size:13.5px"><code>setx</code> stores the variable for new processes: close and reopen your terminal and editor afterwards.</p></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="s3">
+    <h2 id="s3"><span class="step-n">3</span>Add briefd to your tool</h2>
+    <div class="tabs" role="tablist" aria-label="Coding agent" id="tabs"></div>
+    <div id="client" class="client" role="tabpanel"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="s4">
+    <h2 id="s4"><span class="step-n">4</span>Tell the agent when to use it</h2>
+    <p>Agents call tools they are told about. Add this to the instructions file your tool reads — <code>CLAUDE.md</code> (Claude Code), <code>.github/copilot-instructions.md</code> (Copilot), <code>AGENTS.md</code> (Codex, OpenCode, Cursor and others), <code>GEMINI.md</code> (Gemini CLI):</p>
+    <div class="code" data-snippet="instructions"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="s5">
+    <h2 id="s5">Something is not working</h2>
+    <ul class="tight">
+      <li><strong>401 / unauthorized</strong> — the token variable is empty in the editor's environment (it was started from the Dock, or before you set it). Restart the editor from a terminal. Some tools send <code>${BRIEFD_TOKEN}</code> literally when the variable is missing.</li>
+      <li><strong>The server is listed but the agent never calls it</strong> — the chat is not in <em>Agent</em> mode (Copilot, Visual Studio), the tools are switched off in the tools picker, or the instructions from step 4 are missing.</li>
+      <li><strong>The server does not show up at all</strong> — the config is in the wrong file for your tool or editor mode (see the Copilot notes), or the folder is not trusted yet.</li>
+      <li><strong>Connection refused or timeout</strong> — check the URL above opens from your machine (<a id="healthLink" href="api/health" target="_blank" rel="noopener">health check</a>); a VPN or proxy may be required.</li>
+      <li><strong>Confluence tools missing</strong> — they appear only when the server has Confluence configured; Confluence errors such as 401 mean your Atlassian email or API token is wrong.</li>
+    </ul>
+  </section>
+
+  <footer>briefd · this page needs no token and contains none · <a href="https://github.com/ismailperim/briefd" rel="noopener" target="_blank">github.com/ismailperim/briefd</a></footer>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Base of this server, also when it sits behind a path prefix.
+  const base = location.origin + location.pathname.replace(/setup\/?$/, '');
+  const url = base.replace(/\/?$/, '/') + 'mcp';
+  $('mcpUrl').textContent = url;
+  const st = { mode: 'remote', conf: false, src: '/abs/path/to/knowledge', client: 'claude' };
+  try { const saved = JSON.parse(localStorage.getItem('briefd-setup') || '{}'); Object.assign(st, saved); } catch (_) {}
+  const save = () => { try { localStorage.setItem('briefd-setup', JSON.stringify(st)); } catch (_) {} };
+
+  // ${NAME} built without template literals, so the page itself never
+  // interpolates anything into the snippets.
+  const v = (n) => '$' + '{' + n + '}';
+  const V = (n) => '$' + '{env:' + n + '}';
+  const json = (o) => JSON.stringify(o, null, 2);
+  const hdrs = (ref) => {
+    const h = { Authorization: 'Bearer ' + ref('BRIEFD_TOKEN') };
+    if (st.conf) { h['X-Confluence-Email'] = ref('CONFLUENCE_EMAIL'); h['X-Confluence-Token'] = ref('CONFLUENCE_TOKEN'); }
+    return h;
+  };
+  const local = () => st.mode === 'local';
+  const localArgs = () => ['mcp', '--source', st.src];
+  const shellQuote = (s) => /^[\w./:=@-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'";
+
+  const snippets = {
+    envUnix: () => {
+      const lines = ['export BRIEFD_TOKEN="<token from your briefd admin>"'];
+      if (st.conf) lines.push('export CONFLUENCE_EMAIL="you@example.com"', 'export CONFLUENCE_TOKEN="<your Atlassian API token>"');
+      lines.push('', '# macOS, for editors started from the Dock (repeat after a reboot):', 'launchctl setenv BRIEFD_TOKEN "$BRIEFD_TOKEN"');
+      if (st.conf) lines.push('launchctl setenv CONFLUENCE_EMAIL "$CONFLUENCE_EMAIL"', 'launchctl setenv CONFLUENCE_TOKEN "$CONFLUENCE_TOKEN"');
+      return { lang: 'sh', text: lines.join('\n') };
+    },
+    envWin: () => {
+      const lines = ['setx BRIEFD_TOKEN "<token from your briefd admin>"'];
+      if (st.conf) lines.push('setx CONFLUENCE_EMAIL "you@example.com"', 'setx CONFLUENCE_TOKEN "<your Atlassian API token>"');
+      return { lang: 'powershell', text: lines.join('\n') };
+    },
+    instructions: () => ({ lang: 'md', text: [
+      '## Team knowledge (briefd)',
+      '',
+      'Before writing code that team rules, conventions or past decisions could govern,',
+      'call the briefd `compile_bundle` tool with a one-sentence task description and the',
+      'paths you will edit. Use `search_context` to look one thing up and `get_document`',
+      'for a full document. If the knowledge is wrong or missing, use `propose_update`.',
+      ...(st.conf ? ['Use `confluence_search` / `confluence_page` only for what briefd does not cover.'] : []),
+      'Call `report_usage` with the bundle_id and the chunk ids that helped when done.',
+    ].join('\n') }),
+  };
+
+  const C = [
+    { id: 'claude', name: 'Claude Code', render: () => {
+      const cmd = local()
+        ? ['claude mcp add --transport stdio --scope user briefd -- briefd ' + localArgs().map(shellQuote).join(' ')]
+        : ['claude mcp add --transport http --scope user \\', "  --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "' \\"]
+          .concat(st.conf ? ["  --header 'X-Confluence-Email: " + v('CONFLUENCE_EMAIL') + "' \\", "  --header 'X-Confluence-Token: " + v('CONFLUENCE_TOKEN') + "' \\"] : [])
+          .concat(['  briefd ' + url]);
+      const proj = local()
+        ? { mcpServers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
+        : { mcpServers: { briefd: { type: 'http', url, headers: hdrs(v) } } };
+      return `
+        <ol class="steps">
+          <li>Add the server for all your projects (the single quotes keep <code>${esc(v('BRIEFD_TOKEN'))}</code> as a reference; Claude Code expands it when it connects):${code(cmd.join('\n'), 'sh')}</li>
+          <li>Or share it with the team through the repository: commit a <code>.mcp.json</code> at the repo root — it holds only variable references, no secrets. Claude Code asks each person to approve it once.${code(json(proj), 'json', '.mcp.json')}</li>
+          <li>Check: run <code>/mcp</code> inside Claude Code (or <code>claude mcp list</code>); briefd should be <em>connected</em> with its tools listed.</li>
+        </ol>
+        ${pit(['Name the variable <code>BRIEFD_TOKEN</code> (or anything of your own): Claude Code never forwards <code>ANTHROPIC_API_KEY</code>, <code>HTTPS_PROXY</code> and a few others to remote servers.',
+               'An unset variable is sent as the literal text <code>' + esc(v('BRIEFD_TOKEN')) + '</code>; <code>/mcp</code> warns about it.'])}`;
+    } },
+    { id: 'vscode', name: 'GitHub Copilot · VS Code', render: () => {
+      const cfg = local()
+        ? { mcpServers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs(), tools: ['*'] } } }
+        : { mcpServers: { briefd: { type: 'http', url, headers: hdrs(v), tools: ['*'] } } };
+      const localCfg = local()
+        ? { servers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
+        : { inputs: [{ type: 'promptString', id: 'briefd-token', description: 'briefd API token', password: true }]
+              .concat(st.conf ? [{ type: 'promptString', id: 'confluence-email', description: 'Atlassian account email' }, { type: 'promptString', id: 'confluence-token', description: 'Atlassian API token', password: true }] : []),
+            servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer ' + '$' + '{input:briefd-token}' },
+              st.conf ? { 'X-Confluence-Email': '$' + '{input:confluence-email}', 'X-Confluence-Token': '$' + '{input:confluence-token}' } : {}) } } };
+      return `
+        <p class="sub">Most setup problems come from three things: the organisation policy, the config file for the wrong chat session type, and a chat that is not in Agent mode.</p>
+        <div class="callout warn"><strong>Copilot Business or Enterprise?</strong> The policy <em>MCP servers in Copilot</em> is <strong>off by default</strong>. An organisation owner turns it on under <em>Settings → Code, planning, and automation → Copilot → Policies</em> (enterprise: <em>AI controls → MCP</em>). Until then Copilot ignores every MCP server. Copilot Free, Pro and Pro+ are not affected.</div>
+        <ol class="steps">
+          <li>Update VS Code to the latest version (MCP needs 1.99 or later; the session types below are in current releases).</li>
+          <li>Create <code>~/.copilot/mcp-config.json</code> (Windows: <code>%USERPROFILE%\\.copilot\\mcp-config.json</code>). This is the file the default <strong>Copilot</strong> chat sessions read — and Copilot CLI too. Copilot expands <code>${esc(v('BRIEFD_TOKEN'))}</code> from the environment of VS Code (step 2).${code(json(cfg), 'json', '~/.copilot/mcp-config.json')}</li>
+          <li>Restart VS Code from a terminal so it sees the variable: <code>code .</code></li>
+          <li>Open the Chat view, start a <strong>New Chat (+)</strong>, and in the mode picker under the input choose <strong>Agent</strong>. <em>Ask</em>, <em>Edit</em> and <em>Plan</em> have no tools — this is the step most people miss.</li>
+          <li>Open the tools picker (<em>Configure Tools</em>, or <em>Chat: Open Customizations → Tools</em>) and make sure the briefd tools are ticked.</li>
+          <li>Check: run <strong>MCP: List Servers</strong> from the Command Palette — briefd should be <em>Running</em>; <em>Show Output</em> on it shows the log. Then ask in Agent mode: “Use briefd to compile a bundle for …” and expand the tool call.</li>
+        </ol>
+        <h3>Alternative: the “Local” session type with a password prompt</h3>
+        <p>If you pick <strong>Local</strong> as the session target instead of Copilot, VS Code reads <code>.vscode/mcp.json</code> (workspace) or your user <code>mcp.json</code> (<em>MCP: Open User Configuration</em>)${local() ? '' : ' and can prompt for the token once and keep it in its secret storage'}. Copilot sessions do <strong>not</strong> see servers defined this way${local() ? '' : ' — the <code>' + esc('$' + '{input:…}') + '</code> prompt only works for Local sessions'}.</p>
+        ${code(json(localCfg), 'json', '.vscode/mcp.json')}
+        ${pit(['The server is in <code>.vscode/mcp.json</code> but the chat is a <em>Copilot</em> session: the server silently does not exist there. Use <code>~/.copilot/mcp-config.json</code>.',
+               'Use <code>' + esc(v('BRIEFD_TOKEN')) + '</code> in <code>mcp-config.json</code> and <code>' + esc(V('BRIEFD_TOKEN')) + '</code> or <code>$' + '{input:…}</code> in <code>.vscode/mcp.json</code>; the syntaxes are not interchangeable.',
+               'More than 128 tools across all servers fail the request (“Cannot have more than 128 tools per request”): untick servers you do not need.',
+               'In a workspace that is not trusted (Restricted Mode) workspace MCP servers do not start.'])}`;
+    } },
+    { id: 'copilotcli', name: 'Copilot CLI', render: () => {
+      const cmd = local()
+        ? 'copilot mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ')
+        : "copilot mcp add --transport http --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? " --header 'X-Confluence-Email: " + v('CONFLUENCE_EMAIL') + "' --header 'X-Confluence-Token: " + v('CONFLUENCE_TOKEN') + "'" : '') + ' briefd ' + url;
+      return `
+        <ol class="steps">
+          <li>Add the server (written to <code>~/.copilot/mcp-config.json</code>, the same file VS Code's Copilot sessions read):${code(cmd, 'sh')}</li>
+          <li>Check: <code>copilot mcp list</code>, or <code>/mcp</code> inside a session.</li>
+        </ol>
+        ${pit(['Servers in a repository <code>.mcp.json</code> load only after you trust the folder.', 'The organisation policy <em>MCP servers in Copilot</em> applies here too (see the VS Code tab).'])}`;
+    } },
+    { id: 'jetbrains', name: 'Copilot · JetBrains', render: () => {
+      const cfg = local()
+        ? { servers: { briefd: { command: 'briefd', args: localArgs() } } }
+        : { servers: { briefd: { url, requestInit: { headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Confluence-Email': 'you@example.com', 'X-Confluence-Token': '<Atlassian API token>' } : {}) } } } };
+      return `
+        <ol class="steps">
+          <li>Update the GitHub Copilot plugin (1.14.2 or later; earlier versions ignored headers).</li>
+          <li>Open Copilot Chat, switch it to <strong>Agent</strong> mode, click the tools icon and choose <em>Add MCP Tools</em>. That opens <code>mcp.json</code>:${code(json(cfg), 'json', 'mcp.json')}</li>
+          <li>Save, then pick the briefd tools in the tools list and ask something in Agent mode.</li>
+        </ol>
+        ${local() ? '' : `<div class="callout warn"><strong>The token has to be written into this file for now.</strong> The plugin sends <code>${esc(v('BRIEFD_TOKEN'))}</code> literally instead of expanding it (known issue). This <code>mcp.json</code> lives in your user configuration, not in a repository — keep it that way.</div>`}
+        ${pit(['Agent mode is required; the plain chat has no tools.', 'The organisation policy <em>MCP servers in Copilot</em> applies (see the VS Code tab).'])}`;
+    } },
+    { id: 'vs', name: 'Copilot · Visual Studio', render: () => {
+      const cfg = local()
+        ? { servers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
+        : { servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Confluence-Email': 'you@example.com', 'X-Confluence-Token': '<Atlassian API token>' } : {}) } } };
+      return `
+        <ol class="steps">
+          <li>Visual Studio 2022 17.14 or later, or Visual Studio 2026.</li>
+          <li>Create <code>%USERPROFILE%\\.mcp.json</code> (all solutions) — or use Copilot Chat → <strong>Agent</strong> → <em>Tools</em> → <em>+</em> → <em>Add custom MCP server</em>:${code(json(cfg), 'json', '%USERPROFILE%\\.mcp.json')}</li>
+          <li>In Copilot Chat pick <strong>Agent</strong> mode, open <em>Tools</em> and tick the briefd tools — they are <strong>off by default</strong>.</li>
+        </ol>
+        ${pit(['Keep the token in the user-level file, never in a solution file that is committed.', 'The organisation policy <em>MCP servers in Copilot</em> applies (see the VS Code tab).'])}`;
+    } },
+    { id: 'cursor', name: 'Cursor', render: () => {
+      const cfg = local()
+        ? { mcpServers: { briefd: { command: 'briefd', args: localArgs() } } }
+        : { mcpServers: { briefd: { url, headers: hdrs(V) } } };
+      return `
+        <ol class="steps">
+          <li>Add briefd to <code>~/.cursor/mcp.json</code> (all projects) or <code>.cursor/mcp.json</code> (one project):${code(json(cfg), 'json', '~/.cursor/mcp.json')}</li>
+          <li>Restart Cursor from a terminal (<code>cursor .</code>) so it sees the variables.</li>
+          <li>Check: the MCP section in Cursor's settings shows briefd with a green dot; <em>Output → MCP Logs</em> has the details.</li>
+        </ol>
+        ${pit(['Cursor uses <code>' + esc(V('BRIEFD_TOKEN')) + '</code> — with <code>env:</code>.', 'Team admins can restrict which MCP servers are allowed.'])}`;
+    } },
+    { id: 'codex', name: 'Codex', render: () => {
+      const toml = local()
+        ? ['[mcp_servers.briefd]', 'command = "briefd"', 'args = [' + localArgs().map((a) => JSON.stringify(a)).join(', ') + ']']
+        : ['[mcp_servers.briefd]', 'url = "' + url + '"', 'bearer_token_env_var = "BRIEFD_TOKEN"'].concat(st.conf ? ['env_http_headers = { "X-Confluence-Email" = "CONFLUENCE_EMAIL", "X-Confluence-Token" = "CONFLUENCE_TOKEN" }'] : []);
+      const cmd = local() ? 'codex mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ') : 'codex mcp add briefd --url ' + url + ' --bearer-token-env-var BRIEFD_TOKEN';
+      return `
+        <p class="sub">The Codex CLI, the IDE extension and the desktop app share one configuration.</p>
+        <ol class="steps">
+          <li>Add the server:${code(cmd, 'sh')}or edit <code>~/.codex/config.toml</code> directly${st.conf && !local() ? ' (needed for the Confluence headers)' : ''}:${code(toml.join('\n'), 'toml', '~/.codex/config.toml')}</li>
+          <li>Check: <code>codex mcp list</code>, or <code>/mcp</code> in a session. In the IDE extension use <em>Restart extension</em> after editing.</li>
+        </ol>
+        ${pit(['If <code>BRIEFD_TOKEN</code> is empty, Codex connects without a token and every call fails with 401.'])}`;
+    } },
+    { id: 'opencode', name: 'OpenCode', render: () => {
+      const cfg = local()
+        ? { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'local', command: ['briefd'].concat(localArgs()) } } } }
+        : { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'remote', url, oauth: false, headers: Object.assign({ Authorization: 'Bearer {env:BRIEFD_TOKEN}' }, st.conf ? { 'X-Confluence-Email': '{env:CONFLUENCE_EMAIL}', 'X-Confluence-Token': '{env:CONFLUENCE_TOKEN}' } : {}) } } } };
+      return `
+        <ol class="steps">
+          <li>Add briefd to <code>~/.config/opencode/opencode.json</code> (all projects) or <code>opencode.json</code> in the project:${code(json(cfg), 'json', 'opencode.json')}</li>
+          <li>Check: <code>opencode mcp list</code> shows <em>briefd connected</em>.</li>
+        </ol>
+        ${pit(['Set <code>"oauth": false</code>: OpenCode otherwise starts an OAuth flow for remote servers.', 'OpenCode only expands <code>{env:NAME}</code>, not <code>$NAME</code>. Older configs put servers directly under <code>mcp</code>; current versions use <code>mcp.servers</code>.'])}`;
+    } },
+    { id: 'gemini', name: 'Gemini CLI', render: () => {
+      const cfg = local()
+        ? { mcpServers: { briefd: { command: 'briefd', args: localArgs() } } }
+        : { mcpServers: { briefd: { httpUrl: url, headers: hdrs(v) } } };
+      return `
+        <ol class="steps">
+          <li>Add briefd to <code>~/.gemini/settings.json</code> (or <code>.gemini/settings.json</code> in a project):${code(json(cfg), 'json', '~/.gemini/settings.json')}</li>
+          <li>Check: <code>/mcp</code> in a session, or <code>gemini mcp list</code>.</li>
+        </ol>
+        ${pit(['Use <code>httpUrl</code>: <code>url</code> means the older SSE transport.', 'Local (stdio) servers start only in trusted folders.'])}`;
+    } },
+    { id: 'windsurf', name: 'Windsurf / Devin', render: () => {
+      const cfg = local()
+        ? { mcpServers: { briefd: { command: 'briefd', args: localArgs() } } }
+        : { mcpServers: { briefd: { serverUrl: url, headers: hdrs(V) } } };
+      return `
+        <ol class="steps">
+          <li>Add briefd to <code>~/.config/devin/mcp_config.json</code> (Windows: <code>%AppData%\\devin\\mcp_config.json</code>). Older Windsurf versions use <code>~/.codeium/windsurf/mcp_config.json</code>.${code(json(cfg), 'json', 'mcp_config.json')}</li>
+          <li>Press refresh in Cascade's MCP panel and check that briefd's tools are listed.</li>
+        </ol>
+        ${pit(['On Enterprise plans an admin has to allow MCP servers first.'])}`;
+    } },
+    { id: 'desktop', name: 'Claude Desktop', render: () => {
+      const args = ['-y', 'mcp-remote', url, '--header', 'Authorization:' + v('AUTH_HEADER')];
+      const cfg = local()
+        ? { mcpServers: { briefd: { command: 'briefd', args: localArgs() } } }
+        : { mcpServers: { briefd: { command: 'npx', args: st.conf ? args.concat(['--header', 'X-Confluence-Email:' + v('CONFLUENCE_EMAIL'), '--header', 'X-Confluence-Token:' + v('CONFLUENCE_TOKEN')]) : args,
+              env: Object.assign({ AUTH_HEADER: 'Bearer <token>' }, st.conf ? { CONFLUENCE_EMAIL: 'you@example.com', CONFLUENCE_TOKEN: '<Atlassian API token>' } : {}) } } };
+      return `
+        <p class="sub">Claude Desktop's custom connectors connect from Anthropic's cloud and cannot carry a personal token, so briefd is added as a local bridge (<code>mcp-remote</code>, needs Node.js)${local() ? ' — or, locally, directly' : ''}.</p>
+        <ol class="steps">
+          <li>Settings → Developer → <em>Edit Config</em> opens <code>claude_desktop_config.json</code> (macOS: <code>~/Library/Application Support/Claude/</code>, Windows: <code>%APPDATA%\\Claude\\</code>):${code(json(cfg), 'json', 'claude_desktop_config.json')}</li>
+          <li>Quit Claude Desktop completely and start it again; briefd appears under the <em>+</em> menu → Connectors.</li>
+        </ol>
+        ${pit(['Claude Desktop does not read your shell profile, so the token goes into the <code>env</code> block of this user-level file; keep the file private.', 'Write <code>Authorization:' + esc(v('AUTH_HEADER')) + '</code> without a space (Windows splits arguments on spaces); the space belongs in the value.', 'Logs: <code>~/Library/Logs/Claude/mcp*.log</code> (Windows: <code>%APPDATA%\\Claude\\logs</code>).'])}`;
+    } },
+  ];
+
+  function code(text, lang, file) {
+    return (file ? `<div class="file">${esc(file)}</div>` : '') + `<div class="code"><pre><code data-lang="${esc(lang)}">${esc(text)}</code></pre><button class="copy" type="button">Copy</button></div>`;
+  }
+  function pit(items) {
+    return items.length ? `<h3>Common pitfalls</h3><ul class="tight">${items.map((i) => `<li>${i}</li>`).join('')}</ul>` : '';
+  }
+
+  function render() {
+    document.querySelectorAll('input[name=mode]').forEach((r) => { r.checked = r.value === st.mode; });
+    $('conf').checked = st.conf; $('srcDir').value = st.src;
+    $('localOpts').hidden = !local();
+    $('confOpt').hidden = local();
+    if (local()) st.conf = false;
+    document.querySelectorAll('.confOnly').forEach((e) => { e.hidden = !st.conf; });
+    $('envPanel').hidden = local();
+    $('mcpUrl').textContent = local() ? 'briefd mcp --source ' + st.src : url;
+    $('urlLabel').textContent = local() ? 'Your agent starts briefd itself (stdio) with:' : 'MCP endpoint (streamable HTTP):';
+    document.querySelectorAll('[data-snippet]').forEach((el) => { const s = snippets[el.dataset.snippet](); el.innerHTML = `<pre><code>${esc(s.text)}</code></pre><button class="copy" type="button">Copy</button>`; });
+    $('tabs').innerHTML = C.map((c) => `<button class="tab" role="tab" type="button" id="tab-${c.id}" aria-selected="${c.id === st.client}" aria-controls="client" data-id="${c.id}">${esc(c.name)}</button>`).join('');
+    const c = C.find((x) => x.id === st.client) || C[0];
+    $('client').setAttribute('aria-labelledby', 'tab-' + c.id);
+    $('client').innerHTML = `<h2>${esc(c.name)}</h2>` + c.render();
+  }
+
+  document.addEventListener('click', async (ev) => {
+    const tab = ev.target.closest('.tab');
+    if (tab) { st.client = tab.dataset.id; save(); render(); history.replaceState(null, '', '#' + st.client); document.getElementById('tab-' + st.client).focus(); return; }
+    const btn = ev.target.closest('.copy, [data-copy-text]');
+    if (!btn) return;
+    const text = btn.dataset.copyText ? $(btn.dataset.copyText).textContent : btn.previousElementSibling.textContent;
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch (_) { btn.textContent = 'Select and copy'; }
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  });
+  $('tabs').addEventListener('keydown', (ev) => {
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    const i = C.findIndex((c) => c.id === st.client);
+    st.client = C[(i + (ev.key === 'ArrowRight' ? 1 : C.length - 1)) % C.length].id;
+    save(); render(); document.getElementById('tab-' + st.client).focus();
+  });
+  document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', () => { st.mode = r.value; save(); render(); }));
+  $('conf').addEventListener('change', (ev) => { st.conf = ev.target.checked; save(); render(); });
+  $('srcDir').addEventListener('change', (ev) => { st.src = ev.target.value.trim() || '/abs/path/to/knowledge'; save(); render(); });
+  const fromHash = location.hash.slice(1);
+  if (C.some((c) => c.id === fromHash)) st.client = fromHash;
+  render();
+})();
+</script>
+</body>
+</html>

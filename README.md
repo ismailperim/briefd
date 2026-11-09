@@ -165,6 +165,11 @@ inspectors launch it directly:
 }
 ```
 
+Every instance also serves **`/setup`**: a public page (no token needed, none shown) with
+copy-ready, per-tool steps for Claude Code, GitHub Copilot (VS Code, CLI, JetBrains, Visual
+Studio), Cursor, Codex, OpenCode, Gemini CLI, Windsurf / Devin and Claude Desktop, filled in
+with the server's own URL. Send your team the link instead of a wiki page.
+
 Use `serve` when a team shares one instance (dashboard, metrics, webhook, REST); use `mcp`
 when the agent runs on the machine that holds the checkout.
 

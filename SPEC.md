@@ -107,7 +107,8 @@ index size, last sync time/status, embedding calls.
 no JS framework): request volume and latency per tool, tokens served, cache hit rate,
 index contents per scope, sync status, proposal counts by forge status, and a search box
 that calls `/api/search` for manual inspection. Read-only; it never mutates state. Same
-bearer token as the API.
+bearer token as the API. `GET /setup` is a static, unauthenticated page with per-client
+connection instructions built from the page's own URL; it contains no token.
 
 ### 3.3 CLI
 
