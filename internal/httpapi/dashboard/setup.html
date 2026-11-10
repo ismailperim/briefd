@@ -102,7 +102,7 @@
     <div class="opts">
       <label><input type="radio" name="mode" value="remote" checked> Shared server (this URL)</label>
       <label><input type="radio" name="mode" value="local"> Local, on my machine (<code>briefd mcp</code>)</label>
-      <label id="confOpt"><input type="checkbox" id="conf"> I use Confluence through briefd</label>
+      <label id="confOpt"><input type="checkbox" id="conf"> I use Jira or Confluence through briefd</label>
     </div>
     <div class="opts" id="localOpts" hidden>
       <label>Knowledge folder <input type="text" id="srcDir" value="/abs/path/to/knowledge" spellcheck="false" aria-label="Absolute path of the knowledge folder"></label>
@@ -111,7 +111,7 @@
 
   <section class="panel" aria-labelledby="s2" id="envPanel">
     <h2 id="s2"><span class="step-n">2</span>Put the token in your environment</h2>
-    <p>Every snippet below reads <code>BRIEFD_TOKEN</code><span class="confOnly" hidden>, <code>CONFLUENCE_EMAIL</code> and <code>CONFLUENCE_TOKEN</code> (your Atlassian account email and an <a href="https://id.atlassian.com/manage-profile/security/api-tokens" rel="noopener" target="_blank">Atlassian API token</a>)</span> from the environment, so no secret ends up in a config file or in git.</p>
+    <p>Every snippet below reads <code>BRIEFD_TOKEN</code><span class="confOnly" hidden>, <code>ATLASSIAN_EMAIL</code> and <code>ATLASSIAN_TOKEN</code> (your Atlassian account email and an <a href="https://id.atlassian.com/manage-profile/security/api-tokens" rel="noopener" target="_blank">Atlassian API token</a>; one token works for both Jira and Confluence)</span> from the environment, so no secret ends up in a config file or in git.</p>
     <div class="grid2">
       <div><h3>macOS / Linux</h3><div class="code" data-snippet="envUnix"></div>
         <p class="dim" style="font-size:13.5px">Add the lines to <code>~/.zshrc</code> or <code>~/.bashrc</code>. Editors started from the Dock or a launcher do not read that file: start them from a terminal (<code>code .</code>, <code>cursor .</code>), or on macOS also run the <code>launchctl setenv</code> lines and restart the editor.</p></div>
@@ -139,7 +139,7 @@
       <li><strong>The server is listed but the agent never calls it</strong> — the chat is not in <em>Agent</em> mode (Copilot, Visual Studio), the tools are switched off in the tools picker, or the instructions from step 4 are missing.</li>
       <li><strong>The server does not show up at all</strong> — the config is in the wrong file for your tool or editor mode (see the Copilot notes), or the folder is not trusted yet.</li>
       <li><strong>Connection refused or timeout</strong> — check the URL above opens from your machine (<a id="healthLink" href="api/health" target="_blank" rel="noopener">health check</a>); a VPN or proxy may be required.</li>
-      <li><strong>Confluence tools missing</strong> — they appear only when the server has Confluence configured; Confluence errors such as 401 mean your Atlassian email or API token is wrong.</li>
+      <li><strong>Jira or Confluence tools missing</strong> — they appear only when the server has Jira or Confluence configured; errors such as 401 mean your Atlassian email or API token is wrong, 403 that your account may not see that project or space. Set up before v0.8 with <code>X-Confluence-Email</code> / <code>X-Confluence-Token</code> headers? They keep working, for Jira too.</li>
     </ul>
   </section>
 
@@ -165,7 +165,7 @@
   const json = (o) => JSON.stringify(o, null, 2);
   const hdrs = (ref) => {
     const h = { Authorization: 'Bearer ' + ref('BRIEFD_TOKEN') };
-    if (st.conf) { h['X-Confluence-Email'] = ref('CONFLUENCE_EMAIL'); h['X-Confluence-Token'] = ref('CONFLUENCE_TOKEN'); }
+    if (st.conf) { h['X-Atlassian-Email'] = ref('ATLASSIAN_EMAIL'); h['X-Atlassian-Token'] = ref('ATLASSIAN_TOKEN'); }
     return h;
   };
   const local = () => st.mode === 'local';
@@ -175,14 +175,14 @@
   const snippets = {
     envUnix: () => {
       const lines = ['export BRIEFD_TOKEN="<token from your briefd admin>"'];
-      if (st.conf) lines.push('export CONFLUENCE_EMAIL="you@example.com"', 'export CONFLUENCE_TOKEN="<your Atlassian API token>"');
+      if (st.conf) lines.push('export ATLASSIAN_EMAIL="you@example.com"', 'export ATLASSIAN_TOKEN="<your Atlassian API token>"');
       lines.push('', '# macOS, for editors started from the Dock (repeat after a reboot):', 'launchctl setenv BRIEFD_TOKEN "$BRIEFD_TOKEN"');
-      if (st.conf) lines.push('launchctl setenv CONFLUENCE_EMAIL "$CONFLUENCE_EMAIL"', 'launchctl setenv CONFLUENCE_TOKEN "$CONFLUENCE_TOKEN"');
+      if (st.conf) lines.push('launchctl setenv ATLASSIAN_EMAIL "$ATLASSIAN_EMAIL"', 'launchctl setenv ATLASSIAN_TOKEN "$ATLASSIAN_TOKEN"');
       return { lang: 'sh', text: lines.join('\n') };
     },
     envWin: () => {
       const lines = ['setx BRIEFD_TOKEN "<token from your briefd admin>"'];
-      if (st.conf) lines.push('setx CONFLUENCE_EMAIL "you@example.com"', 'setx CONFLUENCE_TOKEN "<your Atlassian API token>"');
+      if (st.conf) lines.push('setx ATLASSIAN_EMAIL "you@example.com"', 'setx ATLASSIAN_TOKEN "<your Atlassian API token>"');
       return { lang: 'powershell', text: lines.join('\n') };
     },
     instructions: () => ({ lang: 'md', text: [
@@ -192,7 +192,9 @@
       'call the briefd `compile_bundle` tool with a one-sentence task description and the',
       'paths you will edit. Use `search_context` to look one thing up and `get_document`',
       'for a full document. If the knowledge is wrong or missing, use `propose_update`.',
-      ...(st.conf ? ['Use `confluence_search` / `confluence_page` only for what briefd does not cover.'] : []),
+      ...(st.conf ? ['Working on a Jira issue? Call `compile_bundle` with `issue: "<KEY>"` to get the issue and the',
+        'rules that apply in one block. Use `jira_search` / `jira_issue` for other issues and',
+        '`confluence_search` / `confluence_page` for what briefd does not cover.'] : []),
       'Call `report_usage` with the bundle_id and the chunk ids that helped when done.',
     ].join('\n') }),
   };
@@ -202,7 +204,7 @@
       const cmd = local()
         ? ['claude mcp add --transport stdio --scope user briefd -- briefd ' + localArgs().map(shellQuote).join(' ')]
         : ['claude mcp add --transport http --scope user \\', "  --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "' \\"]
-          .concat(st.conf ? ["  --header 'X-Confluence-Email: " + v('CONFLUENCE_EMAIL') + "' \\", "  --header 'X-Confluence-Token: " + v('CONFLUENCE_TOKEN') + "' \\"] : [])
+          .concat(st.conf ? ["  --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' \\", "  --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "' \\"] : [])
           .concat(['  briefd ' + url]);
       const proj = local()
         ? { mcpServers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
@@ -223,9 +225,9 @@
       const localCfg = local()
         ? { servers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
         : { inputs: [{ type: 'promptString', id: 'briefd-token', description: 'briefd API token', password: true }]
-              .concat(st.conf ? [{ type: 'promptString', id: 'confluence-email', description: 'Atlassian account email' }, { type: 'promptString', id: 'confluence-token', description: 'Atlassian API token', password: true }] : []),
+              .concat(st.conf ? [{ type: 'promptString', id: 'atlassian-email', description: 'Atlassian account email' }, { type: 'promptString', id: 'atlassian-token', description: 'Atlassian API token', password: true }] : []),
             servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer ' + '$' + '{input:briefd-token}' },
-              st.conf ? { 'X-Confluence-Email': '$' + '{input:confluence-email}', 'X-Confluence-Token': '$' + '{input:confluence-token}' } : {}) } } };
+              st.conf ? { 'X-Atlassian-Email': '$' + '{input:atlassian-email}', 'X-Atlassian-Token': '$' + '{input:atlassian-token}' } : {}) } } };
       return `
         <p class="sub">Most setup problems come from three things: the organisation policy, the config file for the wrong chat session type, and a chat that is not in Agent mode.</p>
         <div class="callout warn"><strong>Copilot Business or Enterprise?</strong> The policy <em>MCP servers in Copilot</em> is <strong>off by default</strong>. An organisation owner turns it on under <em>Settings → Code, planning, and automation → Copilot → Policies</em> (enterprise: <em>AI controls → MCP</em>). Until then Copilot ignores every MCP server. Copilot Free, Pro and Pro+ are not affected.</div>
@@ -248,7 +250,7 @@
     { id: 'copilotcli', name: 'Copilot CLI', render: () => {
       const cmd = local()
         ? 'copilot mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ')
-        : "copilot mcp add --transport http --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? " --header 'X-Confluence-Email: " + v('CONFLUENCE_EMAIL') + "' --header 'X-Confluence-Token: " + v('CONFLUENCE_TOKEN') + "'" : '') + ' briefd ' + url;
+        : "copilot mcp add --transport http --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? " --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "'" : '') + ' briefd ' + url;
       return `
         <ol class="steps">
           <li>Add the server (written to <code>~/.copilot/mcp-config.json</code>, the same file VS Code's Copilot sessions read):${code(cmd, 'sh')}</li>
@@ -259,7 +261,7 @@
     { id: 'jetbrains', name: 'Copilot · JetBrains', render: () => {
       const cfg = local()
         ? { servers: { briefd: { command: 'briefd', args: localArgs() } } }
-        : { servers: { briefd: { url, requestInit: { headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Confluence-Email': 'you@example.com', 'X-Confluence-Token': '<Atlassian API token>' } : {}) } } } };
+        : { servers: { briefd: { url, requestInit: { headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Atlassian-Email': 'you@example.com', 'X-Atlassian-Token': '<Atlassian API token>' } : {}) } } } };
       return `
         <ol class="steps">
           <li>Update the GitHub Copilot plugin (1.14.2 or later; earlier versions ignored headers).</li>
@@ -272,7 +274,7 @@
     { id: 'vs', name: 'Copilot · Visual Studio', render: () => {
       const cfg = local()
         ? { servers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
-        : { servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Confluence-Email': 'you@example.com', 'X-Confluence-Token': '<Atlassian API token>' } : {}) } } };
+        : { servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Atlassian-Email': 'you@example.com', 'X-Atlassian-Token': '<Atlassian API token>' } : {}) } } };
       return `
         <ol class="steps">
           <li>Visual Studio 2022 17.14 or later, or Visual Studio 2026.</li>
@@ -296,12 +298,12 @@
     { id: 'codex', name: 'Codex', render: () => {
       const toml = local()
         ? ['[mcp_servers.briefd]', 'command = "briefd"', 'args = [' + localArgs().map((a) => JSON.stringify(a)).join(', ') + ']']
-        : ['[mcp_servers.briefd]', 'url = "' + url + '"', 'bearer_token_env_var = "BRIEFD_TOKEN"'].concat(st.conf ? ['env_http_headers = { "X-Confluence-Email" = "CONFLUENCE_EMAIL", "X-Confluence-Token" = "CONFLUENCE_TOKEN" }'] : []);
+        : ['[mcp_servers.briefd]', 'url = "' + url + '"', 'bearer_token_env_var = "BRIEFD_TOKEN"'].concat(st.conf ? ['env_http_headers = { "X-Atlassian-Email" = "ATLASSIAN_EMAIL", "X-Atlassian-Token" = "ATLASSIAN_TOKEN" }'] : []);
       const cmd = local() ? 'codex mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ') : 'codex mcp add briefd --url ' + url + ' --bearer-token-env-var BRIEFD_TOKEN';
       return `
         <p class="sub">The Codex CLI, the IDE extension and the desktop app share one configuration.</p>
         <ol class="steps">
-          <li>Add the server:${code(cmd, 'sh')}or edit <code>~/.codex/config.toml</code> directly${st.conf && !local() ? ' (needed for the Confluence headers)' : ''}:${code(toml.join('\n'), 'toml', '~/.codex/config.toml')}</li>
+          <li>Add the server:${code(cmd, 'sh')}or edit <code>~/.codex/config.toml</code> directly${st.conf && !local() ? ' (needed for the Atlassian headers)' : ''}:${code(toml.join('\n'), 'toml', '~/.codex/config.toml')}</li>
           <li>Check: <code>codex mcp list</code>, or <code>/mcp</code> in a session. In the IDE extension use <em>Restart extension</em> after editing.</li>
         </ol>
         ${pit(['If <code>BRIEFD_TOKEN</code> is empty, Codex connects without a token and every call fails with 401.'])}`;
@@ -309,7 +311,7 @@
     { id: 'opencode', name: 'OpenCode', render: () => {
       const cfg = local()
         ? { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'local', command: ['briefd'].concat(localArgs()) } } } }
-        : { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'remote', url, oauth: false, headers: Object.assign({ Authorization: 'Bearer {env:BRIEFD_TOKEN}' }, st.conf ? { 'X-Confluence-Email': '{env:CONFLUENCE_EMAIL}', 'X-Confluence-Token': '{env:CONFLUENCE_TOKEN}' } : {}) } } } };
+        : { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'remote', url, oauth: false, headers: Object.assign({ Authorization: 'Bearer {env:BRIEFD_TOKEN}' }, st.conf ? { 'X-Atlassian-Email': '{env:ATLASSIAN_EMAIL}', 'X-Atlassian-Token': '{env:ATLASSIAN_TOKEN}' } : {}) } } } };
       return `
         <ol class="steps">
           <li>Add briefd to <code>~/.config/opencode/opencode.json</code> (all projects) or <code>opencode.json</code> in the project:${code(json(cfg), 'json', 'opencode.json')}</li>
@@ -343,8 +345,8 @@
       const args = ['-y', 'mcp-remote', url, '--header', 'Authorization:' + v('AUTH_HEADER')];
       const cfg = local()
         ? { mcpServers: { briefd: { command: 'briefd', args: localArgs() } } }
-        : { mcpServers: { briefd: { command: 'npx', args: st.conf ? args.concat(['--header', 'X-Confluence-Email:' + v('CONFLUENCE_EMAIL'), '--header', 'X-Confluence-Token:' + v('CONFLUENCE_TOKEN')]) : args,
-              env: Object.assign({ AUTH_HEADER: 'Bearer <token>' }, st.conf ? { CONFLUENCE_EMAIL: 'you@example.com', CONFLUENCE_TOKEN: '<Atlassian API token>' } : {}) } } };
+        : { mcpServers: { briefd: { command: 'npx', args: st.conf ? args.concat(['--header', 'X-Atlassian-Email:' + v('ATLASSIAN_EMAIL'), '--header', 'X-Atlassian-Token:' + v('ATLASSIAN_TOKEN')]) : args,
+              env: Object.assign({ AUTH_HEADER: 'Bearer <token>' }, st.conf ? { ATLASSIAN_EMAIL: 'you@example.com', ATLASSIAN_TOKEN: '<Atlassian API token>' } : {}) } } };
       return `
         <p class="sub">Claude Desktop's custom connectors connect from Anthropic's cloud and cannot carry a personal token, so briefd is added as a local bridge (<code>mcp-remote</code>, needs Node.js)${local() ? ' — or, locally, directly' : ''}.</p>
         <ol class="steps">
