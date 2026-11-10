@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `/setup`: the Claude Code and Copilot CLI commands put the server name and
+  URL before `--header`. The option takes several values, so the name was
+  swallowed and `claude mcp add` failed with "missing required argument
+  'name'".
+
 ## [0.8.0] — 2026-11-10
 
 ### Added

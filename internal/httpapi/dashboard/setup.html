@@ -203,9 +203,10 @@
     { id: 'claude', name: 'Claude Code', render: () => {
       const cmd = local()
         ? ['claude mcp add --transport stdio --scope user briefd -- briefd ' + localArgs().map(shellQuote).join(' ')]
-        : ['claude mcp add --transport http --scope user \\', "  --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "' \\"]
-          .concat(st.conf ? ["  --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' \\", "  --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "' \\"] : [])
-          .concat(['  briefd ' + url]);
+        // Name and URL come before --header: the option takes several
+        // values and would swallow them otherwise.
+        : ['claude mcp add --transport http --scope user briefd ' + url + ' \\', "  --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? ' \\' : '')]
+          .concat(st.conf ? ["  --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' \\", "  --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "'"] : []);
       const proj = local()
         ? { mcpServers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
         : { mcpServers: { briefd: { type: 'http', url, headers: hdrs(v) } } };
@@ -250,7 +251,7 @@
     { id: 'copilotcli', name: 'Copilot CLI', render: () => {
       const cmd = local()
         ? 'copilot mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ')
-        : "copilot mcp add --transport http --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? " --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "'" : '') + ' briefd ' + url;
+        : "copilot mcp add --transport http briefd " + url + " --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? " --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "'" : '');
       return `
         <ol class="steps">
           <li>Add the server (written to <code>~/.copilot/mcp-config.json</code>, the same file VS Code's Copilot sessions read):${code(cmd, 'sh')}</li>
