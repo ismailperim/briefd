@@ -168,6 +168,7 @@ func (t *tools) jiraIssue(ctx context.Context, req *mcp.CallToolRequest, in Jira
 	if err != nil {
 		return nil, out, err
 	}
+	t.filterPages(ctx, req, is)
 	md := is.Markdown(in.Comments == nil || *in.Comments)
 	text, truncated, ok := bundle.Fit(md, budget)
 	if !ok {
@@ -177,6 +178,30 @@ func (t *tools) jiraIssue(ctx context.Context, req *mcp.CallToolRequest, in Jira
 		Key: is.Key, Status: is.Status, URL: is.URL, Content: text, Tokens: tokenizer.Count(text), IssueTokens: tokenizer.Count(md), Budget: budget, Truncated: truncated,
 	}
 	return textResult(text), out, nil
+}
+
+// maxCheckedPages bounds the space lookups for an issue's linked pages.
+const maxCheckedPages = 10
+
+// filterPages drops linked Confluence pages outside confluence.spaces, so
+// an issue cannot surface page titles the Confluence tools would refuse.
+// With no Confluence spaces allow-list, pages are kept as Jira lists them.
+func (t *tools) filterPages(ctx context.Context, req *mcp.CallToolRequest, is *jira.Issue) {
+	conf := t.deps.Confluence
+	if conf == nil || len(conf.Spaces()) == 0 || len(is.Pages) == 0 {
+		return
+	}
+	cr, err := conf.Resolve(requestHeader(req))
+	kept := is.Pages[:0]
+	for i, p := range is.Pages {
+		if err != nil || i >= maxCheckedPages || p.PageID == "" {
+			continue
+		}
+		if ok, perr := conf.PageAllowed(ctx, cr, p.PageID); perr == nil && ok {
+			kept = append(kept, p)
+		}
+	}
+	is.Pages = kept
 }
 
 // CompileBundleIssueInput is compile_bundle's input when Jira is
@@ -244,6 +269,7 @@ func (t *tools) issueBundle(ctx context.Context, req *mcp.CallToolRequest, in Co
 	if err != nil {
 		return nil, out, err
 	}
+	t.filterPages(ctx, req, is)
 	budget := search.Budget(cmpOr(in.MaxTokens, t.deps.Compiler.DefaultMaxTokens()))
 	md := is.Markdown(true)
 	short := fmt.Sprintf("# %s: %s\n\nSource: Jira · %s\n%s", is.Key, is.Summary, is.Status, is.URL)

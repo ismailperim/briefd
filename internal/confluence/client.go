@@ -237,6 +237,31 @@ func (c *Client) Page(ctx context.Context, cr Credentials, id string) (*Page, er
 	return p, nil
 }
 
+// PageAllowed reports whether page id lies in an allowed space. Without a
+// spaces allow-list every page is allowed and no request is made.
+func (c *Client) PageAllowed(ctx context.Context, cr Credentials, id string) (bool, error) {
+	if len(c.cfg.Spaces) == 0 {
+		return true, nil
+	}
+	if !pageID.MatchString(id) {
+		return false, nil
+	}
+	var resp struct {
+		SpaceID string `json:"spaceId"`
+	}
+	if err := c.get(ctx, cr, "/wiki/api/v2/pages/"+id, &resp); err != nil {
+		return false, fmt.Errorf("confluence page %s: %w", id, err)
+	}
+	if resp.SpaceID == "" {
+		return false, nil
+	}
+	key, err := c.spaceKey(ctx, cr, resp.SpaceID)
+	if err != nil {
+		return false, err
+	}
+	return c.allowed(key), nil
+}
+
 func (c *Client) spaceKey(ctx context.Context, cr Credentials, spaceID string) (string, error) {
 	if !pageID.MatchString(spaceID) {
 		return "", fmt.Errorf("unexpected space id %q", spaceID)

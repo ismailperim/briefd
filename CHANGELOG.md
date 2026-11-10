@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `jira_issue` and `compile_bundle(issue)` no longer show parent, linked or
+  sub-task issues from projects outside `jira.projects`, nor linked
+  Confluence pages outside `confluence.spaces` (when that list is set).
+  Before, a link from an allowed issue could surface a summary or page
+  title the tools would otherwise refuse to show.
+
 ### Fixed
 
 - `/setup`: the Claude Code and Copilot CLI commands put the server name and

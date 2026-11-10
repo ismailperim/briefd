@@ -69,6 +69,11 @@ Rules shared with ADR-0009, now in `internal/atlassian`:
 - **Allow-list.** `jira.projects` limits both tools and `compile_bundle`. An
   issue key is checked before the request is made, and the issue's actual
   project is checked again after the response, because issues can move.
+  Parent, linked and sub-task issues are shown only when their project is
+  allowed too. Linked Confluence pages are shown only when they lie in
+  `confluence.spaces`, if Confluence sets that list; each page's space is
+  looked up, for at most 10 pages. A link therefore cannot surface a summary
+  or title that the tools themselves would refuse to show.
 - **Nothing from Jira is stored.**
   - The bundle cache and the query log record only the issue key and the
     caller's own `task_description`.

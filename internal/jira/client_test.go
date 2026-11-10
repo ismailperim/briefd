@@ -36,6 +36,11 @@ func fakeSite(t *testing.T) (*httptest.Server, *string, *string) {
 				"parent":    map[string]any{"key": "PAY-1", "fields": map[string]any{"summary": "Refunds epic", "status": map[string]any{"name": "Open"}}},
 				"issuelinks": []any{
 					map[string]any{"type": map[string]any{"inward": "is blocked by", "outward": "blocks"}, "outwardIssue": map[string]any{"key": "PAY-8", "fields": map[string]any{"summary": "Ledger reversal API"}}},
+					map[string]any{"type": map[string]any{"inward": "is blocked by", "outward": "blocks"}, "inwardIssue": map[string]any{"key": "HR-5", "fields": map[string]any{"summary": "Salary review"}}},
+				},
+				"subtasks": []any{
+					map[string]any{"key": "PAY-9", "fields": map[string]any{"summary": "Refund UI"}},
+					map[string]any{"key": "HR-6", "fields": map[string]any{"summary": "Payroll export"}},
 				},
 				"updated":           "2026-10-02T09:30:00.000+0000",
 				"description":       map[string]any{"type": "doc", "content": []any{}},
@@ -114,6 +119,9 @@ func TestIssue(t *testing.T) {
 	}
 	if strings.Index(md, "Second comment") > strings.Index(md, "First comment") {
 		t.Error("comments should be newest first")
+	}
+	if len(is.Subtasks) != 1 || is.Subtasks[0].Key != "PAY-9" || strings.Contains(md, "HR-") || strings.Contains(md, "Salary") {
+		t.Errorf("related issues outside the allowed projects leaked: links %+v subtasks %+v", is.Links, is.Subtasks)
 	}
 	if strings.Contains(is.Markdown(false), "Comments") {
 		t.Error("comments rendered although not asked for")

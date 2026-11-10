@@ -16,6 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ismailperim/briefd/internal/bundle"
+	"github.com/ismailperim/briefd/internal/confluence"
 	"github.com/ismailperim/briefd/internal/indexer"
 	"github.com/ismailperim/briefd/internal/jira"
 	"github.com/ismailperim/briefd/internal/search"
@@ -245,5 +246,42 @@ func TestCompileBundleWithIssue(t *testing.T) {
 		if bytes.Contains(raw, []byte(secretMarker)) || bytes.Contains(raw, []byte("Partial refunds for card")) {
 			t.Errorf("issue content stored in %s", filepath.Base(f))
 		}
+	}
+}
+
+func TestJiraIssueHidesPagesOutsideConfluenceSpaces(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/api/3/issue/PAY-7", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"key":"PAY-7","fields":{"summary":"Refunds","project":{"key":"PAY"}}}`))
+	})
+	mux.HandleFunc("/rest/api/3/issue/PAY-7/remotelink", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"globalId":"appId=a&pageId=11","application":{"type":"com.atlassian.confluence"},"object":{"title":"Refund design","url":"https://x/wiki/pages/11"}},
+			{"globalId":"appId=a&pageId=22","application":{"type":"com.atlassian.confluence"},"object":{"title":"Salary bands","url":"https://x/wiki/pages/22"}},
+			{"application":{"type":"com.atlassian.confluence"},"object":{"title":"No id page","url":"https://x/wiki/display/HR/Bonus"}}]`))
+	})
+	mux.HandleFunc("/wiki/api/v2/pages/11", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"spaceId":"1"}`)) })
+	mux.HandleFunc("/wiki/api/v2/pages/22", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"spaceId":"2"}`)) })
+	mux.HandleFunc("/wiki/api/v2/spaces/1", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"key":"PAY"}`)) })
+	mux.HandleFunc("/wiki/api/v2/spaces/2", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"key":"HR"}`)) })
+	site := httptest.NewServer(mux)
+	t.Cleanup(site.Close)
+
+	j := jira.New(jira.Config{BaseURL: site.URL, Email: "svc@example.com", Token: "t"})
+	call := func(d Deps) string {
+		res, err := connect(t, d, nil).CallTool(context.Background(), &mcp.CallToolParams{Name: "jira_issue", Arguments: map[string]any{"key": "PAY-7"}})
+		if err != nil || res.IsError {
+			t.Fatal(err, res)
+		}
+		return text(res)
+	}
+	restricted := confluence.New(confluence.Config{BaseURL: site.URL, Email: "svc@example.com", Token: "t", Spaces: []string{"PAY"}})
+	got := call(Deps{Jira: j, Confluence: restricted})
+	if !strings.Contains(got, "Refund design") || strings.Contains(got, "Salary") || strings.Contains(got, "Bonus") {
+		t.Errorf("pages outside confluence.spaces should be hidden:\n%s", got)
+	}
+	open := confluence.New(confluence.Config{BaseURL: site.URL, Email: "svc@example.com", Token: "t"})
+	if got := call(Deps{Jira: j, Confluence: open}); !strings.Contains(got, "Salary bands") {
+		t.Errorf("without a spaces allow-list every linked page should show:\n%s", got)
 	}
 }

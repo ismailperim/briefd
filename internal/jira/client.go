@@ -265,18 +265,22 @@ func (c *Client) Issue(ctx context.Context, cr atlassian.Credentials, key string
 	for _, x := range f.FixVersions {
 		is.FixVersions = append(is.FixVersions, strings.TrimSpace(x.Name))
 	}
-	if f.Parent != nil && f.Parent.Key != "" {
+	// Related issues are shown only when their project is allowed too, so
+	// a link cannot surface a summary from outside jira.projects.
+	if f.Parent != nil && f.Parent.Key != "" && c.allowedKey(f.Parent.Key) {
 		p := f.Parent.ref("parent")
 		is.Parent = &p
 	}
 	for _, s := range f.Subtasks {
-		is.Subtasks = append(is.Subtasks, s.ref("subtask"))
+		if c.allowedKey(s.Key) {
+			is.Subtasks = append(is.Subtasks, s.ref("subtask"))
+		}
 	}
 	for _, l := range f.IssueLinks {
 		switch {
-		case l.Outward != nil:
+		case l.Outward != nil && c.allowedKey(l.Outward.Key):
 			is.Links = append(is.Links, l.Outward.ref(l.Type.Outward))
-		case l.Inward != nil:
+		case l.Inward != nil && c.allowedKey(l.Inward.Key):
 			is.Links = append(is.Links, l.Inward.ref(l.Type.Inward))
 		}
 	}
@@ -480,6 +484,12 @@ func (c *Client) effectiveProjects(requested []string) ([]string, error) {
 		return nil, fmt.Errorf("none of the projects %v is allowed; allowed: %v", requested, c.cfg.Projects)
 	}
 	return out, nil
+}
+
+// allowedKey reports whether an issue key's project is allowed.
+func (c *Client) allowedKey(key string) bool {
+	i := strings.LastIndexByte(key, '-')
+	return i > 0 && c.allowed(key[:i])
 }
 
 func (c *Client) allowed(project string) bool {
