@@ -17,6 +17,7 @@ import (
 
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/confluence"
+	"github.com/ismailperim/briefd/internal/jira"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
@@ -40,8 +41,11 @@ type Deps struct {
 	// Confluence enables the live confluence_search / confluence_page tools
 	// (ADR-0009); nil leaves them out of the tool list.
 	Confluence *confluence.Client
-	Version    string
-	Logger     *slog.Logger
+	// Jira enables the live jira_search / jira_issue tools and
+	// compile_bundle's issue option (ADR-0010); nil leaves them out.
+	Jira    *jira.Client
+	Version string
+	Logger  *slog.Logger
 }
 
 // served records the documents a tool handed out, for the dashboard's
@@ -93,11 +97,17 @@ func New(d Deps) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.searchContext)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	compileTool := &mcp.Tool{
 		Name:        "compile_bundle",
-		Description: "Compile what the team's knowledge base says about a task into one context block within a token budget. Call it once at the start of a task, before code that rules, conventions or past decisions could govern; describe the task in a sentence, not keywords. Sections are deduplicated, ordered domain → conventions → project, each with a source line (path, heading, last-updated date, and a note when the code it governs changed later). Read-only, deterministic, cached: same task, scopes and budget give the same bundle_id and content. Never exceeds max_tokens; a too-small budget truncates the top section with a marker. Afterwards, report which sections helped via report_usage.",
+		Description: compileBundleDescription,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
-	}, t.compileBundle)
+	}
+	if d.Jira != nil {
+		compileTool.Description += compileBundleIssueNote
+		mcp.AddTool(srv, compileTool, t.compileBundleWithIssue)
+	} else {
+		mcp.AddTool(srv, compileTool, t.compileBundle)
+	}
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "report_usage",
@@ -132,8 +142,13 @@ func New(d Deps) *mcp.Server {
 	if d.Confluence != nil {
 		t.addConfluence(srv)
 	}
+	if d.Jira != nil {
+		t.addJira(srv)
+	}
 	return srv
 }
+
+const compileBundleDescription = "Compile what the team's knowledge base says about a task into one context block within a token budget. Call it once at the start of a task, before code that rules, conventions or past decisions could govern; describe the task in a sentence, not keywords. Sections are deduplicated, ordered domain → conventions → project, each with a source line (path, heading, last-updated date, and a note when the code it governs changed later). Read-only, deterministic, cached: same task, scopes and budget give the same bundle_id and content. Never exceeds max_tokens; a too-small budget truncates the top section with a marker. Afterwards, report which sections helped via report_usage."
 
 // ToolDefinitionsJSON returns the tool list as a client would receive it,
 // for estimating the per-session token cost of exposing briefd's tools.

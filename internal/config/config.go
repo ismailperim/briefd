@@ -17,6 +17,7 @@ import (
 	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/embed/minilm"
 	"github.com/ismailperim/briefd/internal/gitsync"
+	"github.com/ismailperim/briefd/internal/jira"
 )
 
 // Config is the fully resolved configuration.
@@ -49,6 +50,9 @@ type Config struct {
 	Code Code `yaml:"code"`
 	// Confluence enables live Confluence Cloud search tools (ADR-0009).
 	Confluence confluence.Config `yaml:"confluence"`
+	// Jira enables live Jira Cloud tools and compile_bundle's issue option
+	// (ADR-0010).
+	Jira jira.Config `yaml:"jira"`
 }
 
 // Code configures code-drift detection (ADR-0007).
@@ -141,6 +145,7 @@ func Default() Config {
 		Embeddings: embed.Default(),
 		Git:        Git{AuthorName: "briefd", AuthorEmail: "briefd@localhost"},
 		Confluence: confluence.Config{UserCredentials: true},
+		Jira:       jira.Config{UserCredentials: true},
 	}
 }
 
@@ -193,6 +198,11 @@ func Load(file string) (Config, error) {
 	}
 	if err := cfg.applyEnv(); err != nil {
 		return cfg, err
+	}
+	// One Atlassian account and API token cover Confluence and Jira on the
+	// same site: Jira falls back to the Confluence service account.
+	if cfg.Jira.Enabled() && cfg.Jira.Email == "" && cfg.Jira.Token == "" {
+		cfg.Jira.Email, cfg.Jira.Token = cfg.Confluence.Email, cfg.Confluence.Token
 	}
 	return cfg, cfg.Validate()
 }
@@ -277,6 +287,22 @@ func (c *Config) applyEnv() error {
 		}
 		c.Confluence.UserCredentials = b
 	}
+	str("JIRA_BASE_URL", &c.Jira.BaseURL)
+	str("JIRA_EMAIL", &c.Jira.Email)
+	str("JIRA_TOKEN", &c.Jira.Token)
+	if v, ok := os.LookupEnv("BRIEFD_JIRA_PROJECTS"); ok {
+		c.Jira.Projects = splitList(v)
+	}
+	if v, ok := os.LookupEnv("BRIEFD_JIRA_FIELDS"); ok {
+		c.Jira.Fields = splitList(v)
+	}
+	if v, ok := os.LookupEnv("BRIEFD_JIRA_USER_CREDENTIALS"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("BRIEFD_JIRA_USER_CREDENTIALS: %w", err)
+		}
+		c.Jira.UserCredentials = b
+	}
 	if v, ok := os.LookupEnv("BRIEFD_EMBEDDINGS_ENABLED"); ok {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
@@ -343,6 +369,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: unknown embeddings.provider %q", c.Embeddings.Provider)
 	}
 	if err := c.Confluence.Validate(); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	if err := c.Jira.Validate(); err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
 	if c.Embeddings.BatchSize < 0 {

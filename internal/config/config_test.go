@@ -74,3 +74,28 @@ func TestValidate(t *testing.T) {
 		t.Error("expected error for negative interval")
 	}
 }
+
+func TestJiraInheritsConfluenceServiceAccount(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "briefd.yaml")
+	yaml := "confluence:\n  base_url: https://x.atlassian.net\n  email: svc@example.com\n  token: tok\njira:\n  base_url: https://x.atlassian.net\n  projects: [PAY]\n"
+	if err := os.WriteFile(file, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BRIEFD_JIRA_FIELDS", "customfield_10035, customfield_10040")
+	cfg, err := Load(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Jira.Email != "svc@example.com" || cfg.Jira.Token != "tok" || !cfg.Jira.UserCredentials {
+		t.Errorf("jira did not inherit the Confluence account: %+v", cfg.Jira)
+	}
+	if len(cfg.Jira.Fields) != 2 || cfg.Jira.Projects[0] != "PAY" {
+		t.Errorf("jira fields/projects: %+v", cfg.Jira)
+	}
+
+	t.Setenv("BRIEFD_JIRA_EMAIL", "jira@example.com")
+	t.Setenv("BRIEFD_JIRA_TOKEN", "jt")
+	if cfg, err = Load(file); err != nil || cfg.Jira.Email != "jira@example.com" {
+		t.Errorf("an explicit Jira account should win: %v %+v", err, cfg.Jira)
+	}
+}

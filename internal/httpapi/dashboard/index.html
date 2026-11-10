@@ -1285,6 +1285,7 @@
         row('Listen address', esc(i.listen)), row('API token required', yn(i.auth)), row('/metrics requires token', yn(i.metrics_auth)),
         row('MCP endpoint', esc(location.origin + '/mcp')),
         row('Confluence (live)', i.confluence ? `${esc(i.confluence.site)} · ${(i.confluence.spaces || []).length ? 'spaces ' + esc(i.confluence.spaces.join(', ')) : 'all spaces'} · ${esc(i.confluence.auth)}` : '<span class="no">off</span>'),
+        row('Jira (live)', i.jira ? `${esc(i.jira.site)} · ${(i.jira.projects || []).length ? 'projects ' + esc(i.jira.projects.join(', ')) : 'all projects'}${(i.jira.fields || []).length ? ' · fields ' + esc(i.jira.fields.join(', ')) : ''} · ${esc(i.jira.auth)}` : '<span class="no">off</span>'),
       ]),
       box('Proposals and code', [
         row('Proposals', i.proposals_enabled ? 'enabled' : '<span class="no">disabled (no writable git source)</span>'),

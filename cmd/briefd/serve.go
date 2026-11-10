@@ -24,6 +24,7 @@ import (
 	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/httpapi"
 	"github.com/ismailperim/briefd/internal/indexer"
+	"github.com/ismailperim/briefd/internal/jira"
 	"github.com/ismailperim/briefd/internal/mcpserver"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
@@ -381,6 +382,7 @@ func instanceInfo(cfg config.Config, rt *process) func() map[string]any {
 			"code_repos":         code,
 			"embeddings":         "off (BM25 only)",
 			"confluence":         confluenceInfo(cfg.Confluence),
+			"jira":               jiraInfo(cfg.Jira),
 		}
 		if rt.searcher.Hybrid() {
 			v := rt.searcher.Vectors()
@@ -396,14 +398,25 @@ func confluenceInfo(c confluence.Config) map[string]any {
 	if !c.Enabled() {
 		return nil
 	}
-	auth := "caller credentials only"
-	switch {
-	case c.Email != "" && c.UserCredentials:
-		auth = "caller credentials, else service account"
-	case c.Email != "":
-		auth = "service account"
+	return map[string]any{"site": redactURL(c.BaseURL), "spaces": c.Spaces, "auth": authMode(c.Email, c.UserCredentials)}
+}
+
+// jiraInfo describes the Jira connection without secrets.
+func jiraInfo(c jira.Config) map[string]any {
+	if !c.Enabled() {
+		return nil
 	}
-	return map[string]any{"site": redactURL(c.BaseURL), "spaces": c.Spaces, "auth": auth}
+	return map[string]any{"site": redactURL(c.BaseURL), "projects": c.Projects, "fields": c.Fields, "auth": authMode(c.Email, c.UserCredentials)}
+}
+
+func authMode(serviceEmail string, user bool) string {
+	switch {
+	case serviceEmail != "" && user:
+		return "caller credentials, else service account"
+	case serviceEmail != "":
+		return "service account"
+	}
+	return "caller credentials only"
 }
 
 // redactURL drops userinfo (user:token@) from a URL-shaped source.
@@ -486,9 +499,13 @@ func (rt *process) mcpServer(cfg config.Config) *mcp.Server {
 	if cfg.Confluence.Enabled() {
 		conf = confluence.New(cfg.Confluence)
 	}
+	var jc *jira.Client
+	if cfg.Jira.Enabled() {
+		jc = jira.New(cfg.Jira)
+	}
 	return mcpserver.New(mcpserver.Deps{
 		Store: rt.st, Searcher: rt.searcher, Compiler: rt.compiler, Proposals: rt.proposals, Metrics: rt.reg,
-		QueryLog: cfg.QueryLog.Enabled, Confluence: conf, Version: version, Logger: rt.mcpLogger(cfg),
+		QueryLog: cfg.QueryLog.Enabled, Confluence: conf, Jira: jc, Version: version, Logger: rt.mcpLogger(cfg),
 	})
 }
 

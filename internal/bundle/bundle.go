@@ -37,7 +37,12 @@ const (
 
 // Request describes what to compile.
 type Request struct {
-	Task      string
+	// Task labels the bundle (its header, the cache and the query log).
+	Task string
+	// Query, when set, is what retrieval searches for instead of Task. It
+	// lets live sources such as a Jira issue (ADR-0010) steer the bundle
+	// without their text being stored: only its hash enters the cache key.
+	Query     string
 	Scopes    []string
 	MaxTokens int
 	// Paths are the code paths being worked on (see search.Query.Paths).
@@ -86,6 +91,9 @@ func New(st *store.Store, s *search.Searcher, opts Options) *Compiler {
 	return &Compiler{store: st, searcher: s, opts: opts, lru: map[string]*lruEntry{}}
 }
 
+// DefaultMaxTokens is the budget used when a request sets none.
+func (c *Compiler) DefaultMaxTokens() int { return c.opts.DefaultMaxTokens }
+
 // Compile returns the bundle for req, from cache when the same task was
 // compiled against the same knowledge state, budget and scopes.
 func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
@@ -107,7 +115,16 @@ func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
 		model = v.Model()
 	}
 	paths := normalizePaths(req.Paths)
-	key := cacheKey(task, scopes, maxTokens, fingerprint, model, paths)
+	query := strings.TrimSpace(req.Query)
+	if query == "" {
+		query = task
+	}
+	keyTask := task
+	if query != task {
+		sum := sha256.Sum256([]byte(query))
+		keyTask = task + "\x00q:" + hex.EncodeToString(sum[:])
+	}
+	key := cacheKey(keyTask, scopes, maxTokens, fingerprint, model, paths)
 	budget := search.Budget(maxTokens)
 
 	if b := c.lruGet(key); b != nil {
@@ -125,7 +142,7 @@ func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
 	}
 	c.report(false)
 
-	b, err = c.compile(ctx, task, scopes, paths, maxTokens, fingerprint, model, key)
+	b, err = c.compile(ctx, task, query, scopes, paths, maxTokens, fingerprint, model, key)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +153,8 @@ func (c *Compiler) Compile(ctx context.Context, req Request) (*Result, error) {
 	return &Result{Bundle: b, Budget: budget, Cached: false}, nil
 }
 
-func (c *Compiler) compile(ctx context.Context, task string, scopes, paths []string, maxTokens int, fingerprint, model, key string) (*store.Bundle, error) {
-	res, err := c.searcher.Search(ctx, search.Query{Text: task, Scopes: scopes, Paths: paths, TopK: candidates, MaxTokens: 1 << 30})
+func (c *Compiler) compile(ctx context.Context, task, query string, scopes, paths []string, maxTokens int, fingerprint, model, key string) (*store.Bundle, error) {
+	res, err := c.searcher.Search(ctx, search.Query{Text: query, Scopes: scopes, Paths: paths, TopK: candidates, MaxTokens: 1 << 30})
 	if err != nil {
 		return nil, err
 	}
