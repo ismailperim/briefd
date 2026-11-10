@@ -186,6 +186,10 @@ func (w *mdWriter) inlineNode(n *html.Node) string {
 		if text == "" || href == "" || strings.HasPrefix(href, "#") || strings.HasPrefix(href, "javascript:") {
 			return raw
 		}
+		// An autolink (text is the address itself) needs no brackets.
+		if text == href || strings.TrimPrefix(strings.TrimPrefix(href, "https://"), "http://") == text {
+			return edges(raw, href)
+		}
 		return edges(raw, "["+text+"]("+href+")")
 	case atom.Ul, atom.Ol, atom.Table, atom.Pre:
 		sub := &mdWriter{}
