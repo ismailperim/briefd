@@ -6,17 +6,17 @@ package confluence
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ismailperim/briefd/internal/atlassian"
 )
 
 // Config configures the Confluence Cloud connection.
@@ -32,8 +32,8 @@ type Config struct {
 	// allows every space the credentials can see.
 	Spaces []string `yaml:"spaces"`
 	// UserCredentials lets MCP clients send their own Atlassian credentials
-	// in the X-Confluence-Email and X-Confluence-Token headers, so they see
-	// only what they may see (default true).
+	// in the X-Atlassian-Email and X-Atlassian-Token headers (or the older
+	// X-Confluence-* pair), so they see only what they may see (default true).
 	UserCredentials bool `yaml:"user_credentials"`
 	// Timeout bounds each Confluence request (default 15s).
 	Timeout time.Duration `yaml:"timeout"`
@@ -47,18 +47,11 @@ func (c Config) Validate() error {
 	if !c.Enabled() {
 		return nil
 	}
-	u, err := url.Parse(c.BaseURL)
-	if err != nil || u.Host == "" {
-		return fmt.Errorf("confluence.base_url %q is not a URL", c.BaseURL)
+	if err := atlassian.ValidateSite("confluence.base_url", c.BaseURL); err != nil {
+		return err
 	}
-	if u.Scheme != "https" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" {
-		return errors.New("confluence.base_url must use https")
-	}
-	if (c.Email == "") != (c.Token == "") {
-		return errors.New("confluence: set both email and token, or neither")
-	}
-	if c.Email == "" && !c.UserCredentials {
-		return errors.New("confluence: no service credentials and user_credentials is off; nobody could authenticate")
+	if err := atlassian.ValidateAuth("confluence", atlassian.Credentials{Email: c.Email, Token: c.Token}, c.UserCredentials); err != nil {
+		return err
 	}
 	if c.Timeout < 0 {
 		return errors.New("confluence.timeout must be >= 0")
@@ -72,14 +65,14 @@ func (c Config) Validate() error {
 }
 
 // Credentials authenticate one request (Atlassian email + API token).
-type Credentials struct {
-	Email string
-	Token string
-}
+type Credentials = atlassian.Credentials
 
 // ErrNoCredentials means neither the caller nor the configuration supplied
 // credentials.
-var ErrNoCredentials = errors.New("no Confluence credentials: send X-Confluence-Email and X-Confluence-Token headers, or configure confluence.email and confluence.token")
+var ErrNoCredentials = atlassian.ErrNoCredentials
+
+// StatusError is a non-2xx answer from Confluence.
+type StatusError = atlassian.StatusError
 
 // ErrNotAllowed is returned for pages outside the configured spaces.
 var ErrNotAllowed = errors.New("page is outside the Confluence spaces this server allows")
@@ -93,18 +86,14 @@ var (
 type Client struct {
 	cfg  Config
 	base string
-	http *http.Client
+	api  *atlassian.Client
 }
 
 // New returns a client; cfg must be enabled and valid.
 func New(cfg Config) *Client {
-	timeout := cfg.Timeout
-	if timeout == 0 {
-		timeout = 15 * time.Second
-	}
-	// Accept the site URL with or without the /wiki context path.
-	base := strings.TrimSuffix(strings.TrimRight(cfg.BaseURL, "/"), "/wiki")
-	return &Client{cfg: cfg, base: base, http: &http.Client{Timeout: timeout}}
+	// The site URL is accepted with or without the /wiki context path.
+	api := atlassian.NewClient("Confluence", cfg.BaseURL, cfg.Timeout)
+	return &Client{cfg: cfg, base: api.Base, api: api}
 }
 
 // Spaces returns the allowed space keys (nil = all).
@@ -113,16 +102,7 @@ func (c *Client) Spaces() []string { return c.cfg.Spaces }
 // Resolve picks the credentials for a request from the caller's headers
 // (when allowed) or the service account.
 func (c *Client) Resolve(h http.Header) (Credentials, error) {
-	if c.cfg.UserCredentials && h != nil {
-		email, token := strings.TrimSpace(h.Get("X-Confluence-Email")), strings.TrimSpace(h.Get("X-Confluence-Token"))
-		if email != "" && token != "" {
-			return Credentials{Email: email, Token: token}, nil
-		}
-	}
-	if c.cfg.Email != "" {
-		return Credentials{Email: c.cfg.Email, Token: c.cfg.Token}, nil
-	}
-	return Credentials{}, ErrNoCredentials
+	return atlassian.Resolve(h, c.cfg.UserCredentials, Credentials{Email: c.cfg.Email, Token: c.cfg.Token})
 }
 
 // Hit is one search result.
@@ -320,49 +300,8 @@ func (c *Client) webURL(link string) string {
 	}
 }
 
-// StatusError is a non-2xx answer from Confluence.
-type StatusError struct {
-	Code int
-	Body string
-}
-
-func (e *StatusError) Error() string {
-	switch e.Code {
-	case http.StatusUnauthorized:
-		return "401 unauthorized: check the Atlassian email and API token"
-	case http.StatusForbidden:
-		return "403 forbidden: the account may not read this content"
-	case http.StatusNotFound:
-		return "404 not found (or not visible to this account)"
-	case http.StatusTooManyRequests:
-		return "429 rate limited by Confluence; retry later"
-	}
-	if e.Body != "" {
-		return fmt.Sprintf("HTTP %d: %s", e.Code, e.Body)
-	}
-	return fmt.Sprintf("HTTP %d", e.Code)
-}
-
 func (c *Client) get(ctx context.Context, cr Credentials, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(cr.Email, cr.Token)
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
-		return &StatusError{Code: resp.StatusCode, Body: strings.TrimSpace(string(b))}
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(out); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
-	return nil
+	return c.api.Get(ctx, cr, path, out)
 }
 
 // CQL builds the search query: full-text over pages, optionally limited to
@@ -379,11 +318,7 @@ func CQL(query string, spaces []string) string {
 	return cql
 }
 
-func quote(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
-}
+func quote(s string) string { return atlassian.Quote(s) }
 
 // cleanExcerpt drops Confluence's highlight markers and collapses space.
 func cleanExcerpt(s string) string {

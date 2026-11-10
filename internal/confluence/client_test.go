@@ -106,7 +106,16 @@ func TestResolve(t *testing.T) {
 	if cr, _ := svc.Resolve(http.Header{"X-Confluence-Email": {"me"}, "X-Confluence-Token": {"t"}}); cr.Email != "svc@x" {
 		t.Errorf("caller credentials used although user_credentials is off: %+v", cr)
 	}
-	callerOnly := New(Config{BaseURL: "https://x.atlassian.net", UserCredentials: true})
+	user := New(Config{BaseURL: "https://x.atlassian.net", UserCredentials: true})
+	for _, h := range []http.Header{
+		{"X-Atlassian-Email": {"me"}, "X-Atlassian-Token": {"t"}},
+		{"X-Confluence-Email": {"me"}, "X-Confluence-Token": {"t"}},
+	} {
+		if cr, err := user.Resolve(h); err != nil || cr.Email != "me" {
+			t.Errorf("caller headers %v not accepted: %+v %v", h, cr, err)
+		}
+	}
+	callerOnly := user
 	if _, err := callerOnly.Resolve(nil); !errors.Is(err, ErrNoCredentials) {
 		t.Errorf("want ErrNoCredentials, got %v", err)
 	}
@@ -133,7 +142,7 @@ func TestValidate(t *testing.T) {
 
 func TestToMarkdown(t *testing.T) {
 	src := `<div class="wrap"><h1>Refunds</h1>
-<p>Refunds go through the <a href="https://example.com/ledger">ledger</a> and take <em>two</em> days. Set it in the <span>.csproj</span>-file.</p>
+<p>Refunds go through the <a href="https://example.com/ledger">ledger</a> and take <em>two</em> days. Set it in the <span>.csproj</span>-file. See <a href="https://example.com/x">https://example.com/x</a> or <a href="http://ops.example.com">ops.example.com</a>.</p>
 <ul><li>Partial refunds<ul><li>allowed once</li></ul></li><li>Full refunds</li></ul>
 <ol><li>Open</li><li>Close</li></ol>
 <table><tbody><tr><th>Code</th><th>Meaning</th></tr><tr><td>R1</td><td>a|b</td></tr></tbody></table>
@@ -142,7 +151,7 @@ y := 2</pre>
 <blockquote><p>Never retry a 4xx.</p></blockquote>
 <script>alert(1)</script><img src="x.png"></div>`
 	want := "# Refunds\n\n" +
-		"Refunds go through the [ledger](https://example.com/ledger) and take _two_ days. Set it in the .csproj-file.\n\n" +
+		"Refunds go through the [ledger](https://example.com/ledger) and take _two_ days. Set it in the .csproj-file. See https://example.com/x or http://ops.example.com.\n\n" +
 		"- Partial refunds\n  - allowed once\n- Full refunds\n\n" +
 		"1. Open\n2. Close\n\n" +
 		"| Code | Meaning |\n| --- | --- |\n| R1 | a\\|b |\n\n" +
