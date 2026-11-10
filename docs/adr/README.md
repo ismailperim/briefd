@@ -28,4 +28,5 @@ Template:
 | [0006](0006-multilingual-default-model.md) | Multilingual embeddings by default (multilingual-e5-small) | accepted |
 | [0008](0008-code-linking-not-code-rag.md) | Link knowledge to code through `refs` (path-aware bundles, coverage); no code indexing | accepted |
 | [0007](0007-code-drift-via-refs.md) | Code drift: knowledge that lags the code it governs (`refs` × `code.repos`) | accepted |
-| [0009](0009-live-confluence-tools.md) | Live Confluence Cloud search as read-only, budgeted MCP tools | accepted |
+| [0009](0009-live-confluence-tools.md) | Live Confluence Cloud search as read-only, budgeted MCP tools | accepted (headers extended by 0010) |
+| [0010](0010-live-jira-tools-and-issue-bundles.md) | Live Jira Cloud tools and issue-driven bundles | accepted |

@@ -77,7 +77,7 @@ and run side by side.
 | Staleness | Unknown | Dates on every section; drift against the code it governs |
 | What it can't answer | Silently absent | Listed on the dashboard as a backlog |
 | Footprint | Runtime + engine + several ports | One static binary, one SQLite file, one port (or stdio) |
-| Tool surface | Dozens of tools, thousands of tokens per session | 7 tools, ~2.8k tokens per session (+2 if Confluence is configured) |
+| Tool surface | Dozens of tools, thousands of tokens per session | 7 tools, ~2.8k tokens per session (+2 each if Jira or Confluence is configured) |
 
 Use a memory tool so your agent remembers what it tried last week. Use briefd so every agent on
 the team applies the same rules — and so someone notices when a rule falls behind the code.
@@ -177,7 +177,7 @@ when the agent runs on the machine that holds the checkout.
 
 | Tool | What it does |
 |---|---|
-| `compile_bundle(task_description, max_tokens?, scopes?, paths?)` | One deduplicated context block within the budget, ordered domain → conventions → project, with a source line per section and a `bundle_id`. Deterministic and cached. |
+| `compile_bundle(task_description, max_tokens?, scopes?, paths?, issue?)` | One deduplicated context block within the budget, ordered domain → conventions → project, with a source line per section and a `bundle_id`. Deterministic and cached. With Jira configured, `issue: "PAY-123"` puts the ticket on top and lets its text choose the rules. |
 | `search_context(query, max_tokens?, scopes?, top_k?, paths?)` | Ranked sections that fit the budget, for inspection. `paths` (code paths being edited) pull the documents whose `refs` cover them to the top. |
 | `get_document(doc_path, scopes?)` | One document in full. |
 | `list_scopes()` | Scopes with document/section counts. |
@@ -185,6 +185,7 @@ when the agent runs on the machine that holds the checkout.
 | `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback: which sections helped. An empty list marks the question as a knowledge gap. |
 | `suggest_links(doc_path?, limit?)` | Links the knowledge base is missing (a document names another without linking it) and broken links — for an agent tidying the knowledge base via `propose_update`. |
 | `confluence_search(query, spaces?, limit?, max_tokens?)`, `confluence_page(id, max_tokens?)` | *Optional.* Live Confluence Cloud search and page reads, converted to compact Markdown within the budget. Listed only when Confluence is configured; see below. |
+| `jira_search(text?, projects?, status?, type?, assignee?, open_only?, limit?, max_tokens?)`, `jira_issue(key, comments?, max_tokens?)` | *Optional.* Live Jira Cloud issue search and issue reads (description, acceptance criteria, related issues, linked Confluence pages, comments) within the budget. Listed only when Jira is configured; see below. |
 
 The same operations are available over REST (`/api/search`, `POST /api/bundle`, `/api/docs/{path}`,
 `/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/gaps`, `/api/health`, `/api/stats`)
@@ -280,11 +281,14 @@ or `BRIEFD_*` environment variables; flags override both. The ones you will actu
 | `query_log.retention_days` | `BRIEFD_QUERY_LOG_RETENTION_DAYS` | `30` | feeds the knowledge-gap report; `query_log.enabled: false` turns it off |
 | `code.repos` | — | *(none)* | code repositories (URL or path) compared against documents' `refs` for drift |
 | `confluence.base_url` | `BRIEFD_CONFLUENCE_*` | *(off)* | live Confluence Cloud search tools; see below |
+| `jira.base_url` | `BRIEFD_JIRA_*` | *(off)* | live Jira Cloud tools and issue bundles; see below |
 
 `briefd model pull` pre-fetches the embedding model for offline or image-build use.
 
-**Confluence (optional, live).** Teams whose knowledge also lives in Confluence Cloud can let
-agents search it through the same MCP endpoint ([ADR-0009](docs/adr/0009-live-confluence-tools.md)):
+**Jira and Confluence (optional, live).** Agents can read the team's Atlassian Cloud site through
+the same MCP endpoint: Confluence pages ([ADR-0009](docs/adr/0009-live-confluence-tools.md)) and
+Jira issues ([ADR-0010](docs/adr/0010-live-jira-tools-and-issue-bundles.md)). Configure either or
+both:
 
 ```yaml
 confluence:
@@ -293,18 +297,34 @@ confluence:
   email: ""                                   # BRIEFD_CONFLUENCE_EMAIL  ┐ optional service account
   token: ""                                   # BRIEFD_CONFLUENCE_TOKEN  ┘ (Atlassian API token)
   user_credentials: true                      # callers may send their own account in headers
+
+jira:
+  base_url: https://your-site.atlassian.net   # BRIEFD_JIRA_BASE_URL
+  projects: [PAY]                             # BRIEFD_JIRA_PROJECTS; empty = every project the account sees
+  fields: [customfield_10035]                 # BRIEFD_JIRA_FIELDS; extra fields to include, e.g. acceptance criteria
+  # email / token: optional service account; empty = the Confluence one (same Atlassian account)
 ```
 
-Each person can use their own Atlassian account, so they only see what Confluence lets them see:
+Each person can use their own Atlassian account, so they only see what Jira and Confluence let them
+see. One Atlassian API token works for both:
 
 ```sh
 claude mcp add --transport http briefd https://briefd.example.com/mcp \
   --header "Authorization: Bearer $BRIEFD_API_TOKEN" \
-  --header "X-Confluence-Email: you@example.com" --header "X-Confluence-Token: $ATLASSIAN_API_TOKEN"
+  --header "X-Atlassian-Email: you@example.com" --header "X-Atlassian-Token: $ATLASSIAN_TOKEN"
 ```
 
-Results are read live and never indexed or stored; the reviewed knowledge base stays the
-source briefd compiles bundles from. Confluence Data Center / Server are not supported yet.
+(The `X-Confluence-Email` / `X-Confluence-Token` headers from v0.7 still work, for Jira too.)
+
+With Jira configured, an agent can start a ticket with one call: `compile_bundle(issue: "PAY-123")`
+returns the issue (cut to at most a third of the budget) followed by the team rules its summary and
+description retrieve, within the same `max_tokens`. Find a custom field's id (such as
+"Acceptance criteria") in Jira under *Settings → Issues → Custom fields*, or from
+`/rest/api/3/field`.
+
+Results are read live with GET requests and never indexed or stored; the bundle cache and query log
+keep only the issue key. The reviewed knowledge base stays the source briefd compiles rules from.
+Data Center / Server are not supported yet.
 
 ## Dashboard and metrics
 

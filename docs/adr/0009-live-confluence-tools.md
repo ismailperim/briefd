@@ -1,6 +1,7 @@
 # 0009 — Live Confluence Cloud search as read-only, budgeted MCP tools
 
-- Status: accepted
+- Status: accepted; ADR-0010 adds the shared `X-Atlassian-Email` /
+  `X-Atlassian-Token` headers (the `X-Confluence-*` pair still works)
 - Date: 2026-11-09
 
 ## Context

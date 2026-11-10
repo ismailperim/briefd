@@ -52,7 +52,16 @@ confluence:                # optional: live Confluence Cloud search tools (ADR-0
   spaces: []               # BRIEFD_CONFLUENCE_SPACES (comma-separated keys); empty = every space the account sees
   email: ""                # BRIEFD_CONFLUENCE_EMAIL  ┐ optional service account; keep the token in the env
   token: ""                # BRIEFD_CONFLUENCE_TOKEN  ┘
-  user_credentials: true   # BRIEFD_CONFLUENCE_USER_CREDENTIALS: honor X-Confluence-Email / X-Confluence-Token headers
+  user_credentials: true   # BRIEFD_CONFLUENCE_USER_CREDENTIALS: honor X-Atlassian-* (and X-Confluence-*) headers
+  timeout: 15s
+
+jira:                      # optional: live Jira Cloud tools + compile_bundle(issue) (ADR-0010)
+  base_url: ""             # BRIEFD_JIRA_BASE_URL, e.g. https://your-site.atlassian.net; empty = off
+  projects: []             # BRIEFD_JIRA_PROJECTS (comma-separated keys); empty = every project the account sees
+  fields: []               # BRIEFD_JIRA_FIELDS: extra field ids to include, e.g. [customfield_10035] (acceptance criteria)
+  email: ""                # BRIEFD_JIRA_EMAIL  ┐ optional service account; empty = the Confluence one
+  token: ""                # BRIEFD_JIRA_TOKEN  ┘
+  user_credentials: true   # BRIEFD_JIRA_USER_CREDENTIALS: honor X-Atlassian-* (and X-Confluence-*) headers
   timeout: 15s
 
 search:

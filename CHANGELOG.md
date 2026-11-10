@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Live Jira Cloud tools (ADR-0010), listed only when `jira.base_url` is
+  set: `jira_search` (filters, not raw JQL; newest first) and `jira_issue`
+  (metadata, related issues, linked Confluence pages, description, extra
+  fields such as acceptance criteria via `jira.fields`, comments newest
+  first), both within `max_tokens` and limited to `jira.projects`.
+- `compile_bundle(issue: "PAY-123")` with Jira configured: the issue's text
+  steers retrieval and the issue (at most 35% of the budget) heads the
+  bundle, all within `max_tokens`. Only the issue key is recorded in the
+  bundle cache and query log.
+- Shared Atlassian credential headers `X-Atlassian-Email` /
+  `X-Atlassian-Token` for Jira and Confluence. The v0.7 `X-Confluence-*`
+  headers keep working, for Jira too; Jira falls back to the Confluence
+  service account. Configuration: `jira.*` / `BRIEFD_JIRA_*`.
+- `/setup` and the dashboard cover Jira: one "Jira or Confluence" option
+  using `ATLASSIAN_EMAIL` / `ATLASSIAN_TOKEN`, and agent instructions for
+  issue-driven bundles.
+
 ## [0.7.1] — 2026-11-09
 
 ### Added

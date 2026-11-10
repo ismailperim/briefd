@@ -66,7 +66,7 @@ and broken links on the dashboard.
 1. `search_context(query, max_tokens?=2000, scopes?, top_k?=8, paths?)`
    → ranked chunks: `[{chunk_id, doc_path, heading, content, score, tokens}]`,
    total ≤ `max_tokens`.
-2. `compile_bundle(task_description, max_tokens?=2000, scopes?, paths?)` — `paths` are code paths the task touches; documents whose `refs` cover them lead (ADR-0008)
+2. `compile_bundle(task_description, max_tokens?=2000, scopes?, paths?, issue?)` — `paths` are code paths the task touches; documents whose `refs` cover them lead (ADR-0008). `issue` (only when Jira is configured, ADR-0010) is a Jira key: its text joins the retrieval query, `task_description` becomes optional, and the issue (≤ 35% of the budget) heads the result; only the key is stored
    → single assembled context block: deduplicated, ordered (domain → conventions →
    project), with per-chunk source attribution and `bundle_id`. Deterministic: same
    task + same knowledge state (repo commit hash) ⇒ byte-identical bundle (cacheable,
@@ -83,8 +83,15 @@ and broken links on the dashboard.
    `confluence_page(id, max_tokens?=3000)` — only when `confluence.base_url` is set
    (ADR-0009). Live, read-only Confluence Cloud search (CQL `siteSearch`) and page
    reads converted to Markdown, within `max_tokens`. Limited to `confluence.spaces`;
-   callers may send `X-Confluence-Email` / `X-Confluence-Token` to use their own
-   account. Nothing is indexed, cached or logged.
+   callers may send `X-Atlassian-Email` / `X-Atlassian-Token` (or the older
+   `X-Confluence-*` pair) to use their own account. Nothing is indexed, cached or logged.
+9. `jira_search(text?, projects?, status?, type?, assignee?, open_only?, limit?=10,
+   max_tokens?=800)` and `jira_issue(key, comments?=true, max_tokens?=2000)` — only when
+   `jira.base_url` is set (ADR-0010). Live, read-only Jira Cloud search (JQL built by briefd
+   from the filters, newest first) and issue reads as Markdown (metadata, related issues,
+   linked Confluence pages, description, `jira.fields`, comments newest first), cut from the
+   end to `max_tokens`. Limited to `jira.projects`; same credential headers as Confluence;
+   the Confluence service account is used when Jira has none. Nothing is indexed or stored.
 
 ### 3.2 REST (secondary)
 
