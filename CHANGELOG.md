@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-10
+
 ### Added
 
 - Live Jira Cloud tools (ADR-0010), listed only when `jira.base_url` is
@@ -361,7 +363,8 @@ First release: everything below.
 - Project skeleton: Go module, `briefd version` command, Makefile, lint config,
   CI, ADR-0001 (core architecture) and ADR-0002 (SQLite driver, vector search).
 
-[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/ismailperim/briefd/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/ismailperim/briefd/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/ismailperim/briefd/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/ismailperim/briefd/compare/v0.6.0...v0.6.1
