@@ -303,6 +303,10 @@ jira:
   projects: [PAY]                             # BRIEFD_JIRA_PROJECTS; empty = every project the account sees
   fields: [customfield_10035]                 # BRIEFD_JIRA_FIELDS; extra fields to include, e.g. acceptance criteria
   # email / token: optional service account; empty = the Confluence one (same Atlassian account)
+  # scoped_token: true marks the service-account token as scoped (BRIEFD_JIRA_SCOPED_TOKEN)
+
+atlassian:
+  cloud_id: ""                                # BRIEFD_ATLASSIAN_CLOUD_ID; only for scoped tokens, empty = looked up
 ```
 
 Each person can use their own Atlassian account, so they only see what Jira and Confluence let them
@@ -315,6 +319,14 @@ claude mcp add --transport http briefd https://briefd.example.com/mcp \
 ```
 
 (The `X-Confluence-Email` / `X-Confluence-Token` headers from v0.7 still work, for Jira too.)
+
+**Scoped API tokens.** Atlassian's API tokens with scopes are made for one product, so send one per
+product instead of `X-Atlassian-Token`:
+`--header "X-Atlassian-Jira-Token: $ATLASSIAN_JIRA_TOKEN" --header "X-Atlassian-Confluence-Token: $ATLASSIAN_CONFLUENCE_TOKEN"`
+(with `X-Atlassian-Email`). briefd sends them through the Atlassian API gateway. Read-only scopes:
+`read:jira-work` for Jira; `search:confluence`, `read:page:confluence` and `read:space:confluence`
+for Confluence ([ADR-0012](docs/adr/0012-scoped-atlassian-tokens.md)). The dashboard's Instance page
+shows each product's health: requests, failures, the last error and whether the site answers.
 
 With Jira configured, an agent can start a ticket with one call: `compile_bundle(issue: "PAY-123")`
 returns the issue (cut to at most a third of the budget) followed by the team rules its summary and

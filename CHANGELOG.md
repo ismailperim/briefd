@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Built with Go 1.27.4, which fixes GO-2026-6859 (an HTTP/1 server crash
+  through a `MaxBytesReader` race in `net/http`).
+
 ### Added
 
 - Close a declined proposal: `POST /api/proposals/{id}/close`
@@ -15,6 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Without a forge (Azure DevOps, Bitbucket, plain git), a proposal whose
   branch was deleted before its change landed is marked closed. Branches are
   checked at most every 10 minutes.
+
+- Scoped Atlassian API tokens (ADR-0012): callers send
+  `X-Atlassian-Jira-Token` and/or `X-Atlassian-Confluence-Token` with
+  `X-Atlassian-Email`, and briefd routes them through the Atlassian API
+  gateway. Service accounts set `jira.scoped_token` /
+  `confluence.scoped_token`. The site's cloud ID is looked up once, or set
+  with `atlassian.cloud_id` (`BRIEFD_ATLASSIAN_CLOUD_ID`). Classic tokens
+  and the `X-Confluence-*` headers work as before.
+- Atlassian health: `GET /api/atlassian/health` and a panel on the
+  dashboard's Instance page show, per product, requests and failures since
+  start, the last error and whether the site answers. A failing product
+  appears under *Needs attention*.
+- `/setup` asks whether you use a classic token or scoped tokens and writes
+  the matching headers into every snippet.
 
 ### Fixed
 

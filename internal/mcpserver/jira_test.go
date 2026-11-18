@@ -189,6 +189,36 @@ func TestJiraCallerCredentials(t *testing.T) {
 	}
 }
 
+func TestJiraScopedTokensUseTheGateway(t *testing.T) {
+	const cloudID = "11111111-2222-3333-4444-555555555555"
+	var users []string
+	site := fakeJira(t, &users)
+	var gatewayHits int
+	gateway := httptest.NewServer(http.StripPrefix("/ex/jira/"+cloudID, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gatewayHits++
+		site.Config.Handler.ServeHTTP(w, r)
+	})))
+	t.Cleanup(gateway.Close)
+	j := jira.New(jira.Config{BaseURL: site.URL, UserCredentials: true, CloudID: cloudID, Gateway: gateway.URL})
+	ctx := context.Background()
+
+	// A scoped Jira token goes through the gateway.
+	cs := connect(t, Deps{Jira: j}, http.Header{"X-Atlassian-Email": {"me@example.com"}, "X-Atlassian-Jira-Token": {"scoped"}})
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "jira_issue", Arguments: map[string]any{"key": "PAY-7"}})
+	if err != nil || res.IsError {
+		t.Fatalf("jira_issue: %v %+v", err, res)
+	}
+	if gatewayHits != 2 || len(users) != 1 || users[0] != "me@example.com" {
+		t.Errorf("gateway hits = %d, users = %v", gatewayHits, users)
+	}
+	// A scoped Confluence token is no credential for Jira.
+	cs = connect(t, Deps{Jira: j}, http.Header{"X-Atlassian-Email": {"me@example.com"}, "X-Atlassian-Confluence-Token": {"scoped"}})
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "jira_search", Arguments: map[string]any{"text": "x"}})
+	if err != nil || !res.IsError || !strings.Contains(text(res), "X-Atlassian-Jira-Token") {
+		t.Errorf("confluence token used for jira: %v %+v", err, res)
+	}
+}
+
 func TestCompileBundleWithIssue(t *testing.T) {
 	var users []string
 	site := fakeJira(t, &users)

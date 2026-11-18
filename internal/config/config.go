@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/ismailperim/briefd/internal/atlassian"
 	"github.com/ismailperim/briefd/internal/confluence"
 	"github.com/ismailperim/briefd/internal/embed"
 	"github.com/ismailperim/briefd/internal/embed/minilm"
@@ -53,6 +55,8 @@ type Config struct {
 	// Jira enables live Jira Cloud tools and compile_bundle's issue option
 	// (ADR-0010).
 	Jira jira.Config `yaml:"jira"`
+	// Atlassian holds what Jira and Confluence share (ADR-0012).
+	Atlassian Atlassian `yaml:"atlassian"`
 }
 
 // Code configures code-drift detection (ADR-0007).
@@ -149,6 +153,40 @@ func Default() Config {
 	}
 }
 
+// Atlassian is shared by the Jira and Confluence connections.
+type Atlassian struct {
+	// CloudID is the site's cloud ID, used to send scoped API tokens
+	// through the Atlassian API gateway. Empty: looked up from the site on
+	// the first scoped request.
+	CloudID string `yaml:"cloud_id"`
+}
+
+// validate checks the cloud ID. It enters gateway URLs, so it must be a
+// UUID, and one ID only fits when Jira and Confluence share a site.
+func (a Atlassian) validate(j jira.Config, c confluence.Config) error {
+	if a.CloudID == "" {
+		return nil
+	}
+	if !atlassian.ValidCloudID(a.CloudID) {
+		return fmt.Errorf("atlassian.cloud_id %q is not a cloud ID (a UUID)", a.CloudID)
+	}
+	if j.Enabled() && c.Enabled() {
+		jh, ch := siteHost(j.BaseURL), siteHost(c.BaseURL)
+		if !strings.EqualFold(jh, ch) {
+			return fmt.Errorf("atlassian.cloud_id is shared, but jira.base_url (%s) and confluence.base_url (%s) are different sites; leave cloud_id empty so each is looked up", jh, ch)
+		}
+	}
+	return nil
+}
+
+func siteHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	return u.Host
+}
+
 // GitDir returns the checkout directory for a git source.
 func (c *Config) GitDir() string {
 	if c.Git.Dir != "" {
@@ -199,11 +237,13 @@ func Load(file string) (Config, error) {
 	if err := cfg.applyEnv(); err != nil {
 		return cfg, err
 	}
-	// One Atlassian account and API token cover Confluence and Jira on the
-	// same site: Jira falls back to the Confluence service account.
-	if cfg.Jira.Enabled() && cfg.Jira.Email == "" && cfg.Jira.Token == "" {
+	// One Atlassian account and classic API token cover Confluence and Jira
+	// on the same site: Jira falls back to the Confluence service account.
+	// A scoped token works for one product only, so it is never shared.
+	if cfg.Jira.Enabled() && cfg.Jira.Email == "" && cfg.Jira.Token == "" && !cfg.Confluence.ScopedToken {
 		cfg.Jira.Email, cfg.Jira.Token = cfg.Confluence.Email, cfg.Confluence.Token
 	}
+	cfg.Jira.CloudID, cfg.Confluence.CloudID = cfg.Atlassian.CloudID, cfg.Atlassian.CloudID
 	return cfg, cfg.Validate()
 }
 
@@ -286,6 +326,16 @@ func (c *Config) applyEnv() error {
 			return fmt.Errorf("BRIEFD_CONFLUENCE_USER_CREDENTIALS: %w", err)
 		}
 		c.Confluence.UserCredentials = b
+	}
+	str("ATLASSIAN_CLOUD_ID", &c.Atlassian.CloudID)
+	for key, dst := range map[string]*bool{"BRIEFD_JIRA_SCOPED_TOKEN": &c.Jira.ScopedToken, "BRIEFD_CONFLUENCE_SCOPED_TOKEN": &c.Confluence.ScopedToken} {
+		if v, ok := os.LookupEnv(key); ok {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return fmt.Errorf("%s: %w", key, err)
+			}
+			*dst = b
+		}
 	}
 	str("JIRA_BASE_URL", &c.Jira.BaseURL)
 	str("JIRA_EMAIL", &c.Jira.Email)
@@ -370,6 +420,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Confluence.Validate(); err != nil {
 		return fmt.Errorf("config: %w", err)
+	}
+	if err := c.Atlassian.validate(c.Jira, c.Confluence); err != nil {
+		return err
 	}
 	if err := c.Jira.Validate(); err != nil {
 		return fmt.Errorf("config: %w", err)

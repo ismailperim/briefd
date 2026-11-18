@@ -17,6 +17,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ismailperim/briefd/internal/atlassian"
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/config"
 	"github.com/ismailperim/briefd/internal/confluence"
@@ -110,6 +111,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		QueryLog:           cfg.QueryLog.Enabled,
 		Coverage:           rt.syncer.coverageFunc(),
 		Instance:           instanceInfo(cfg, rt),
+		AtlassianHealth:    rt.atlassianHealth,
 		Version:            version,
 		Logger:             logger,
 	})
@@ -159,6 +161,10 @@ type process struct {
 	searcher  *search.Searcher
 	compiler  *bundle.Compiler
 	syncer    *syncer
+	// confluence and jira are nil unless configured; one client per
+	// product serves the MCP tools and the dashboard's health view.
+	confluence *confluence.Client
+	jira       *jira.Client
 }
 
 // buildProcess opens the store and the source, wires retrieval and runs
@@ -278,7 +284,14 @@ func buildProcess(ctx context.Context, cfg config.Config, stderr io.Writer) (rt 
 		logger.Warn("no source configured; serving the existing index only")
 		syncer.refreshGauges(ctx)
 	}
-	return &process{logger: logger, st: st, reg: reg, repo: repo, proposals: proposals, searcher: searcher, compiler: compiler, syncer: syncer}, nil
+	rt = &process{logger: logger, st: st, reg: reg, repo: repo, proposals: proposals, searcher: searcher, compiler: compiler, syncer: syncer}
+	if cfg.Confluence.Enabled() {
+		rt.confluence = confluence.New(cfg.Confluence)
+	}
+	if cfg.Jira.Enabled() {
+		rt.jira = jira.New(cfg.Jira)
+	}
+	return rt, nil
 }
 
 func (rt *process) close() { rt.st.Close() }
@@ -398,7 +411,7 @@ func confluenceInfo(c confluence.Config) map[string]any {
 	if !c.Enabled() {
 		return nil
 	}
-	return map[string]any{"site": redactURL(c.BaseURL), "spaces": c.Spaces, "auth": authMode(c.Email, c.UserCredentials)}
+	return map[string]any{"site": redactURL(c.BaseURL), "spaces": c.Spaces, "auth": authMode(c.Email, c.UserCredentials), "token": tokenKind(c.Email, c.ScopedToken)}
 }
 
 // jiraInfo describes the Jira connection without secrets.
@@ -406,7 +419,18 @@ func jiraInfo(c jira.Config) map[string]any {
 	if !c.Enabled() {
 		return nil
 	}
-	return map[string]any{"site": redactURL(c.BaseURL), "projects": c.Projects, "fields": c.Fields, "auth": authMode(c.Email, c.UserCredentials)}
+	return map[string]any{"site": redactURL(c.BaseURL), "projects": c.Projects, "fields": c.Fields, "auth": authMode(c.Email, c.UserCredentials), "token": tokenKind(c.Email, c.ScopedToken)}
+}
+
+// tokenKind names the service-account token type ("" without one).
+func tokenKind(serviceEmail string, scoped bool) string {
+	switch {
+	case serviceEmail == "":
+		return ""
+	case scoped:
+		return "scoped (API gateway)"
+	}
+	return "classic"
 }
 
 func authMode(serviceEmail string, user bool) string {
@@ -483,6 +507,18 @@ func (rt *process) startSync(ctx context.Context, cfg config.Config) {
 	}
 }
 
+// atlassianHealth reports the configured Atlassian products (ADR-0012).
+func (rt *process) atlassianHealth(ctx context.Context) []atlassian.Health {
+	var out []atlassian.Health
+	if rt.jira != nil {
+		out = append(out, rt.jira.Health(ctx))
+	}
+	if rt.confluence != nil {
+		out = append(out, rt.confluence.Health(ctx))
+	}
+	return out
+}
+
 // mcpLogger returns the logger for the MCP SDK. It logs every session at
 // info level, which in stateless HTTP mode means every request, so it is
 // only enabled when debugging.
@@ -495,17 +531,9 @@ func (rt *process) mcpLogger(cfg config.Config) *slog.Logger {
 
 // mcpServer builds the MCP server over this process.
 func (rt *process) mcpServer(cfg config.Config) *mcp.Server {
-	var conf *confluence.Client
-	if cfg.Confluence.Enabled() {
-		conf = confluence.New(cfg.Confluence)
-	}
-	var jc *jira.Client
-	if cfg.Jira.Enabled() {
-		jc = jira.New(cfg.Jira)
-	}
 	return mcpserver.New(mcpserver.Deps{
 		Store: rt.st, Searcher: rt.searcher, Compiler: rt.compiler, Proposals: rt.proposals, Metrics: rt.reg,
-		QueryLog: cfg.QueryLog.Enabled, Confluence: conf, Jira: jc, Version: version, Logger: rt.mcpLogger(cfg),
+		QueryLog: cfg.QueryLog.Enabled, Confluence: rt.confluence, Jira: rt.jira, Version: version, Logger: rt.mcpLogger(cfg),
 	})
 }
 

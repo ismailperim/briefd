@@ -35,8 +35,21 @@ type Config struct {
 	// in the X-Atlassian-Email and X-Atlassian-Token headers (or the older
 	// X-Confluence-* pair), so they see only what they may see (default true).
 	UserCredentials bool `yaml:"user_credentials"`
+	// ScopedToken marks the service-account token as a scoped API token
+	// made for Confluence, which briefd sends through the Atlassian API gateway
+	// (ADR-0012).
+	ScopedToken bool `yaml:"scoped_token"`
+	// CloudID and Gateway are set by the configuration loader from the
+	// shared atlassian section (and by tests); see atlassian.Options.
+	CloudID string `yaml:"-"`
+	Gateway string `yaml:"-"`
 	// Timeout bounds each Confluence request (default 15s).
 	Timeout time.Duration `yaml:"timeout"`
+}
+
+// service returns the configured service account.
+func (c Config) service() atlassian.Credentials {
+	return atlassian.Credentials{Email: c.Email, Token: c.Token, Scoped: c.ScopedToken}
 }
 
 // Enabled reports whether the tools should be offered.
@@ -50,7 +63,7 @@ func (c Config) Validate() error {
 	if err := atlassian.ValidateSite("confluence.base_url", c.BaseURL); err != nil {
 		return err
 	}
-	if err := atlassian.ValidateAuth("confluence", atlassian.Credentials{Email: c.Email, Token: c.Token}, c.UserCredentials); err != nil {
+	if err := atlassian.ValidateAuth("confluence", c.service(), c.UserCredentials); err != nil {
 		return err
 	}
 	if c.Timeout < 0 {
@@ -92,9 +105,12 @@ type Client struct {
 // New returns a client; cfg must be enabled and valid.
 func New(cfg Config) *Client {
 	// The site URL is accepted with or without the /wiki context path.
-	api := atlassian.NewClient("Confluence", cfg.BaseURL, cfg.Timeout)
+	api := atlassian.NewClient("Confluence", cfg.BaseURL, atlassian.Options{Timeout: cfg.Timeout, CloudID: cfg.CloudID, Gateway: cfg.Gateway})
 	return &Client{cfg: cfg, base: api.Base, api: api}
 }
+
+// Health reports the Confluence connection's health for the dashboard.
+func (c *Client) Health(ctx context.Context) atlassian.Health { return c.api.Health(ctx) }
 
 // Spaces returns the allowed space keys (nil = all).
 func (c *Client) Spaces() []string { return c.cfg.Spaces }
@@ -102,7 +118,7 @@ func (c *Client) Spaces() []string { return c.cfg.Spaces }
 // Resolve picks the credentials for a request from the caller's headers
 // (when allowed) or the service account.
 func (c *Client) Resolve(h http.Header) (Credentials, error) {
-	return atlassian.Resolve(h, c.cfg.UserCredentials, Credentials{Email: c.cfg.Email, Token: c.cfg.Token})
+	return atlassian.Resolve(h, atlassian.Confluence, c.cfg.UserCredentials, c.cfg.service())
 }
 
 // Hit is one search result.

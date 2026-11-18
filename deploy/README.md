@@ -238,7 +238,11 @@ re-embeds automatically.
   credentials: leave the service account empty and have each person add
   `X-Atlassian-Email` and `X-Atlassian-Token` (one Atlassian API token covers
   Jira and Confluence) to their MCP headers, so they see only what Atlassian
-  lets them see; the older `X-Confluence-*` headers still work. A service
+  lets them see; the older `X-Confluence-*` headers still work. With
+  Atlassian's scoped API tokens (one per product, read-only scopes), send
+  `X-Atlassian-Jira-Token` and `X-Atlassian-Confluence-Token` instead of
+  `X-Atlassian-Token`; a scoped service-account token needs
+  `scoped_token: true` (ADR-0012). A service
   account (`BRIEFD_CONFLUENCE_EMAIL` / `_TOKEN`, used by Jira too unless
   `BRIEFD_JIRA_EMAIL` / `_TOKEN` are set; from a secret store, never
   committed) is shared by everyone who holds the briefd token; restrict it
@@ -258,7 +262,9 @@ re-embeds automatically.
   `briefd_sync_runs_total{status="error"}` increasing, `briefd_vectors_pending`
   not draining, p95 of `briefd_request_duration_seconds` above 1 s. `GET /healthz`
   and `GET /api/health` are unauthenticated liveness endpoints; `/api/health`
-  includes the last sync time and error.
+  includes the last sync time and error. `GET /api/atlassian/health` (token
+  required) reports Jira and Confluence: failures, the last error, and
+  whether the site answers.
 - **Logs:** structured `log/slog` on stderr; `log_level: debug` also logs
   every HTTP request and MCP session.
 
@@ -295,6 +301,10 @@ their own Atlassian account to the headers:
   "X-Atlassian-Token": "<your Atlassian API token>"
 }
 ```
+
+With scoped API tokens, replace `X-Atlassian-Token` with
+`"X-Atlassian-Jira-Token": "<scoped token for Jira>"` and
+`"X-Atlassian-Confluence-Token": "<scoped token for Confluence>"`.
 
 Claude Code: `claude mcp add --transport http briefd <url>/mcp --header "Authorization: Bearer <token>"`.
 A short `CLAUDE.md` telling the agent to call `compile_bundle` before

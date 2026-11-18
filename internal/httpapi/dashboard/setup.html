@@ -104,6 +104,10 @@
       <label><input type="radio" name="mode" value="local"> Local, on my machine (<code>briefd mcp</code>)</label>
       <label id="confOpt"><input type="checkbox" id="conf"> I use Jira or Confluence through briefd</label>
     </div>
+    <div class="opts" id="tokOpts" hidden>
+      <label><input type="radio" name="atok" value="classic" checked> Classic Atlassian API token (one for Jira and Confluence)</label>
+      <label><input type="radio" name="atok" value="scoped"> Scoped API tokens (one per product, e.g. read-only)</label>
+    </div>
     <div class="opts" id="localOpts" hidden>
       <label>Knowledge folder <input type="text" id="srcDir" value="/abs/path/to/knowledge" spellcheck="false" aria-label="Absolute path of the knowledge folder"></label>
     </div>
@@ -111,7 +115,7 @@
 
   <section class="panel" aria-labelledby="s2" id="envPanel">
     <h2 id="s2"><span class="step-n">2</span>Put the token in your environment</h2>
-    <p>Every snippet below reads <code>BRIEFD_TOKEN</code><span class="confOnly" hidden>, <code>ATLASSIAN_EMAIL</code> and <code>ATLASSIAN_TOKEN</code> (your Atlassian account email and an <a href="https://id.atlassian.com/manage-profile/security/api-tokens" rel="noopener" target="_blank">Atlassian API token</a>; one token works for both Jira and Confluence)</span> from the environment, so no secret ends up in a config file or in git.</p>
+    <p>Every snippet below reads <code>BRIEFD_TOKEN</code><span class="confOnly" hidden id="atlEnv"></span> from the environment, so no secret ends up in a config file or in git.</p>
     <div class="grid2">
       <div><h3>macOS / Linux</h3><div class="code" data-snippet="envUnix"></div>
         <p class="dim" style="font-size:13.5px">Add the lines to <code>~/.zshrc</code> or <code>~/.bashrc</code>. Editors started from the Dock or a launcher do not read that file: start them from a terminal (<code>code .</code>, <code>cursor .</code>), or on macOS also run the <code>launchctl setenv</code> lines and restart the editor.</p></div>
@@ -139,7 +143,7 @@
       <li><strong>The server is listed but the agent never calls it</strong> — the chat is not in <em>Agent</em> mode (Copilot, Visual Studio), the tools are switched off in the tools picker, or the instructions from step 4 are missing.</li>
       <li><strong>The server does not show up at all</strong> — the config is in the wrong file for your tool or editor mode (see the Copilot notes), or the folder is not trusted yet.</li>
       <li><strong>Connection refused or timeout</strong> — check the URL above opens from your machine (<a id="healthLink" href="api/health" target="_blank" rel="noopener">health check</a>); a VPN or proxy may be required.</li>
-      <li><strong>Jira or Confluence tools missing</strong> — they appear only when the server has Jira or Confluence configured; errors such as 401 mean your Atlassian email or API token is wrong, 403 that your account may not see that project or space. Set up before v0.8 with <code>X-Confluence-Email</code> / <code>X-Confluence-Token</code> headers? They keep working, for Jira too.</li>
+      <li><strong>Jira or Confluence tools missing</strong> — they appear only when the server has Jira or Confluence configured; errors such as 401 mean your Atlassian email or API token is wrong, 403 that your account may not see that project or space. With scoped tokens, 401 or 403 also means the token was made for the other product, lacks a scope the tool needs, or has expired (at most 365 days). Set up before v0.8 with <code>X-Confluence-Email</code> / <code>X-Confluence-Token</code> headers? They keep working, for Jira too.</li>
     </ul>
   </section>
 
@@ -154,7 +158,7 @@
   const base = location.origin + location.pathname.replace(/setup\/?$/, '');
   const url = base.replace(/\/?$/, '/') + 'mcp';
   $('mcpUrl').textContent = url;
-  const st = { mode: 'remote', conf: false, src: '/abs/path/to/knowledge', client: 'claude' };
+  const st = { mode: 'remote', conf: false, atok: 'classic', src: '/abs/path/to/knowledge', client: 'claude' };
   try { const saved = JSON.parse(localStorage.getItem('briefd-setup') || '{}'); Object.assign(st, saved); } catch (_) {}
   const save = () => { try { localStorage.setItem('briefd-setup', JSON.stringify(st)); } catch (_) {} };
 
@@ -163,11 +167,17 @@
   const v = (n) => '$' + '{' + n + '}';
   const V = (n) => '$' + '{env:' + n + '}';
   const json = (o) => JSON.stringify(o, null, 2);
-  const hdrs = (ref) => {
-    const h = { Authorization: 'Bearer ' + ref('BRIEFD_TOKEN') };
-    if (st.conf) { h['X-Atlassian-Email'] = ref('ATLASSIAN_EMAIL'); h['X-Atlassian-Token'] = ref('ATLASSIAN_TOKEN'); }
-    return h;
-  };
+  // The Atlassian headers the caller sends: the account email plus one
+  // classic token, or one scoped token per product (ADR-0012).
+  const atl = () => !st.conf || st.mode === 'local' ? [] : [
+    { h: 'X-Atlassian-Email', env: 'ATLASSIAN_EMAIL', input: 'atlassian-email', desc: 'Atlassian account email', ph: 'you@example.com' },
+    ...(st.atok === 'scoped'
+      ? [{ h: 'X-Atlassian-Jira-Token', env: 'ATLASSIAN_JIRA_TOKEN', input: 'atlassian-jira-token', desc: 'Atlassian scoped API token for Jira', ph: '<scoped API token for Jira>', secret: true },
+         { h: 'X-Atlassian-Confluence-Token', env: 'ATLASSIAN_CONFLUENCE_TOKEN', input: 'atlassian-confluence-token', desc: 'Atlassian scoped API token for Confluence', ph: '<scoped API token for Confluence>', secret: true }]
+      : [{ h: 'X-Atlassian-Token', env: 'ATLASSIAN_TOKEN', input: 'atlassian-token', desc: 'Atlassian API token', ph: '<your Atlassian API token>', secret: true }]),
+  ];
+  const atlHeaders = (fn) => Object.fromEntries(atl().map((a) => [a.h, fn(a)]));
+  const hdrs = (ref) => Object.assign({ Authorization: 'Bearer ' + ref('BRIEFD_TOKEN') }, atlHeaders((a) => ref(a.env)));
   const local = () => st.mode === 'local';
   const localArgs = () => ['mcp', '--source', st.src];
   const shellQuote = (s) => /^[\w./:=@-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'";
@@ -175,14 +185,14 @@
   const snippets = {
     envUnix: () => {
       const lines = ['export BRIEFD_TOKEN="<token from your briefd admin>"'];
-      if (st.conf) lines.push('export ATLASSIAN_EMAIL="you@example.com"', 'export ATLASSIAN_TOKEN="<your Atlassian API token>"');
+      for (const a of atl()) lines.push('export ' + a.env + '="' + a.ph + '"');
       lines.push('', '# macOS, for editors started from the Dock (repeat after a reboot):', 'launchctl setenv BRIEFD_TOKEN "$BRIEFD_TOKEN"');
-      if (st.conf) lines.push('launchctl setenv ATLASSIAN_EMAIL "$ATLASSIAN_EMAIL"', 'launchctl setenv ATLASSIAN_TOKEN "$ATLASSIAN_TOKEN"');
+      for (const a of atl()) lines.push('launchctl setenv ' + a.env + ' "$' + a.env + '"');
       return { lang: 'sh', text: lines.join('\n') };
     },
     envWin: () => {
       const lines = ['setx BRIEFD_TOKEN "<token from your briefd admin>"'];
-      if (st.conf) lines.push('setx ATLASSIAN_EMAIL "you@example.com"', 'setx ATLASSIAN_TOKEN "<your Atlassian API token>"');
+      for (const a of atl()) lines.push('setx ' + a.env + ' "' + a.ph + '"');
       return { lang: 'powershell', text: lines.join('\n') };
     },
     instructions: () => ({ lang: 'md', text: [
@@ -205,8 +215,8 @@
         ? ['claude mcp add --transport stdio --scope user briefd -- briefd ' + localArgs().map(shellQuote).join(' ')]
         // Name and URL come before --header: the option takes several
         // values and would swallow them otherwise.
-        : ['claude mcp add --transport http --scope user briefd ' + url + ' \\', "  --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? ' \\' : '')]
-          .concat(st.conf ? ["  --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' \\", "  --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "'"] : []);
+        : ['claude mcp add --transport http --scope user briefd ' + url].concat(Object.entries(hdrs(v)).map(([k, val]) => "  --header '" + k + ': ' + val + "'"))
+          .map((line, i, all) => i < all.length - 1 ? line + ' \\' : line);
       const proj = local()
         ? { mcpServers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
         : { mcpServers: { briefd: { type: 'http', url, headers: hdrs(v) } } };
@@ -226,9 +236,9 @@
       const localCfg = local()
         ? { servers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
         : { inputs: [{ type: 'promptString', id: 'briefd-token', description: 'briefd API token', password: true }]
-              .concat(st.conf ? [{ type: 'promptString', id: 'atlassian-email', description: 'Atlassian account email' }, { type: 'promptString', id: 'atlassian-token', description: 'Atlassian API token', password: true }] : []),
+              .concat(atl().map((a) => Object.assign({ type: 'promptString', id: a.input, description: a.desc }, a.secret ? { password: true } : {}))),
             servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer ' + '$' + '{input:briefd-token}' },
-              st.conf ? { 'X-Atlassian-Email': '$' + '{input:atlassian-email}', 'X-Atlassian-Token': '$' + '{input:atlassian-token}' } : {}) } } };
+              atlHeaders((a) => '$' + '{input:' + a.input + '}')) } } };
       return `
         <p class="sub">Most setup problems come from three things: the organisation policy, the config file for the wrong chat session type, and a chat that is not in Agent mode.</p>
         <div class="callout warn"><strong>Copilot Business or Enterprise?</strong> The policy <em>MCP servers in Copilot</em> is <strong>off by default</strong>. An organisation owner turns it on under <em>Settings → Code, planning, and automation → Copilot → Policies</em> (enterprise: <em>AI controls → MCP</em>). Until then Copilot ignores every MCP server. Copilot Free, Pro and Pro+ are not affected.</div>
@@ -251,7 +261,7 @@
     { id: 'copilotcli', name: 'Copilot CLI', render: () => {
       const cmd = local()
         ? 'copilot mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ')
-        : "copilot mcp add --transport http briefd " + url + " --header 'Authorization: Bearer " + v('BRIEFD_TOKEN') + "'" + (st.conf ? " --header 'X-Atlassian-Email: " + v('ATLASSIAN_EMAIL') + "' --header 'X-Atlassian-Token: " + v('ATLASSIAN_TOKEN') + "'" : '');
+        : 'copilot mcp add --transport http briefd ' + url + Object.entries(hdrs(v)).map(([k, val]) => " --header '" + k + ': ' + val + "'").join('');
       return `
         <ol class="steps">
           <li>Add the server (written to <code>~/.copilot/mcp-config.json</code>, the same file VS Code's Copilot sessions read):${code(cmd, 'sh')}</li>
@@ -262,7 +272,7 @@
     { id: 'jetbrains', name: 'Copilot · JetBrains', render: () => {
       const cfg = local()
         ? { servers: { briefd: { command: 'briefd', args: localArgs() } } }
-        : { servers: { briefd: { url, requestInit: { headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Atlassian-Email': 'you@example.com', 'X-Atlassian-Token': '<Atlassian API token>' } : {}) } } } };
+        : { servers: { briefd: { url, requestInit: { headers: Object.assign({ Authorization: 'Bearer <token>' }, atlHeaders((a) => a.ph)) } } } };
       return `
         <ol class="steps">
           <li>Update the GitHub Copilot plugin (1.14.2 or later; earlier versions ignored headers).</li>
@@ -275,7 +285,7 @@
     { id: 'vs', name: 'Copilot · Visual Studio', render: () => {
       const cfg = local()
         ? { servers: { briefd: { type: 'stdio', command: 'briefd', args: localArgs() } } }
-        : { servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer <token>' }, st.conf ? { 'X-Atlassian-Email': 'you@example.com', 'X-Atlassian-Token': '<Atlassian API token>' } : {}) } } };
+        : { servers: { briefd: { type: 'http', url, headers: Object.assign({ Authorization: 'Bearer <token>' }, atlHeaders((a) => a.ph)) } } };
       return `
         <ol class="steps">
           <li>Visual Studio 2022 17.14 or later, or Visual Studio 2026.</li>
@@ -299,7 +309,7 @@
     { id: 'codex', name: 'Codex', render: () => {
       const toml = local()
         ? ['[mcp_servers.briefd]', 'command = "briefd"', 'args = [' + localArgs().map((a) => JSON.stringify(a)).join(', ') + ']']
-        : ['[mcp_servers.briefd]', 'url = "' + url + '"', 'bearer_token_env_var = "BRIEFD_TOKEN"'].concat(st.conf ? ['env_http_headers = { "X-Atlassian-Email" = "ATLASSIAN_EMAIL", "X-Atlassian-Token" = "ATLASSIAN_TOKEN" }'] : []);
+        : ['[mcp_servers.briefd]', 'url = "' + url + '"', 'bearer_token_env_var = "BRIEFD_TOKEN"'].concat(atl().length ? ['env_http_headers = { ' + atl().map((a) => '"' + a.h + '" = "' + a.env + '"').join(', ') + ' }'] : []);
       const cmd = local() ? 'codex mcp add briefd -- briefd ' + localArgs().map(shellQuote).join(' ') : 'codex mcp add briefd --url ' + url + ' --bearer-token-env-var BRIEFD_TOKEN';
       return `
         <p class="sub">The Codex CLI, the IDE extension and the desktop app share one configuration.</p>
@@ -312,7 +322,7 @@
     { id: 'opencode', name: 'OpenCode', render: () => {
       const cfg = local()
         ? { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'local', command: ['briefd'].concat(localArgs()) } } } }
-        : { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'remote', url, oauth: false, headers: Object.assign({ Authorization: 'Bearer {env:BRIEFD_TOKEN}' }, st.conf ? { 'X-Atlassian-Email': '{env:ATLASSIAN_EMAIL}', 'X-Atlassian-Token': '{env:ATLASSIAN_TOKEN}' } : {}) } } } };
+        : { $schema: 'https://opencode.ai/config.json', mcp: { servers: { briefd: { type: 'remote', url, oauth: false, headers: Object.assign({ Authorization: 'Bearer {env:BRIEFD_TOKEN}' }, atlHeaders((a) => '{env:' + a.env + '}')) } } } };
       return `
         <ol class="steps">
           <li>Add briefd to <code>~/.config/opencode/opencode.json</code> (all projects) or <code>opencode.json</code> in the project:${code(json(cfg), 'json', 'opencode.json')}</li>
@@ -346,8 +356,8 @@
       const args = ['-y', 'mcp-remote', url, '--header', 'Authorization:' + v('AUTH_HEADER')];
       const cfg = local()
         ? { mcpServers: { briefd: { command: 'briefd', args: localArgs() } } }
-        : { mcpServers: { briefd: { command: 'npx', args: st.conf ? args.concat(['--header', 'X-Atlassian-Email:' + v('ATLASSIAN_EMAIL'), '--header', 'X-Atlassian-Token:' + v('ATLASSIAN_TOKEN')]) : args,
-              env: Object.assign({ AUTH_HEADER: 'Bearer <token>' }, st.conf ? { ATLASSIAN_EMAIL: 'you@example.com', ATLASSIAN_TOKEN: '<Atlassian API token>' } : {}) } } };
+        : { mcpServers: { briefd: { command: 'npx', args: args.concat(atl().flatMap((a) => ['--header', a.h + ':' + v(a.env)])),
+              env: Object.assign({ AUTH_HEADER: 'Bearer <token>' }, Object.fromEntries(atl().map((a) => [a.env, a.ph]))) } } };
       return `
         <p class="sub">Claude Desktop's custom connectors connect from Anthropic's cloud and cannot carry a personal token, so briefd is added as a local bridge (<code>mcp-remote</code>, needs Node.js)${local() ? ' — or, locally, directly' : ''}.</p>
         <ol class="steps">
@@ -372,6 +382,12 @@
     $('confOpt').hidden = local();
     if (local()) st.conf = false;
     document.querySelectorAll('.confOnly').forEach((e) => { e.hidden = !st.conf; });
+    $('tokOpts').hidden = !st.conf || local();
+    document.querySelectorAll('input[name=atok]').forEach((r) => { r.checked = r.value === st.atok; });
+    const tokenLink = '<a href="https://id.atlassian.com/manage-profile/security/api-tokens" rel="noopener" target="_blank">';
+    $('atlEnv').innerHTML = st.atok === 'scoped'
+      ? ', <code>ATLASSIAN_EMAIL</code>, <code>ATLASSIAN_JIRA_TOKEN</code> and <code>ATLASSIAN_CONFLUENCE_TOKEN</code> (your Atlassian account email and two ' + tokenLink + 'API tokens with scopes</a>, one created for Jira and one for Confluence; leave one out if you use only the other product)'
+      : ', <code>ATLASSIAN_EMAIL</code> and <code>ATLASSIAN_TOKEN</code> (your Atlassian account email and an ' + tokenLink + 'Atlassian API token</a>; one token works for both Jira and Confluence)';
     $('envPanel').hidden = local();
     $('mcpUrl').textContent = local() ? 'briefd mcp --source ' + st.src : url;
     $('urlLabel').textContent = local() ? 'Your agent starts briefd itself (stdio) with:' : 'MCP endpoint (streamable HTTP):';
@@ -399,6 +415,7 @@
   });
   document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', () => { st.mode = r.value; save(); render(); }));
   $('conf').addEventListener('change', (ev) => { st.conf = ev.target.checked; save(); render(); });
+  document.querySelectorAll('input[name=atok]').forEach((r) => r.addEventListener('change', () => { st.atok = r.value; save(); render(); }));
   $('srcDir').addEventListener('change', (ev) => { st.src = ev.target.value.trim() || '/abs/path/to/knowledge'; save(); render(); });
   const fromHash = location.hash.slice(1);
   if (C.some((c) => c.id === fromHash)) st.client = fromHash;

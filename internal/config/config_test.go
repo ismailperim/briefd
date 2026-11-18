@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -97,5 +98,52 @@ func TestJiraInheritsConfluenceServiceAccount(t *testing.T) {
 	t.Setenv("BRIEFD_JIRA_TOKEN", "jt")
 	if cfg, err = Load(file); err != nil || cfg.Jira.Email != "jira@example.com" {
 		t.Errorf("an explicit Jira account should win: %v %+v", err, cfg.Jira)
+	}
+}
+
+func TestScopedAtlassianTokens(t *testing.T) {
+	write := func(yaml string) string {
+		t.Helper()
+		file := filepath.Join(t.TempDir(), "briefd.yaml")
+		if err := os.WriteFile(file, []byte(yaml), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	const id = "11111111-2222-3333-4444-555555555555"
+
+	// A scoped Confluence token is never shared with Jira.
+	file := write("confluence:\n  base_url: https://x.atlassian.net\n  email: svc@example.com\n  token: tok\n  scoped_token: true\njira:\n  base_url: https://x.atlassian.net\n")
+	cfg, err := Load(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Jira.Token != "" || !cfg.Confluence.ScopedToken {
+		t.Errorf("jira inherited a scoped Confluence token: %+v", cfg.Jira)
+	}
+	// ... so Jira without caller credentials has nobody to authenticate as.
+	t.Setenv("BRIEFD_JIRA_USER_CREDENTIALS", "false")
+	if _, err := Load(file); err == nil || !strings.Contains(err.Error(), "jira") {
+		t.Errorf("want a jira auth error, got %v", err)
+	}
+	t.Setenv("BRIEFD_JIRA_USER_CREDENTIALS", "true")
+
+	// The cloud ID reaches both products; env flags set scoped tokens.
+	t.Setenv("BRIEFD_ATLASSIAN_CLOUD_ID", id)
+	t.Setenv("BRIEFD_JIRA_SCOPED_TOKEN", "true")
+	t.Setenv("BRIEFD_JIRA_EMAIL", "svc@example.com")
+	t.Setenv("BRIEFD_JIRA_TOKEN", "jt")
+	if cfg, err = Load(file); err != nil || cfg.Jira.CloudID != id || cfg.Confluence.CloudID != id || !cfg.Jira.ScopedToken {
+		t.Errorf("cloud id / scoped flag: %v jira=%+v", err, cfg.Jira)
+	}
+
+	t.Setenv("BRIEFD_ATLASSIAN_CLOUD_ID", "../../evil")
+	if _, err := Load(file); err == nil || !strings.Contains(err.Error(), "cloud_id") {
+		t.Errorf("malformed cloud id accepted: %v", err)
+	}
+	t.Setenv("BRIEFD_ATLASSIAN_CLOUD_ID", id)
+	t.Setenv("BRIEFD_JIRA_BASE_URL", "https://other.atlassian.net")
+	if _, err := Load(file); err == nil || !strings.Contains(err.Error(), "different sites") {
+		t.Errorf("one cloud id for two sites accepted: %v", err)
 	}
 }

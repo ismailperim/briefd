@@ -53,6 +53,7 @@ confluence:                # optional: live Confluence Cloud search tools (ADR-0
   email: ""                # BRIEFD_CONFLUENCE_EMAIL  ┐ optional service account; keep the token in the env
   token: ""                # BRIEFD_CONFLUENCE_TOKEN  ┘
   user_credentials: true   # BRIEFD_CONFLUENCE_USER_CREDENTIALS: honor X-Atlassian-* (and X-Confluence-*) headers
+  scoped_token: false      # BRIEFD_CONFLUENCE_SCOPED_TOKEN: the token above is a scoped token (API gateway, ADR-0012)
   timeout: 15s
 
 jira:                      # optional: live Jira Cloud tools + compile_bundle(issue) (ADR-0010)
@@ -62,7 +63,11 @@ jira:                      # optional: live Jira Cloud tools + compile_bundle(is
   email: ""                # BRIEFD_JIRA_EMAIL  ┐ optional service account; empty = the Confluence one
   token: ""                # BRIEFD_JIRA_TOKEN  ┘
   user_credentials: true   # BRIEFD_JIRA_USER_CREDENTIALS: honor X-Atlassian-* (and X-Confluence-*) headers
+  scoped_token: false      # BRIEFD_JIRA_SCOPED_TOKEN: the token above is a scoped token; never inherited from Confluence
   timeout: 15s
+
+atlassian:                 # shared by jira and confluence
+  cloud_id: ""             # BRIEFD_ATLASSIAN_CLOUD_ID: site cloud ID for scoped tokens; empty = looked up from the site
 
 search:
   default_scopes: [domain, conventions]   # BRIEFD_DEFAULT_SCOPES (comma-separated)

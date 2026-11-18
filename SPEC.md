@@ -84,21 +84,25 @@ and broken links on the dashboard.
    (ADR-0009). Live, read-only Confluence Cloud search (CQL `siteSearch`) and page
    reads converted to Markdown, within `max_tokens`. Limited to `confluence.spaces`;
    callers may send `X-Atlassian-Email` / `X-Atlassian-Token` (or the older
-   `X-Confluence-*` pair) to use their own account. Nothing is indexed, cached or logged.
+   `X-Confluence-*` pair) to use their own account, or `X-Atlassian-Email` with a scoped
+   `X-Atlassian-Confluence-Token`, which briefd routes through the Atlassian API gateway
+   (ADR-0012). Nothing is indexed, cached or logged.
 9. `jira_search(text?, projects?, status?, type?, assignee?, open_only?, limit?=10,
    max_tokens?=800)` and `jira_issue(key, comments?=true, max_tokens?=2000)` — only when
    `jira.base_url` is set (ADR-0010). Live, read-only Jira Cloud search (JQL built by briefd
    from the filters, newest first) and issue reads as Markdown (metadata, related issues,
    linked Confluence pages, description, `jira.fields`, comments newest first), cut from the
-   end to `max_tokens`. Limited to `jira.projects`; same credential headers as Confluence;
-   the Confluence service account is used when Jira has none. Nothing is indexed or stored.
+   end to `max_tokens`. Limited to `jira.projects`; same credential headers as Confluence,
+   with `X-Atlassian-Jira-Token` for a scoped Jira token; the Confluence service account is
+   used when Jira has none and its token is classic. Nothing is indexed or stored.
 
 ### 3.2 REST (secondary)
 
 `GET /api/search`, `POST /api/bundle` (`{task, max_tokens?, scopes?}`), `POST /api/usage`
 (`{bundle_id, useful_chunk_ids?, client?}`), `GET /api/docs/{path}`, `GET /api/scopes`,
 `POST /api/proposals` (`{doc_path, change_description, new_content, client?}`),
-`GET /api/proposals`, `POST /api/proposals/{id}/close` (`{delete_branch?}`: marks an open
+`GET /api/atlassian/health` (per configured Jira/Confluence product: request outcomes since
+start, site reachability; ADR-0012), `GET /api/proposals`, `POST /api/proposals/{id}/close` (`{delete_branch?}`: marks an open
 proposal closed, optionally deleting its branch; ADR-0011), `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
 cache hit rate, token-served counters, and proposal counts grouped by open, merged, and
 closed status). `POST /webhook/git` (GitHub-style

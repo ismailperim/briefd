@@ -41,8 +41,21 @@ type Config struct {
 	// in the X-Atlassian-Email and X-Atlassian-Token headers (or the
 	// X-Confluence-* pair), so they see only what they may see (default true).
 	UserCredentials bool `yaml:"user_credentials"`
+	// ScopedToken marks the service-account token as a scoped API token
+	// made for Jira, which briefd sends through the Atlassian API gateway
+	// (ADR-0012).
+	ScopedToken bool `yaml:"scoped_token"`
+	// CloudID and Gateway are set by the configuration loader from the
+	// shared atlassian section (and by tests); see atlassian.Options.
+	CloudID string `yaml:"-"`
+	Gateway string `yaml:"-"`
 	// Timeout bounds each Jira request (default 15s).
 	Timeout time.Duration `yaml:"timeout"`
+}
+
+// service returns the configured service account.
+func (c Config) service() atlassian.Credentials {
+	return atlassian.Credentials{Email: c.Email, Token: c.Token, Scoped: c.ScopedToken}
 }
 
 // Enabled reports whether the tools should be offered.
@@ -56,7 +69,7 @@ func (c Config) Validate() error {
 	if err := atlassian.ValidateSite("jira.base_url", c.BaseURL); err != nil {
 		return err
 	}
-	if err := atlassian.ValidateAuth("jira", atlassian.Credentials{Email: c.Email, Token: c.Token}, c.UserCredentials); err != nil {
+	if err := atlassian.ValidateAuth("jira", c.service(), c.UserCredentials); err != nil {
 		return err
 	}
 	if c.Timeout < 0 {
@@ -106,8 +119,11 @@ type Client struct {
 
 // New returns a client; cfg must be enabled and valid.
 func New(cfg Config) *Client {
-	return &Client{cfg: cfg, api: atlassian.NewClient("Jira", cfg.BaseURL, cfg.Timeout)}
+	return &Client{cfg: cfg, api: atlassian.NewClient("Jira", cfg.BaseURL, atlassian.Options{Timeout: cfg.Timeout, CloudID: cfg.CloudID, Gateway: cfg.Gateway})}
 }
+
+// Health reports the Jira connection's health for the dashboard.
+func (c *Client) Health(ctx context.Context) atlassian.Health { return c.api.Health(ctx) }
 
 // Projects returns the allowed project keys (nil = all).
 func (c *Client) Projects() []string { return c.cfg.Projects }
@@ -115,7 +131,7 @@ func (c *Client) Projects() []string { return c.cfg.Projects }
 // Resolve picks the credentials for a request from the caller's headers
 // (when allowed) or the service account.
 func (c *Client) Resolve(h http.Header) (atlassian.Credentials, error) {
-	return atlassian.Resolve(h, c.cfg.UserCredentials, atlassian.Credentials{Email: c.cfg.Email, Token: c.cfg.Token})
+	return atlassian.Resolve(h, atlassian.Jira, c.cfg.UserCredentials, c.cfg.service())
 }
 
 // Ref is a short reference to another issue.

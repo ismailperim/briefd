@@ -730,6 +730,17 @@
   </div>
 
   <div id="view-instance" hidden>
+    <div class="grid" id="atl-wrap" hidden>
+      <section class="panel" aria-labelledby="h-atl">
+        <div class="head"><h2 id="h-atl">Atlassian</h2><span class="hint">live Jira and Confluence connections · requests since the server started · site checked at most once a minute</span></div>
+        <div class="body flush wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Status</th><th>Site</th><th class="num">Requests</th><th class="num">Failed</th><th>Last success</th><th>Last error</th><th>Cloud ID</th></tr></thead>
+            <tbody id="atl"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
     <div class="inst" id="inst"></div>
   </div>
 
@@ -973,6 +984,7 @@
   function renderAttention() {
     const items = [
       ['syncErr', 'Sync is failing', '#instance', (v) => v ? 1 : 0],
+      ['atlassian', 'Atlassian connections failing (Jira or Confluence)', '#instance'],
       ['proposals', 'proposed knowledge changes waiting for review', '#maintenance'],
       ['gaps', 'questions agents asked that nothing answered (7 days)', '#maintenance'],
       ['drift', 'documents behind the code they govern', '#maintenance'],
@@ -986,11 +998,11 @@
     ].filter(([k]) => attn[k] !== undefined);
     const n = (it) => it[3] ? it[3](attn[it[0]]) : attn[it[0]];
     const hot = items.filter((it) => n(it) > 0);
-    const urgent = (attn.proposals || 0) + (attn.gaps || 0) + (attn.drift || 0) + (attn.broken || 0) + (attn.syncErr ? 1 : 0);
+    const urgent = (attn.proposals || 0) + (attn.gaps || 0) + (attn.drift || 0) + (attn.broken || 0) + (attn.atlassian || 0) + (attn.syncErr ? 1 : 0);
     $('attCount').hidden = !urgent; $('attCount').textContent = urgent;
     $('att').innerHTML = hot.length ? hot.map((it) => it[0] === 'syncErr'
       ? `<li class="hot"><b>!</b><span>${esc(it[1])}: ${esc(attn.syncErr)}</span><a href="${it[2]}">details</a></li>`
-      : `<li class="${['proposals', 'gaps', 'drift', 'broken'].includes(it[0]) ? 'hot' : ''}"><b>${num(n(it))}</b><span>${esc(it[1])}</span><a href="${it[2]}">review</a></li>`).join('')
+      : `<li class="${['atlassian', 'proposals', 'gaps', 'drift', 'broken'].includes(it[0]) ? 'hot' : ''}"><b>${num(n(it))}</b><span>${esc(it[1])}</span><a href="${it[2]}">review</a></li>`).join('')
       : '<li class="ok">Nothing needs attention: every question was answered, links resolve and no rule lags its code.</li>';
   }
   function renderGaps(g) {
@@ -1285,8 +1297,8 @@
       box('Access', [
         row('Listen address', esc(i.listen)), row('API token required', yn(i.auth)), row('/metrics requires token', yn(i.metrics_auth)),
         row('MCP endpoint', esc(location.origin + '/mcp')),
-        row('Confluence (live)', i.confluence ? `${esc(i.confluence.site)} · ${(i.confluence.spaces || []).length ? 'spaces ' + esc(i.confluence.spaces.join(', ')) : 'all spaces'} · ${esc(i.confluence.auth)}` : '<span class="no">off</span>'),
-        row('Jira (live)', i.jira ? `${esc(i.jira.site)} · ${(i.jira.projects || []).length ? 'projects ' + esc(i.jira.projects.join(', ')) : 'all projects'}${(i.jira.fields || []).length ? ' · fields ' + esc(i.jira.fields.join(', ')) : ''} · ${esc(i.jira.auth)}` : '<span class="no">off</span>'),
+        row('Confluence (live)', i.confluence ? `${esc(i.confluence.site)} · ${(i.confluence.spaces || []).length ? 'spaces ' + esc(i.confluence.spaces.join(', ')) : 'all spaces'} · ${esc(i.confluence.auth)}${i.confluence.token ? ' · ' + esc(i.confluence.token) + ' token' : ''}` : '<span class="no">off</span>'),
+        row('Jira (live)', i.jira ? `${esc(i.jira.site)} · ${(i.jira.projects || []).length ? 'projects ' + esc(i.jira.projects.join(', ')) : 'all projects'}${(i.jira.fields || []).length ? ' · fields ' + esc(i.jira.fields.join(', ')) : ''} · ${esc(i.jira.auth)}${i.jira.token ? ' · ' + esc(i.jira.token) + ' token' : ''}` : '<span class="no">off</span>'),
       ]),
       box('Proposals and code', [
         row('Proposals', i.proposals_enabled ? 'enabled' : '<span class="no">disabled (no writable git source)</span>'),
@@ -1303,6 +1315,22 @@
         row('Note', '<span class="no">a cache: delete it and briefd rebuilds from git</span>'),
       ]),
     ].join('');
+  }
+  function renderAtlassian(list) {
+    $('atl-wrap').hidden = !list.length;
+    attn.atlassian = list.length ? list.filter((h) => h.status === 'down' || h.status === 'degraded').length : undefined;
+    const badge = { ok: '<span class="badge ok">ok</span>', idle: '<span class="badge" title="No tool has called it since the server started">idle</span>',
+      degraded: '<span class="badge warn" title="The site answers, but the last request failed">degraded</span>', down: '<span class="badge err" title="The site did not answer">down</span>' };
+    const when = (iso) => iso ? `<span title="${esc(full(iso))}">${dur(Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000))} ago</span>` : '<span class="dim">—</span>';
+    $('atl').innerHTML = list.map((h) => `<tr>
+      <td>${esc(h.product)}</td>
+      <td>${badge[h.status] || esc(h.status)}</td>
+      <td class="mono dim" title="${h.reachable ? `answered in ${num(h.probe_ms)} ms` : esc(h.probe_error || '')}">${esc(h.site)}${h.reachable ? '' : ` · ${esc(h.probe_error || 'unreachable')}`}</td>
+      <td class="num" title="classic ${num(h.classic_requests)} · scoped ${num(h.scoped_requests)}">${num(h.requests)}</td>
+      <td class="num">${num(h.failures)}</td>
+      <td>${when(h.last_ok_at)}</td>
+      <td class="q">${h.last_error ? `${esc(h.last_error)} · ${when(h.last_error_at)}` : '<span class="dim">—</span>'}</td>
+      <td class="dim">${esc(h.cloud_id)}</td></tr>`).join('');
   }
   function renderCoverage(c) {
     attn.blind = c.enabled ? c.repos.reduce((a, r) => a + r.uncovered.length, 0) : undefined;
@@ -1321,6 +1349,7 @@
       try { const g = await api('/api/graph'); renderGraph(g); renderLinks(g); } catch (_) {}
       try { const i = await api('/api/instance'); lastInstance = i; renderIdentity(i); renderInstance(i); } catch (_) {}
       try { renderProposals((await api('/api/proposals')).proposals); } catch (_) {}
+      try { renderAtlassian((await api('/api/atlassian/health')).products); } catch (_) {}
       renderAttention();
       setPill('conn', 'ok', 'live'); $('conn').querySelector('.dot').classList.add('live');
     } catch (e) {

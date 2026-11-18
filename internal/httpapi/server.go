@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ismailperim/briefd/internal/atlassian"
 	"github.com/ismailperim/briefd/internal/bundle"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
@@ -64,8 +65,11 @@ type Deps struct {
 	// Instance describes the configuration for GET /api/instance. It must
 	// never include tokens, passwords or key material.
 	Instance func() map[string]any
-	Version  string
-	Logger   *slog.Logger
+	// AtlassianHealth reports the live Jira/Confluence connections for
+	// GET /api/atlassian/health (nil or empty: none configured).
+	AtlassianHealth func(context.Context) []atlassian.Health
+	Version         string
+	Logger          *slog.Logger
 }
 
 // logQuery appends to the query log; failures are logged, never returned.
@@ -120,6 +124,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
 	mux.Handle("GET /api/graph", auth(http.HandlerFunc(a.graph)))
 	mux.Handle("GET /api/instance", auth(http.HandlerFunc(a.instance)))
+	mux.Handle("GET /api/atlassian/health", auth(http.HandlerFunc(a.atlassianHealth)))
 	mux.Handle("POST /api/sync", auth(http.HandlerFunc(a.syncNow)))
 	mux.Handle("POST /api/stats/reset", auth(http.HandlerFunc(a.resetStats)))
 	mux.Handle("GET /api/links/suggestions", auth(http.HandlerFunc(a.linkSuggestions)))
@@ -590,6 +595,20 @@ func (a *api) ignoreLinkSuggestion(w http.ResponseWriter, r *http.Request) {
 	a.suggestFor = "" // recompute on the next read
 	a.suggestMu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// atlassianHealth reports each configured Atlassian product: outcomes of
+// the tools' requests since start and whether the site answers (probed at
+// most once a minute, only while someone looks).
+func (a *api) atlassianHealth(w http.ResponseWriter, r *http.Request) {
+	products := []atlassian.Health{}
+	if a.deps.AtlassianHealth != nil {
+		if h := a.deps.AtlassianHealth(r.Context()); h != nil {
+			products = h
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"products": products})
 }
 
 // instance describes this server's configuration without secrets.
