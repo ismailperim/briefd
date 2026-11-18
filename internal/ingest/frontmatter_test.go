@@ -70,3 +70,20 @@ func TestSplitFrontMatter(t *testing.T) {
 		})
 	}
 }
+
+func TestHasFrontMatter(t *testing.T) {
+	for in, want := range map[string]bool{
+		"---\ntitle: x\n---\n# X\n": true,
+		"---\n---\n# X\n":           true,
+		"---\r\n---\r\n":            true,
+		"--- \n---\n":               true,
+		"# X\n\n---\n":              false,
+		"text":                      false,
+		"":                          false,
+		"----\n":                    false,
+	} {
+		if got := HasFrontMatter([]byte(in)); got != want {
+			t.Errorf("HasFrontMatter(%q) = %v, want %v", in, got, want)
+		}
+	}
+}

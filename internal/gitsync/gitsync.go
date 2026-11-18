@@ -5,8 +5,11 @@ package gitsync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -26,6 +29,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+
+	"github.com/ismailperim/briefd/internal/ingest"
 )
 
 // Config describes the remote and how to reach it.
@@ -256,6 +261,83 @@ type Proposal struct {
 	Content string
 	// ID names the branch: briefd/proposal-<ID>.
 	ID string
+	// BaseHash, when not nil, is the SHA-256 of the file the content was
+	// edited from (get_document's content_hash). It must match the file on
+	// the followed branch; "" means the file must not exist yet.
+	BaseHash *string
+}
+
+// StaleBaseError refuses a proposal whose base_content_hash does not match
+// the file on the followed branch (ADR-0013).
+type StaleBaseError struct {
+	DocPath string
+	Base    string // what the caller sent; "" means "a new file"
+	Current string // SHA-256 of the file on the branch; "" if it does not exist
+}
+
+func (e *StaleBaseError) Error() string {
+	switch {
+	case e.Current == "":
+		return fmt.Sprintf("%s does not exist on the followed branch, but base_content_hash %s says it did; send an empty base_content_hash to create it", e.DocPath, short(e.Base))
+	case e.Base == "":
+		return fmt.Sprintf("%s already exists (content_hash %s), but an empty base_content_hash says it should not; call get_document and edit its source", e.DocPath, short(e.Current))
+	default:
+		return fmt.Sprintf("%s changed since it was read (have %s, now %s); call get_document again and redo the edit on the new source", e.DocPath, short(e.Base), short(e.Current))
+	}
+}
+
+// ErrFrontMatterDropped refuses new content without front matter for a file
+// that has some: almost always an edit of get_document's content instead of
+// its source.
+var ErrFrontMatterDropped = errors.New("new_content has no front matter but the current file has one; edit the source returned by get_document, or send an empty ---/--- block to remove the front matter on purpose")
+
+var hexHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// NormalizeBaseHash lower-cases and checks a base_content_hash. A nil or
+// empty value is returned as is.
+func NormalizeBaseHash(h *string) (*string, error) {
+	if h == nil {
+		return nil, nil
+	}
+	v := strings.ToLower(strings.TrimSpace(*h))
+	if v != "" && !hexHash.MatchString(v) {
+		return nil, errors.New("base_content_hash must be the content_hash returned by get_document (64 hex characters), or empty for a new file")
+	}
+	return &v, nil
+}
+
+// checkBase compares the proposal with the file at the base commit.
+func checkBase(c *object.Commit, p Proposal) error {
+	var current []byte
+	exists := false
+	if f, err := c.File(p.DocPath); err == nil {
+		r, err := f.Reader()
+		if err != nil {
+			return fmt.Errorf("gitsync: reading %s: %w", p.DocPath, err)
+		}
+		current, err = io.ReadAll(r)
+		_ = r.Close()
+		if err != nil {
+			return fmt.Errorf("gitsync: reading %s: %w", p.DocPath, err)
+		}
+		exists = true
+	} else if !errors.Is(err, object.ErrFileNotFound) {
+		return fmt.Errorf("gitsync: looking up %s: %w", p.DocPath, err)
+	}
+	if p.BaseHash != nil {
+		cur := ""
+		if exists {
+			sum := sha256.Sum256(current)
+			cur = hex.EncodeToString(sum[:])
+		}
+		if cur != *p.BaseHash || (exists && *p.BaseHash == "") {
+			return &StaleBaseError{DocPath: p.DocPath, Base: *p.BaseHash, Current: cur}
+		}
+	}
+	if exists && ingest.HasFrontMatter(current) && !ingest.HasFrontMatter([]byte(p.Content)) {
+		return ErrFrontMatterDropped
+	}
+	return nil
 }
 
 // ProposalResult reports what was created.
@@ -299,6 +381,9 @@ func (r *Repo) Propose(ctx context.Context, p Proposal) (*ProposalResult, error)
 	baseCommit, err := r.repo.CommitObject(base.Hash())
 	if err != nil {
 		return nil, fmt.Errorf("gitsync: %w", err)
+	}
+	if err := checkBase(baseCommit, p); err != nil {
+		return nil, err
 	}
 	tree, err := r.treeWithFile(baseCommit, p.DocPath, []byte(p.Content))
 	if err != nil {

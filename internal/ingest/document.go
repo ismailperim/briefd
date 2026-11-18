@@ -24,7 +24,9 @@ type Document struct {
 	FrontMatter string
 	// ContentHash is a SHA-256 of the file as read from disk.
 	ContentHash string
-	Chunks      []Chunk
+	// Source is the file exactly as read from disk: front matter and body.
+	Source string
+	Chunks []Chunk
 	// Links are the document's wikilinks and relative Markdown links, as
 	// written; the indexer resolves them against the whole repository.
 	Links []Link
@@ -50,6 +52,7 @@ func Parse(relPath string, src []byte) (*Document, error) {
 		Refs:        fm.Refs,
 		FrontMatter: raw,
 		ContentHash: hashHex(src),
+		Source:      string(src),
 		Chunks:      chunks,
 		// Obsidian treats [[wikilinks]] in front-matter properties
 		// (related:, up:, …) as links too.

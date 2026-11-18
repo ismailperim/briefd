@@ -32,3 +32,4 @@ Template:
 | [0010](0010-live-jira-tools-and-issue-bundles.md) | Live Jira Cloud tools and issue-driven bundles | accepted (headers extended by 0012) |
 | [0011](0011-proposal-lifecycle-without-a-forge.md) | Proposal lifecycle without a forge, and closing from the dashboard | accepted |
 | [0012](0012-scoped-atlassian-tokens.md) | Per-product scoped Atlassian API tokens, and Atlassian health | accepted |
+| [0013](0013-get-document-returns-the-source-file.md) | `get_document` returns the complete source file; `propose_update` checks its base | accepted |

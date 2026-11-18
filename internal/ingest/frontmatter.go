@@ -18,6 +18,14 @@ type FrontMatter struct {
 
 var fmDelimiter = []byte("---")
 
+// HasFrontMatter reports whether src opens with a front-matter delimiter
+// line. Unlike SplitFrontMatter's raw result it is true for an empty block
+// ("---\n---"), which is how a caller removes front matter on purpose.
+func HasFrontMatter(src []byte) bool {
+	line, _, _ := bytes.Cut(src, []byte("\n"))
+	return bytes.Equal(bytes.TrimRight(line, "\r "), fmDelimiter)
+}
+
 // SplitFrontMatter separates a leading YAML front matter block from the
 // Markdown body. Documents without front matter are returned unchanged with
 // an empty FrontMatter and raw == "".

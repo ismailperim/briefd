@@ -23,6 +23,7 @@ import (
 
 	"github.com/ismailperim/briefd/internal/atlassian"
 	"github.com/ismailperim/briefd/internal/bundle"
+	"github.com/ismailperim/briefd/internal/gitsync"
 	"github.com/ismailperim/briefd/internal/metrics"
 	"github.com/ismailperim/briefd/internal/proposal"
 	"github.com/ismailperim/briefd/internal/search"
@@ -400,6 +401,8 @@ type proposalRequest struct {
 	Description string `json:"change_description"`
 	Content     string `json:"new_content"`
 	Client      string `json:"client"`
+	// BaseContentHash is nil when absent; "" asserts a new file (ADR-0013).
+	BaseContentHash *string `json:"base_content_hash"`
 }
 
 func (a *api) proposals(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +410,7 @@ func (a *api) proposals(w http.ResponseWriter, r *http.Request) {
 	var req proposalRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&req); err != nil {
 		a.record(start, metrics.Request{Name: "api_proposals"}, true)
-		writeError(w, http.StatusBadRequest, "invalid_json", "body must be JSON: {doc_path, change_description, new_content, client?}")
+		writeError(w, http.StatusBadRequest, "invalid_json", "body must be JSON: {doc_path, change_description, new_content, base_content_hash?, client?}")
 		return
 	}
 	if a.deps.Proposals == nil || !a.deps.Proposals.Available() {
@@ -417,8 +420,19 @@ func (a *api) proposals(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := a.deps.Proposals.Create(r.Context(), proposal.Request{
 		DocPath: req.DocPath, Description: req.Description, Content: req.Content, Client: req.Client,
+		BaseContentHash: req.BaseContentHash,
 	})
-	if err != nil {
+	var stale *gitsync.StaleBaseError
+	switch {
+	case errors.As(err, &stale):
+		a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, true)
+		writeError(w, http.StatusConflict, "stale_base", err.Error())
+		return
+	case errors.Is(err, gitsync.ErrFrontMatterDropped):
+		a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, true)
+		writeError(w, http.StatusUnprocessableEntity, "front_matter_dropped", err.Error())
+		return
+	case err != nil:
 		a.record(start, metrics.Request{Name: "api_proposals", Query: req.DocPath}, true)
 		a.deps.Logger.Error("proposal failed", "err", err)
 		writeError(w, http.StatusBadRequest, "proposal_failed", err.Error())
@@ -767,15 +781,18 @@ func (a *api) document(w http.ResponseWriter, r *http.Request) {
 		backlinks = []store.LinkRef{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"path":       doc.Path,
-		"scope":      doc.Scope,
-		"title":      doc.Title,
-		"tags":       doc.Tags,
-		"content":    content,
-		"indexed_at": doc.IndexedAt,
-		"updated_at": nullableTime(doc.UpdatedAt),
-		"links":      links,
-		"backlinks":  backlinks,
+		"path":         doc.Path,
+		"scope":        doc.Scope,
+		"title":        doc.Title,
+		"tags":         doc.Tags,
+		"content":      content,
+		"source":       nullableString(doc.Source),
+		"content_hash": doc.ContentHash,
+		"front_matter": doc.FrontMatter,
+		"indexed_at":   doc.IndexedAt,
+		"updated_at":   nullableTime(doc.UpdatedAt),
+		"links":        links,
+		"backlinks":    backlinks,
 	})
 }
 
@@ -872,4 +889,12 @@ func nullableTime(t time.Time) *time.Time {
 		return nil
 	}
 	return &t
+}
+
+// nullableString maps "" to JSON null.
+func nullableString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

@@ -117,13 +117,13 @@ func New(d Deps) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "propose_update",
-		Description: "Propose a change to a knowledge document — fix an outdated rule, add a missing decision, create a document — for humans to review. Commits the complete new file to a git branch briefd/proposal-<id> (and opens a pull request when a forge is configured); returns branch, commit and PR URL. Never changes what briefd serves until a human merges. Use it for knowledge that is wrong, stale ('code changed since' in bundles) or missing, not for scratch notes. Fails without a writable git source.",
+		Description: "Propose a change to a knowledge document — fix an outdated rule, add a missing decision, create a document — for humans to review. Commits the complete new file to a git branch briefd/proposal-<id> (and opens a pull request when a forge is configured); returns branch, commit and PR URL. Never changes what briefd serves until a human merges. Use it for knowledge that is wrong, stale ('code changed since' in bundles) or missing, not for scratch notes. To edit an existing document, call get_document, change its source and send the whole result with base_content_hash set to its content_hash; the call is refused if the file changed in the meantime or if the new content drops the front matter. Fails without a writable git source.",
 		Annotations: &mcp.ToolAnnotations{IdempotentHint: false},
 	}, t.proposeUpdate)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_document",
-		Description: "Return one knowledge document in full (title, tags, Markdown, last-updated date, and the documents it links to and is linked from) by the doc_path given in search or bundle results. Use it when a section is not enough, to follow a link, or before proposing an update. Read-only; not-found for unknown paths, forbidden outside the requested scopes.",
+		Description: "Return one knowledge document in full (title, tags, the complete source file with front matter, its content_hash, last-updated date, and the documents it links to and is linked from) by the doc_path given in search or bundle results. Use it when a section is not enough, to follow a link, or before proposing an update: to edit a document, change source and pass the full result to propose_update with base_content_hash = content_hash. Read-only; not-found for unknown paths, forbidden outside the requested scopes.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, t.getDocument)
 
@@ -383,9 +383,10 @@ func (t *tools) reportUsage(ctx context.Context, req *mcp.CallToolRequest, in Re
 
 // ProposeUpdateInput is the propose_update tool input.
 type ProposeUpdateInput struct {
-	DocPath           string `json:"doc_path" jsonschema:"Repository-relative path of the document to change or create, inside a scope folder, e.g. domain/rules/refunds.md or projects/ledger-service/notes.md. Must end in .md."`
-	ChangeDescription string `json:"change_description" jsonschema:"Why this change is needed and what evidence you have, written for the human reviewer (becomes the commit message and pull request description)."`
-	NewContent        string `json:"new_content" jsonschema:"The complete new content of the file as Markdown, including front matter if the document has any — not a diff or a fragment. Fetch the current content with get_document first when editing."`
+	DocPath           string  `json:"doc_path" jsonschema:"Repository-relative path of the document to change or create, inside a scope folder, e.g. domain/rules/refunds.md or projects/ledger-service/notes.md. Must end in .md."`
+	ChangeDescription string  `json:"change_description" jsonschema:"Why this change is needed and what evidence you have, written for the human reviewer (becomes the commit message and pull request description)."`
+	NewContent        string  `json:"new_content" jsonschema:"The complete new content of the file as Markdown, including front matter if the document has any — not a diff or a fragment. When editing, start from the source field of get_document (content lacks the front matter and the title)."`
+	BaseContentHash   *string `json:"base_content_hash,omitempty" jsonschema:"The content_hash get_document returned for the version you edited. The proposal is refused if the file has changed since. Send an empty string when creating a new file (refused if it already exists). Omit only if you did not read the document first."`
 }
 
 // ProposeUpdateOutput describes the created branch.
@@ -405,6 +406,7 @@ func (t *tools) proposeUpdate(ctx context.Context, req *mcp.CallToolRequest, in 
 	}
 	res, err := t.deps.Proposals.Create(ctx, proposal.Request{
 		DocPath: in.DocPath, Description: in.ChangeDescription, Content: in.NewContent, Client: clientName(req),
+		BaseContentHash: in.BaseContentHash,
 	})
 	if err != nil {
 		return nil, out, err
@@ -437,12 +439,24 @@ type GetDocumentInput struct {
 
 // GetDocumentOutput is the get_document tool result.
 type GetDocumentOutput struct {
-	Path    string   `json:"path"`
-	Scope   string   `json:"scope"`
-	Title   string   `json:"title"`
-	Tags    []string `json:"tags"`
-	Content string   `json:"content"`
-	Tokens  int      `json:"tokens"`
+	Path  string   `json:"path"`
+	Scope string   `json:"scope"`
+	Title string   `json:"title"`
+	Tags  []string `json:"tags"`
+	// Content is the readable body search and bundles use: no front
+	// matter, no title heading.
+	Content string `json:"content"`
+	// Source is the complete file as stored in the repository, byte for
+	// byte; the text to edit for propose_update. Omitted until the
+	// document has been re-indexed by a version that stores sources.
+	Source string `json:"source,omitempty"`
+	// ContentHash is the SHA-256 of Source: propose_update's
+	// base_content_hash.
+	ContentHash string `json:"content_hash"`
+	// FrontMatter is the raw YAML header without delimiters, or "".
+	FrontMatter string `json:"front_matter"`
+	// Tokens counts Content.
+	Tokens int `json:"tokens"`
 	// Links are documents this one links to; Backlinks link to it. Both
 	// are doc_paths usable with get_document.
 	Links     []string `json:"links,omitempty"`
@@ -471,7 +485,8 @@ func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetD
 	t.served("get_document", []string{doc.Path})
 	out = GetDocumentOutput{
 		Path: doc.Path, Scope: doc.Scope, Title: doc.Title, Tags: doc.Tags,
-		Content: content, Tokens: tokenizer.Count(content),
+		Content: content, Source: doc.Source, ContentHash: doc.ContentHash, FrontMatter: doc.FrontMatter,
+		Tokens: tokenizer.Count(content),
 	}
 	if links, backlinks, err := t.deps.Store.LinksOf(ctx, doc.Path); err == nil {
 		for _, l := range links {
@@ -488,7 +503,14 @@ func (t *tools) getDocument(ctx context.Context, _ *mcp.CallToolRequest, in GetD
 	if len(out.Backlinks) > 0 {
 		text += "\nLinked from: " + strings.Join(out.Backlinks, ", ")
 	}
-	text += "\n\n" + content
+	// The text form carries the source file when there is one: it holds
+	// everything content does plus the front matter and title, and is what
+	// an agent must edit, so clients that only read text can still edit.
+	if doc.Source != "" {
+		text += "\ncontent_hash: " + doc.ContentHash + " (pass it as base_content_hash to propose_update)\n\n" + doc.Source
+	} else {
+		text += "\n\n" + content
+	}
 	return textResult(text), out, nil
 }
 

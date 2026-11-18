@@ -44,7 +44,15 @@ type Request struct {
 	Description string
 	Content     string
 	Client      string
+	// BaseContentHash is get_document's content_hash for the version the
+	// edit started from; nil skips the check, "" asserts a new file
+	// (ADR-0013).
+	BaseContentHash *string
 }
+
+// noBaseNote ends the description of a proposal made without a base hash,
+// so the reviewer knows concurrent changes were not checked.
+const noBaseNote = "(No base_content_hash was given: briefd did not check that this edit started from the current version of the file.)"
 
 // Result describes the created branch.
 type Result struct {
@@ -73,15 +81,22 @@ func (s *Service) Create(ctx context.Context, req Request) (*Result, error) {
 	if strings.TrimSpace(req.Content) == "" {
 		return nil, errors.New("new_content must not be empty")
 	}
+	base, err := gitsync.NormalizeBaseHash(req.BaseContentHash)
+	if err != nil {
+		return nil, err
+	}
+	if base == nil {
+		req.Description = strings.TrimSpace(req.Description) + "\n\n" + noBaseNote
+	}
 	id, err := newID()
 	if err != nil {
 		return nil, err
 	}
 	pr, err := s.Repo.Propose(ctx, gitsync.Proposal{
-		ID: id, DocPath: req.DocPath, Description: req.Description, Content: req.Content,
+		ID: id, DocPath: req.DocPath, Description: req.Description, Content: req.Content, BaseHash: base,
 	})
 	if err != nil {
-		return nil, err
+		return nil, s.explainStale(ctx, err)
 	}
 	res := &Result{ID: id, Branch: pr.Branch, Commit: pr.Commit, Pushed: pr.Pushed}
 	if s.Forge != nil && pr.Pushed {
@@ -105,6 +120,21 @@ func (s *Service) Create(ctx context.Context, req Request) (*Result, error) {
 	}
 	s.log().Info("proposal created", "id", id, "branch", pr.Branch, "doc", req.DocPath, "pushed", pr.Pushed, "pr", res.PRURL)
 	return res, nil
+}
+
+// explainStale adds a hint when a stale base is the index lagging behind
+// the repository (a sync pulled but has not re-indexed yet): get_document
+// would return the same old hash, so the caller should wait, not re-read
+// in a loop.
+func (s *Service) explainStale(ctx context.Context, err error) error {
+	var stale *gitsync.StaleBaseError
+	if !errors.As(err, &stale) || s.Store == nil || stale.Base == "" {
+		return err
+	}
+	if indexed, e := s.Store.DocumentHash(ctx, stale.DocPath); e == nil && indexed == stale.Base {
+		return fmt.Errorf("%w (briefd's index has not caught up with the repository yet; retry after the next sync)", err)
+	}
+	return err
 }
 
 // StatusSyncInterval is the minimum time between network status lookups

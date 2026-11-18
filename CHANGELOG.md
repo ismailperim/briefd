@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `get_document` (MCP and `GET /api/docs/{path}`) returns `source`, the
+  complete file byte for byte, with its `content_hash` and raw `front_matter`.
+  The MCP text form shows the source instead of the readable content
+  (ADR-0013).
+- `propose_update` and `POST /api/proposals` take an optional
+  `base_content_hash`: a proposal is refused when the file on the followed
+  branch changed since it was read (REST `409 stale_base`); `""` asserts a new
+  file. Proposals without it work as before and say so in their description.
+
+### Fixed
+
+- Editing a document through `get_document` and `propose_update` no longer
+  drops its front matter and title: `get_document` used to return only the
+  chunked body, and `propose_update` now refuses new content without front
+  matter for a file that has some (REST `422 front_matter_dropped`; an
+  explicit empty `---`/`---` block removes it on purpose).
+
+### Changed
+
+- Upgrading re-parses every document once to store its source (no
+  re-embedding).
+
 ## [0.9.0] — 2026-11-18
 
 ### Security

@@ -140,19 +140,20 @@ func (s *Store) DocumentPaths(ctx context.Context) ([]string, error) {
 //	2 — also wikilinks in front-matter properties (related:, up:, …)
 const LinksVersion = 2
 
-// DocumentsWithoutLinkScan lists documents whose links were extracted by
-// older rules (or not at all).
-func (s *Store) DocumentsWithoutLinkScan(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT path FROM documents WHERE links_scanned < ?`, LinksVersion)
+// DocumentsToReparse lists documents the indexer must parse again even if
+// their content is unchanged: their links were extracted by older rules (or
+// not at all), or their source file was never stored (ADR-0013).
+func (s *Store) DocumentsToReparse(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT path FROM documents WHERE links_scanned < ? OR source IS NULL`, LinksVersion)
 	if err != nil {
-		return nil, fmt.Errorf("listing unscanned documents: %w", err)
+		return nil, fmt.Errorf("listing documents to re-parse: %w", err)
 	}
 	defer rows.Close()
 	out := map[string]bool{}
 	for rows.Next() {
 		var p string
 		if err := rows.Scan(&p); err != nil {
-			return nil, fmt.Errorf("listing unscanned documents: %w", err)
+			return nil, fmt.Errorf("listing documents to re-parse: %w", err)
 		}
 		out[p] = true
 	}

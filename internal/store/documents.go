@@ -16,14 +16,18 @@ var ErrNotFound = errors.New("not found")
 
 // Document is a stored knowledge document without its chunks.
 type Document struct {
-	ID            int64
-	Path          string
-	Scope         string
-	Title         string
-	Tags          []string
-	Refs          []string
-	FrontMatter   string
-	ContentHash   string
+	ID          int64
+	Path        string
+	Scope       string
+	Title       string
+	Tags        []string
+	Refs        []string
+	FrontMatter string
+	ContentHash string
+	// Source is the complete file as indexed (front matter and body); ""
+	// for a document indexed before sources were stored and not re-parsed
+	// since.
+	Source        string
 	UpdatedCommit string
 	IndexedAt     time.Time
 	// UpdatedAt is when the content last changed (git commit time, or file
@@ -52,16 +56,16 @@ func (s *Store) UpsertDocument(ctx context.Context, doc *ingest.Document, commit
 
 	var docID int64
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO documents (path, scope, title, tags, refs, front_matter, content_hash, updated_commit, indexed_at, links_scanned)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO documents (path, scope, title, tags, refs, front_matter, content_hash, source, updated_commit, indexed_at, links_scanned)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
 			scope = excluded.scope, title = excluded.title, tags = excluded.tags,
 			refs = excluded.refs, front_matter = excluded.front_matter,
-			content_hash = excluded.content_hash, updated_commit = excluded.updated_commit,
+			content_hash = excluded.content_hash, source = excluded.source, updated_commit = excluded.updated_commit,
 			indexed_at = excluded.indexed_at, links_scanned = excluded.links_scanned
 		RETURNING id`,
 		doc.Path, doc.Scope, doc.Title, string(tags), string(refs), doc.FrontMatter,
-		doc.ContentHash, commit, time.Now().UTC().Format(time.RFC3339), LinksVersion,
+		doc.ContentHash, doc.Source, commit, time.Now().UTC().Format(time.RFC3339), LinksVersion,
 	).Scan(&docID)
 	if err != nil {
 		return fmt.Errorf("upserting %s: %w", doc.Path, err)
@@ -126,15 +130,29 @@ func (s *Store) ContentHashes(ctx context.Context) (map[string]string, error) {
 	return out, rows.Err()
 }
 
-// GetDocument returns a document's metadata and full Markdown content
-// (reassembled from its chunks in order). Returns ErrNotFound if absent.
+// DocumentHash returns a document's content_hash, or ErrNotFound.
+func (s *Store) DocumentHash(ctx context.Context, path string) (string, error) {
+	var h string
+	err := s.db.QueryRowContext(ctx, `SELECT content_hash FROM documents WHERE path = ?`, path).Scan(&h)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("reading hash of %s: %w", path, err)
+	}
+	return h, nil
+}
+
+// GetDocument returns a document's metadata, its source file and its
+// readable Markdown content (reassembled from its chunks in order).
+// Returns ErrNotFound if absent.
 func (s *Store) GetDocument(ctx context.Context, path string) (*Document, string, error) {
 	var d Document
 	var tags, refs, indexedAt, updatedAt string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, path, scope, title, tags, refs, front_matter, content_hash, updated_commit, indexed_at, updated_at
+		SELECT id, path, scope, title, tags, refs, front_matter, content_hash, COALESCE(source, ''), updated_commit, indexed_at, updated_at
 		FROM documents WHERE path = ?`, path).Scan(
-		&d.ID, &d.Path, &d.Scope, &d.Title, &tags, &refs, &d.FrontMatter, &d.ContentHash, &d.UpdatedCommit, &indexedAt, &updatedAt)
+		&d.ID, &d.Path, &d.Scope, &d.Title, &tags, &refs, &d.FrontMatter, &d.ContentHash, &d.Source, &d.UpdatedCommit, &indexedAt, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}

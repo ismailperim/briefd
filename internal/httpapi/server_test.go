@@ -2,10 +2,13 @@ package httpapi_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -191,6 +194,28 @@ func TestMCPToolsOverHTTP(t *testing.T) {
 	if !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "## Refund window") {
 		t.Error("get_document did not return full content")
 	}
+	// ADR-0013: the source file, byte for byte, and its hash.
+	refunds, err := os.ReadFile("../../testdata/knowledge/domain/rules/refunds.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gd struct {
+		Content     string `json:"content"`
+		Source      string `json:"source"`
+		ContentHash string `json:"content_hash"`
+		FrontMatter string `json:"front_matter"`
+	}
+	raw, _ = json.Marshal(res.StructuredContent)
+	if err := json.Unmarshal(raw, &gd); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(refunds)
+	if gd.Source != string(refunds) || gd.ContentHash != hex.EncodeToString(sum[:]) || !strings.Contains(gd.FrontMatter, "title: Refund rules") || strings.HasPrefix(gd.Content, "---") {
+		t.Errorf("get_document source fields: hash=%s fm=%q", gd.ContentHash, gd.FrontMatter)
+	}
+	if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, "content_hash: "+gd.ContentHash) || !strings.Contains(text, "title: Refund rules") {
+		t.Error("the text form should carry the source file and its hash")
+	}
 	res, _ = session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "get_document",
 		Arguments: map[string]any{"doc_path": "domain/nope.md"},
@@ -315,6 +340,14 @@ func TestRESTSearchAndDocs(t *testing.T) {
 	}
 	if doc["scope"] != "projects/ledger-service" || !strings.Contains(doc["content"].(string), "Projection drift") {
 		t.Errorf("unexpected doc: %v", doc["scope"])
+	}
+	runbook, err := os.ReadFile("../../testdata/knowledge/projects/ledger-service/runbook.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(runbook)
+	if doc["source"] != string(runbook) || doc["content_hash"] != hex.EncodeToString(sum[:]) || !strings.Contains(doc["front_matter"].(string), "ledger-service runbook") {
+		t.Errorf("REST source fields: hash=%v fm=%v", doc["content_hash"], doc["front_matter"])
 	}
 }
 

@@ -70,8 +70,9 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 	if err != nil {
 		return Stats{}, err
 	}
-	// Documents indexed before links were tracked are re-parsed once.
-	unscanned, err := st.DocumentsWithoutLinkScan(ctx)
+	// Documents indexed before links or sources were stored are re-parsed
+	// once.
+	reparse, err := st.DocumentsToReparse(ctx)
 	if err != nil {
 		return Stats{}, err
 	}
@@ -92,7 +93,7 @@ func Run(ctx context.Context, st *store.Store, opts Options) (Stats, error) {
 		if err != nil {
 			return stats, err
 		}
-		if !opts.Force && known[f.RelPath] == doc.ContentHash && !unscanned[f.RelPath] {
+		if !opts.Force && known[f.RelPath] == doc.ContentHash && !reparse[f.RelPath] {
 			stats.Skipped++
 			continue
 		}

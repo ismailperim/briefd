@@ -184,6 +184,38 @@ func TestGitSourceProposalsAndWebhook(t *testing.T) {
 		t.Error("expected error for path outside the knowledge layout")
 	}
 
+	// ADR-0013 round trip: edit get_document's source with its hash as the
+	// base; a stale hash is refused.
+	gd, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "get_document", Arguments: map[string]any{"doc_path": "domain/glossary.md"}})
+	if err != nil || gd.IsError {
+		t.Fatalf("get_document: %v %+v", err, gd)
+	}
+	var doc mcpserver.GetDocumentOutput
+	raw, _ = json.Marshal(gd.StructuredContent)
+	_ = json.Unmarshal(raw, &doc)
+	if doc.Source == "" || len(doc.ContentHash) != 64 {
+		t.Fatalf("get_document = %+v", doc)
+	}
+	for hash, wantErr := range map[string]bool{doc.ContentHash: false, strings.Repeat("0", 64): true} {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "propose_update", Arguments: map[string]any{
+			"doc_path": "domain/glossary.md", "change_description": "based edit",
+			"new_content": doc.Source + "\n## Refund\n\nMoney back.\n", "base_content_hash": hash,
+		}})
+		if err != nil || res.IsError != wantErr {
+			t.Errorf("propose_update with base %s: err=%v isError=%v", hash[:6], err, res.IsError)
+		}
+	}
+
+	staleBody, _ := json.Marshal(map[string]string{"doc_path": "domain/glossary.md", "change_description": "x", "new_content": doc.Source, "base_content_hash": strings.Repeat("0", 64)})
+	resp, err = http.Post(srv.URL+"/api/proposals", "application/json", strings.NewReader(string(staleBody)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("REST stale base = %d, want 409", resp.StatusCode)
+	}
+
 	// "Merge": push new content upstream; sync + reindex makes it visible.
 	push("domain/glossary.md", "# Glossary\n\n## Payout\n\nA transfer to the merchant.\n\n## Chargeback\n\nA forced reversal.\n")
 	reindex()

@@ -179,9 +179,9 @@ when the agent runs on the machine that holds the checkout.
 |---|---|
 | `compile_bundle(task_description, max_tokens?, scopes?, paths?, issue?)` | One deduplicated context block within the budget, ordered domain → conventions → project, with a source line per section and a `bundle_id`. Deterministic and cached. With Jira configured, `issue: "PAY-123"` puts the ticket on top and lets its text choose the rules. |
 | `search_context(query, max_tokens?, scopes?, top_k?, paths?)` | Ranked sections that fit the budget, for inspection. `paths` (code paths being edited) pull the documents whose `refs` cover them to the top. |
-| `get_document(doc_path, scopes?)` | One document in full. |
+| `get_document(doc_path, scopes?)` | One document in full: readable content, plus the complete source file and its `content_hash` for editing. |
 | `list_scopes()` | Scopes with document/section counts. |
-| `propose_update(doc_path, change_description, new_content)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. |
+| `propose_update(doc_path, change_description, new_content, base_content_hash?)` | Creates branch `briefd/proposal-<id>` (+ pull request when configured). Never touches the index. Refused if the file changed since `get_document` returned `base_content_hash`, or if the edit drops the front matter ([ADR-0013](docs/adr/0013-get-document-returns-the-source-file.md)). |
 | `report_usage(bundle_id, useful_chunk_ids)` | Optional feedback: which sections helped. An empty list marks the question as a knowledge gap. |
 | `suggest_links(doc_path?, limit?)` | Links the knowledge base is missing (a document names another without linking it) and broken links — for an agent tidying the knowledge base via `propose_update`. |
 | `confluence_search(query, spaces?, limit?, max_tokens?)`, `confluence_page(id, max_tokens?)` | *Optional.* Live Confluence Cloud search and page reads, converted to compact Markdown within the budget. Listed only when Confluence is configured; see below. |

@@ -71,11 +71,17 @@ and broken links on the dashboard.
    project), with per-chunk source attribution and `bundle_id`. Deterministic: same
    task + same knowledge state (repo commit hash) ⇒ byte-identical bundle (cacheable,
    prompt-cache friendly).
-3. `get_document(doc_path)` → full document (subject to scope).
+3. `get_document(doc_path)` → full document (subject to scope): readable `content`
+   (chunks joined, no front matter or title), `source` (the complete file, byte for
+   byte — the text to edit for `propose_update`), its `content_hash` (SHA-256 of
+   `source`) and the raw `front_matter`; ADR-0013.
 4. `list_scopes()` → available scopes + doc counts.
-5. `propose_update(doc_path, change_description, new_content, scopes?)`
+5. `propose_update(doc_path, change_description, new_content, base_content_hash?)`
    → creates branch `briefd/proposal-<id>`, commits, returns branch name + (if forge API
-   configured) PR URL. Never touches the index.
+   configured) PR URL. Never touches the index. `base_content_hash` (from `get_document`)
+   must match the file on the followed branch, `""` asserts a new file, and absent skips
+   the check (the description then says so); new content without front matter is refused
+   for a file that has some, unless it is an explicit empty block (ADR-0013).
 6. `report_usage(bundle_id, useful_chunk_ids)` — optional feedback signal (v0.2 uses it
    for relevance tuning; v0.1 only stores it).
 7. `suggest_links(doc_path?, limit?)` — read-only: documents that mention another by name without a link, and broken links (dismissed suggestions excluded).
@@ -100,7 +106,8 @@ and broken links on the dashboard.
 
 `GET /api/search`, `POST /api/bundle` (`{task, max_tokens?, scopes?}`), `POST /api/usage`
 (`{bundle_id, useful_chunk_ids?, client?}`), `GET /api/docs/{path}`, `GET /api/scopes`,
-`POST /api/proposals` (`{doc_path, change_description, new_content, client?}`),
+`POST /api/proposals` (`{doc_path, change_description, new_content, base_content_hash?,
+client?}`; `409 stale_base`, `422 front_matter_dropped`; ADR-0013),
 `GET /api/atlassian/health` (per configured Jira/Confluence product: request outcomes since
 start, site reachability; ADR-0012), `GET /api/proposals`, `POST /api/proposals/{id}/close` (`{delete_branch?}`: marks an open
 proposal closed, optionally deleting its branch; ADR-0011), `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
@@ -171,7 +178,7 @@ inspection of the index, same ranking as the API) · `briefd model pull` · `bri
 ## 6. Data model (SQLite, WAL)
 
 ```sql
-documents(id, path, scope, title, tags, front_matter, content_hash, updated_commit, indexed_at)
+documents(id, path, scope, title, tags, front_matter, content_hash, source, updated_commit, indexed_at)
 chunks(rowid, id, doc_id, title, heading_path, content, tokens, content_hash, position)
                   -- title is denormalized from documents so the FTS index can weight it
 chunks_fts        -- FTS5 external-content table over chunks(title, heading_path, content),
