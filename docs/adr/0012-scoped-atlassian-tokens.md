@@ -23,8 +23,10 @@ current model:
 2. **A different endpoint.** Requests with a scoped token must go through
    the Atlassian API gateway:
    `https://api.atlassian.com/ex/jira/{cloudId}/...` or
-   `https://api.atlassian.com/ex/confluence/{cloudId}/...`. Requests to the
-   site URL fail with 401.
+   `https://api.atlassian.com/ex/confluence/{cloudId}/...`. In a live test
+   against an Atlassian Cloud site (2026-11-18), Confluence on the site URL
+   answered 401 to a scoped token; Jira accepted it there too, but that is
+   not documented. The gateway accepted both.
 3. **Scopes per endpoint.** A call fails when the token lacks that
    endpoint's scope, even if it has other read scopes.
 
@@ -114,7 +116,8 @@ is off, startup fails with "nobody could authenticate".
 
 ### Scopes
 
-The read-only scopes briefd needs, per endpoint:
+The read-only scopes briefd needs, per endpoint, verified live with tokens
+that had only these scopes:
 
 | Product | Endpoint used by briefd | Scope |
 |---|---|---|
