@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-18
+
 ### Security
 
 - Built with Go 1.27.4, which fixes GO-2026-6859 (an HTTP/1 server crash
@@ -413,7 +415,8 @@ First release: everything below.
 - Project skeleton: Go module, `briefd version` command, Makefile, lint config,
   CI, ADR-0001 (core architecture) and ADR-0002 (SQLite driver, vector search).
 
-[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/ismailperim/briefd/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/ismailperim/briefd/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/ismailperim/briefd/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/ismailperim/briefd/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/ismailperim/briefd/compare/v0.7.0...v0.7.1
