@@ -98,7 +98,8 @@ and broken links on the dashboard.
 `GET /api/search`, `POST /api/bundle` (`{task, max_tokens?, scopes?}`), `POST /api/usage`
 (`{bundle_id, useful_chunk_ids?, client?}`), `GET /api/docs/{path}`, `GET /api/scopes`,
 `POST /api/proposals` (`{doc_path, change_description, new_content, client?}`),
-`GET /api/proposals`, `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
+`GET /api/proposals`, `POST /api/proposals/{id}/close` (`{delete_branch?}`: marks an open
+proposal closed, optionally deleting its branch; ADR-0011), `GET /api/health`, `GET /api/stats` (chunk counts, index freshness,
 cache hit rate, token-served counters, and proposal counts grouped by open, merged, and
 closed status). `POST /webhook/git` (GitHub-style
 `X-Hub-Signature-256` HMAC over the body with `sync.webhook_secret`) triggers a sync.
@@ -113,7 +114,8 @@ index size, last sync time/status, embedding calls.
 `GET /` serves a single-page status dashboard embedded in the binary (no build step,
 no JS framework): request volume and latency per tool, tokens served, cache hit rate,
 index contents per scope, sync status, proposal counts by forge status, and a search box
-that calls `/api/search` for manual inspection. Read-only; it never mutates state. Same
+that calls `/api/search` for manual inspection. Read-only except for three actions:
+trigger a sync or rebuild, reset the counters, and close a declined proposal. Same
 bearer token as the API. `GET /setup` is a static, unauthenticated page with per-client
 connection instructions built from the page's own URL; it contains no token.
 
@@ -174,7 +176,7 @@ chunk_vectors     -- chunk_id, model, dim, embedding BLOB (L2-normalized float32
 bundles(id, cache_key, task, scopes, max_tokens, index_fingerprint, model, content, tokens,
         sections, truncated, created_at, hits)
 usage_events(id, bundle_id, chunk_id, useful, client, created_at)
-proposals(id, branch, doc_path, description, commit_hash, pr_url, status, client, created_at)
+proposals(id, branch, doc_path, description, commit_hash, pr_url, pushed, status, client, created_at)
 sync_state(source, last_commit, last_sync_at, last_error, index_fingerprint)
 ```
 
@@ -227,8 +229,8 @@ code drift via `refs` globs against `code.repos` history (ADR-0007).
 dashboard counters (which otherwise persist across restarts).
 
 **Out:** usage-based relevance tuning · contradiction detection for proposals ·
-multi-repo knowledge sources · `report_usage`-driven ranking · managing proposals
-from the dashboard.
+multi-repo knowledge sources · `report_usage`-driven ranking · merging proposals from
+the dashboard.
 
 ## 11. Milestones
 

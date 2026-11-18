@@ -601,7 +601,7 @@
   <div id="view-maintenance" hidden>
   <div class="grid">
     <section class="panel" aria-labelledby="h-props">
-      <div class="head"><h2 id="h-props">Proposals</h2><span class="hint">changes agents proposed with propose_update — review and merge them in git</span></div>
+      <div class="head"><h2 id="h-props">Proposals</h2><span class="hint">changes agents proposed with propose_update — merge them in git, or close the ones you decline</span></div>
       <div class="body flush wrap">
         <table>
           <thead><tr><th>Document</th><th>Change</th><th>Branch</th><th class="num">Proposed</th><th>Status</th><th></th></tr></thead>
@@ -1255,7 +1255,8 @@
       const link = p.pr_url ? `<a href="${esc(p.pr_url)}" rel="noopener" target="_blank">View pull request</a>`
         : p.status === 'open' && lastInstance && prCreateURL(lastInstance.source, p.branch, base) ? `<a href="${esc(prCreateURL(lastInstance.source, p.branch, base))}" rel="noopener" target="_blank">Open a pull request</a>` : '';
       const badge = p.status === 'open' ? '<span class="badge warn">awaiting review</span>' : p.status === 'merged' ? '<span class="badge ok">merged</span>' : '<span class="badge">closed</span>';
-      return `<tr><td class="q narrow" title="${esc(p.doc_path)}"><span class="mono">${esc(p.doc_path)}</span></td><td class="q" title="${esc(p.description)}">${esc(p.description)}</td><td class="mono dim">${esc(p.branch)}</td><td class="num" title="${esc(full(p.created_at))}">${age(p.created_at)}</td><td>${badge}</td><td>${link}</td></tr>`;
+      const close = p.status === 'open' ? ` <button class="linkbtn" type="button" data-close="${esc(p.id)}" data-branch="${esc(p.branch)}" title="Declined: mark it closed in briefd">Close</button> <button class="linkbtn" type="button" data-close="${esc(p.id)}" data-branch="${esc(p.branch)}" data-delete="1" title="Declined: mark it closed and delete its branch from the repository">Close &amp; delete branch</button>` : '';
+      return `<tr><td class="q narrow" title="${esc(p.doc_path)}"><span class="mono">${esc(p.doc_path)}</span></td><td class="q" title="${esc(p.description)}">${esc(p.description)}</td><td class="mono dim">${esc(p.branch)}</td><td class="num" title="${esc(full(p.created_at))}">${age(p.created_at)}</td><td>${badge}</td><td>${link}${close}</td></tr>`;
     }).join('') : '<tr><td colspan="6"><div class="empty"><strong>No proposals yet.</strong> When an agent calls <code>propose_update</code>, its branch shows up here for review.</div></td></tr>';
   }
   async function post(path, body) {
@@ -1382,6 +1383,16 @@
     b.disabled = true;
     try { await post('/api/links/ignore', { from: b.dataset.ignoreFrom, to: b.dataset.ignoreTo }); suggestions = suggestions.filter((x) => !(x.from === b.dataset.ignoreFrom && x.to === b.dataset.ignoreTo)); b.closest('tr').remove(); }
     catch (e) { b.disabled = false; b.textContent = 'Failed'; }
+  });
+  $('props').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-close]'); if (!b) return;
+    const del = b.dataset.delete === '1';
+    const msg = del ? `Close this proposal and delete branch ${b.dataset.branch} from the repository? The branch cannot be restored from briefd.`
+      : `Close this proposal? Its branch ${b.dataset.branch} stays in the repository. An open pull request is not closed; close it on your git host.`;
+    if (!confirm(msg)) return;
+    for (const x of b.closest('td').querySelectorAll('button')) x.disabled = true;
+    try { await post(`/api/proposals/${encodeURIComponent(b.dataset.close)}/close`, { delete_branch: del }); refresh(); }
+    catch (e) { for (const x of b.closest('td').querySelectorAll('button')) x.disabled = false; b.textContent = 'Failed'; b.title = e.message; }
   });
   $('resetStats').addEventListener('click', async () => {
     if (!confirm('Reset requests, tokens served, latency, the request log and circulation to zero? The index is not touched.')) return;

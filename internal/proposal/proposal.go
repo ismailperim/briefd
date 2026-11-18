@@ -18,8 +18,14 @@ import (
 	"github.com/ismailperim/briefd/internal/store"
 )
 
-// ErrUnavailable is returned when the source is not a git repository.
-var ErrUnavailable = errors.New("proposals require the knowledge source to be a git repository")
+var (
+	// ErrUnavailable is returned when the source is not a git repository.
+	ErrUnavailable = errors.New("proposals require the knowledge source to be a git repository")
+	// ErrNotFound is returned by Close for an unknown proposal id.
+	ErrNotFound = errors.New("proposal not found")
+	// ErrNotOpen is returned by Close for a proposal already merged or closed.
+	ErrNotOpen = errors.New("proposal is not open")
+)
 
 // Service creates proposals.
 type Service struct {
@@ -91,7 +97,7 @@ func (s *Service) Create(ctx context.Context, req Request) (*Result, error) {
 	if s.Store != nil {
 		err := s.Store.PutProposal(ctx, store.Proposal{
 			ID: id, Branch: pr.Branch, DocPath: req.DocPath, Description: req.Description,
-			Commit: pr.Commit, PRURL: res.PRURL, Client: req.Client,
+			Commit: pr.Commit, PRURL: res.PRURL, Pushed: pr.Pushed, Client: req.Client,
 		})
 		if err != nil {
 			return nil, err
@@ -101,47 +107,156 @@ func (s *Service) Create(ctx context.Context, req Request) (*Result, error) {
 	return res, nil
 }
 
-// StatusSyncInterval is the minimum time between forge status lookups, so
-// the (default 60 s) source sync does not spend one API call per open
-// proposal every minute.
+// StatusSyncInterval is the minimum time between network status lookups
+// (forge pull requests, remote proposal branches), so the (default 60 s)
+// source sync does not spend API calls every minute.
 const StatusSyncInterval = 10 * time.Minute
 
-// SyncStatuses refreshes open proposals that have a forge pull request. It
-// is rate-limited to once per StatusSyncInterval; calls in between return
-// nil immediately.
+// SyncStatuses moves open proposals to merged or closed. It runs after
+// every source sync.
+//
+//   - A proposal with a forge pull request takes the pull request's state.
+//   - Any other proposal is merged once its change is on the followed
+//     branch (a local check, every call), and closed once its branch is
+//     gone without the change having landed: the reviewer declined it and
+//     deleted the branch.
+//
+// Network lookups run at most once per StatusSyncInterval.
 func (s *Service) SyncStatuses(ctx context.Context) error {
 	if s == nil || s.Store == nil {
 		return nil
 	}
-	if s.Forge == nil {
-		return s.syncFromGit(ctx)
-	}
-	s.mu.Lock()
-	if time.Since(s.lastStatusSync) < StatusSyncInterval {
-		s.mu.Unlock()
-		return nil
-	}
-	s.lastStatusSync = time.Now()
-	s.mu.Unlock()
 	proposals, err := s.Store.ListOpenProposals(ctx)
-	if err != nil {
+	if err != nil || len(proposals) == 0 {
 		return err
 	}
+	lookup := s.lookupDue()
 	var failures []error
+	fail := func(p store.Proposal, err error) {
+		failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+	}
+	var branches *branchSet
+	if s.Repo != nil {
+		branches = &branchSet{repo: s.Repo}
+	}
 	for _, p := range proposals {
-		status, err := s.Forge.PullRequestStatus(ctx, p.PRURL)
+		status, err := s.status(ctx, p, lookup, branches)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+			fail(p, err)
 			continue
 		}
 		if status == "open" {
 			continue
 		}
 		if err := s.Store.UpdateProposalStatus(ctx, p.ID, status); err != nil {
-			failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
+			fail(p, err)
+			continue
 		}
+		s.log().Info("proposal "+status, "id", p.ID, "branch", p.Branch)
 	}
 	return errors.Join(failures...)
+}
+
+// status works out where one open proposal stands.
+func (s *Service) status(ctx context.Context, p store.Proposal, lookup bool, branches *branchSet) (string, error) {
+	if s.Forge != nil && p.PRURL != "" {
+		if !lookup {
+			return "open", nil
+		}
+		return s.Forge.PullRequestStatus(ctx, p.PRURL)
+	}
+	if branches == nil {
+		return "open", nil
+	}
+	landed, err := s.Repo.Landed(p.Commit, p.DocPath)
+	if err != nil {
+		return "", err
+	}
+	if landed {
+		return "merged", nil
+	}
+	// Without the proposal commit (the clone was made again since) a missing
+	// branch could also mean "merged and branch deleted"; leave it open.
+	if !lookup || !s.Repo.HasCommit(p.Commit) {
+		return "open", nil
+	}
+	exists, err := branches.has(ctx, p)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		return "open", nil
+	}
+	return "closed", nil
+}
+
+// branchSet lists proposal branches at most once per status sync.
+type branchSet struct {
+	repo                *gitsync.Repo
+	remote, local       map[string]bool
+	remoteErr, localErr error
+	remoteDone, locDone bool
+}
+
+// has reports whether p's branch still exists where it was created: on the
+// remote when it was pushed, otherwise in the local clone.
+func (b *branchSet) has(ctx context.Context, p store.Proposal) (bool, error) {
+	if p.Pushed && b.repo.URL() != "" {
+		if !b.remoteDone {
+			b.remote, b.remoteErr = b.repo.RemoteProposalBranches(ctx)
+			b.remoteDone = true
+		}
+		return b.remote[p.Branch], b.remoteErr
+	}
+	if !b.locDone {
+		b.local, b.localErr = b.repo.LocalProposalBranches()
+		b.locDone = true
+	}
+	return b.local[p.Branch], b.localErr
+}
+
+func (s *Service) lookupDue() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if time.Since(s.lastStatusSync) < StatusSyncInterval {
+		return false
+	}
+	s.lastStatusSync = time.Now()
+	return true
+}
+
+// Close marks an open proposal closed, for a reviewer who declined it.
+// With deleteBranch the proposal branch is deleted first (on the remote and
+// locally); if that fails nothing changes. A forge pull request is not
+// touched: close it on the forge (GitHub closes it when the branch goes).
+func (s *Service) Close(ctx context.Context, id string, deleteBranch bool) (*store.Proposal, error) {
+	if s == nil || s.Store == nil {
+		return nil, ErrUnavailable
+	}
+	p, err := s.Store.GetProposal(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if p.Status != "open" {
+		return nil, fmt.Errorf("%w (it is %s)", ErrNotOpen, p.Status)
+	}
+	if deleteBranch {
+		if s.Repo == nil {
+			return nil, ErrUnavailable
+		}
+		if err := s.Repo.DeleteProposalBranch(ctx, p.Branch); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.Store.UpdateProposalStatus(ctx, p.ID, "closed"); err != nil {
+		return nil, err
+	}
+	p.Status = "closed"
+	s.log().Info("proposal closed", "id", p.ID, "branch", p.Branch, "branch_deleted", deleteBranch)
+	return &p, nil
 }
 
 func (s *Service) log() *slog.Logger {
@@ -157,33 +272,4 @@ func newID() (string, error) {
 		return "", fmt.Errorf("generating proposal id: %w", err)
 	}
 	return hex.EncodeToString(b[:]), nil
-}
-
-// syncFromGit marks proposals merged once their change is on the followed
-// branch, for sources without a forge (Azure DevOps, Bitbucket, plain git).
-// It runs on every sync: the check is local and cheap. Proposals that are
-// declined stay open until their branch is deleted and a forge is used;
-// git alone cannot tell "closed" from "not merged yet".
-func (s *Service) syncFromGit(ctx context.Context) error {
-	if s.Repo == nil {
-		return nil
-	}
-	proposals, err := s.Store.ListOpenProposals(ctx)
-	if err != nil {
-		return err
-	}
-	var failures []error
-	for _, p := range proposals {
-		landed, err := s.Repo.Landed(p.Commit, p.DocPath)
-		if err != nil {
-			failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
-			continue
-		}
-		if landed {
-			if err := s.Store.UpdateProposalStatus(ctx, p.ID, "merged"); err != nil {
-				failures = append(failures, fmt.Errorf("proposal %s: %w", p.ID, err))
-			}
-		}
-	}
-	return errors.Join(failures...)
 }

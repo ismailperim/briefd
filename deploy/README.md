@@ -128,6 +128,12 @@ Notes:
   header, Azure DevOps basic auth) can't call it yet — polling covers them.
 - Proposals need write access on the token; without it the branch stays in
   briefd's local checkout and `propose_update` reports `pushed: false`.
+- Without `forge.type` (Azure DevOps, Bitbucket, plain git), a proposal is
+  marked merged once its change is on the followed branch. To decline one,
+  abandon the pull request and delete the branch: briefd marks it closed
+  within about 10 minutes. Or press *Close* on the dashboard, which can
+  delete the branch for you (`POST /api/proposals/{id}/close`). Deleting
+  needs write access on the token (ADR-0011).
 - A directory that is itself a git checkout is read in place (no fetch);
   proposals become local branches. Useful when a CI job or another process
   already keeps the checkout current.

@@ -115,6 +115,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/usage", auth(http.HandlerFunc(a.usage)))
 	mux.Handle("POST /api/proposals", auth(http.HandlerFunc(a.proposals)))
 	mux.Handle("GET /api/proposals", auth(http.HandlerFunc(a.listProposals)))
+	mux.Handle("POST /api/proposals/{id}/close", auth(http.HandlerFunc(a.closeProposal)))
 	mux.Handle("GET /api/gaps", auth(http.HandlerFunc(a.gaps)))
 	mux.Handle("GET /api/coverage", auth(http.HandlerFunc(a.coverage)))
 	mux.Handle("GET /api/graph", auth(http.HandlerFunc(a.graph)))
@@ -642,6 +643,39 @@ func (a *api) listProposals(w http.ResponseWriter, r *http.Request) {
 		list = []store.Proposal{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"proposals": list})
+}
+
+// closeProposal marks an open proposal closed, for a reviewer who declined
+// it; {"delete_branch": true} also deletes its branch.
+func (a *api) closeProposal(w http.ResponseWriter, r *http.Request) {
+	if !jsonAction(w, r) {
+		return
+	}
+	var req struct {
+		DeleteBranch bool `json:"delete_branch"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid_json", `body must be JSON: {"delete_branch": true|false}`)
+		return
+	}
+	if a.deps.Proposals == nil {
+		writeError(w, http.StatusConflict, "proposals_unavailable", proposal.ErrUnavailable.Error())
+		return
+	}
+	p, err := a.deps.Proposals.Close(r.Context(), r.PathValue("id"), req.DeleteBranch)
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusOK, p)
+	case errors.Is(err, proposal.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, proposal.ErrNotOpen):
+		writeError(w, http.StatusConflict, "not_open", err.Error())
+	case errors.Is(err, proposal.ErrUnavailable):
+		writeError(w, http.StatusConflict, "proposals_unavailable", err.Error())
+	default:
+		a.deps.Logger.Error("closing proposal failed", "id", r.PathValue("id"), "err", err)
+		writeError(w, http.StatusBadGateway, "close_failed", "closing the proposal failed, nothing was changed; the server log has the cause (for example a branch that could not be deleted)")
+	}
 }
 
 // webhook accepts GitHub-style push deliveries: the body's HMAC-SHA256 with

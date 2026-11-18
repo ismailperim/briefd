@@ -188,7 +188,7 @@ when the agent runs on the machine that holds the checkout.
 | `jira_search(text?, projects?, status?, type?, assignee?, open_only?, limit?, max_tokens?)`, `jira_issue(key, comments?, max_tokens?)` | *Optional.* Live Jira Cloud issue search and issue reads (description, acceptance criteria, related issues, linked Confluence pages, comments) within the budget. Listed only when Jira is configured; see below. |
 
 The same operations are available over REST (`/api/search`, `POST /api/bundle`, `/api/docs/{path}`,
-`/api/scopes`, `POST /api/proposals`, `POST /api/usage`, `/api/gaps`, `/api/health`, `/api/stats`)
+`/api/scopes`, `POST /api/proposals`, `POST /api/proposals/{id}/close`, `POST /api/usage`, `/api/gaps`, `/api/health`, `/api/stats`)
 behind the same bearer token.
 
 ## Your knowledge repo

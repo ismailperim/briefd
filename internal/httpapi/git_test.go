@@ -138,9 +138,45 @@ func TestGitSourceProposalsAndWebhook(t *testing.T) {
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&list)
 	resp.Body.Close()
-	if len(list.Proposals) != 1 || list.Proposals[0].Branch != out.Branch {
+	if len(list.Proposals) != 1 || list.Proposals[0].Branch != out.Branch || !list.Proposals[0].Pushed {
 		t.Errorf("proposals list = %+v", list)
 	}
+	// A second proposal is declined from the dashboard: closed, branch deleted.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "propose_update", Arguments: map[string]any{
+		"doc_path": "domain/glossary.md", "change_description": "rename payout", "new_content": "# Glossary\n\n## Disbursement\n\nx\n",
+	}})
+	if err != nil || res.IsError {
+		t.Fatalf("second propose_update: err=%v res=%+v", err, res)
+	}
+	var declined mcpserver.ProposeUpdateOutput
+	raw, _ = json.Marshal(res.StructuredContent)
+	_ = json.Unmarshal(raw, &declined)
+	closeURL := srv.URL + "/api/proposals/" + declined.ProposalID + "/close"
+	for _, tc := range []struct {
+		url, ctype, body string
+		want             int
+	}{
+		{closeURL, "text/plain", `{}`, http.StatusUnsupportedMediaType},
+		{srv.URL + "/api/proposals/nope/close", "application/json", `{}`, http.StatusNotFound},
+		{closeURL, "application/json", `{"delete_branch": true}`, http.StatusOK},
+		{closeURL, "application/json", ``, http.StatusConflict},
+	} {
+		resp, err := http.Post(tc.url, tc.ctype, strings.NewReader(tc.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Errorf("POST %s (%s %q) = %d, want %d", tc.url, tc.ctype, tc.body, resp.StatusCode, tc.want)
+		}
+	}
+	if _, err := origin.Reference(plumbing.NewBranchReferenceName(declined.Branch), true); err == nil {
+		t.Error("declined branch still on origin")
+	}
+	if p, _ := st.GetProposal(ctx, declined.ProposalID); p.Status != "closed" {
+		t.Errorf("declined proposal = %+v", p)
+	}
+
 	// Invalid paths are rejected.
 	bad, _ := session.CallTool(ctx, &mcp.CallToolParams{Name: "propose_update", Arguments: map[string]any{
 		"doc_path": "../secrets.md", "change_description": "x", "new_content": "y"}})

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Close a declined proposal: `POST /api/proposals/{id}/close`
+  (`{"delete_branch": true}` also deletes its branch), and *Close* /
+  *Close & delete branch* buttons on the dashboard (ADR-0011).
+- Without a forge (Azure DevOps, Bitbucket, plain git), a proposal whose
+  branch was deleted before its change landed is marked closed. Branches are
+  checked at most every 10 minutes.
+
+### Fixed
+
+- Without a forge, merged proposals stayed open: the status sync skipped
+  every proposal that had no pull request URL.
+
 ## [0.8.1] — 2026-11-10
 
 ### Security

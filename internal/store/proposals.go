@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -14,6 +16,7 @@ type Proposal struct {
 	Description string    `json:"description"`
 	Commit      string    `json:"commit"`
 	PRURL       string    `json:"pr_url,omitempty"`
+	Pushed      bool      `json:"pushed"`
 	Status      string    `json:"status"`
 	Client      string    `json:"client,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -32,61 +35,76 @@ func (s *Store) PutProposal(ctx context.Context, p Proposal) error {
 		p.Status = "open"
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO proposals (id, branch, doc_path, description, commit_hash, pr_url, status, client, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Branch, p.DocPath, p.Description, p.Commit, p.PRURL, p.Status, p.Client, time.Now().UTC().Format(time.RFC3339))
+		INSERT INTO proposals (id, branch, doc_path, description, commit_hash, pr_url, pushed, status, client, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Branch, p.DocPath, p.Description, p.Commit, p.PRURL, p.Pushed, p.Status, p.Client, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return fmt.Errorf("storing proposal: %w", err)
 	}
 	return nil
 }
 
-// ListProposals returns proposals newest first, up to limit.
-func (s *Store) ListProposals(ctx context.Context, limit int) ([]Proposal, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, branch, doc_path, description, commit_hash, pr_url, status, client, created_at
-		FROM proposals ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+const proposalColumns = `id, branch, doc_path, description, commit_hash, pr_url, pushed, status, client, created_at`
+
+type rowScanner interface{ Scan(dest ...any) error }
+
+func scanProposal(row rowScanner) (Proposal, error) {
+	var p Proposal
+	var created string
+	if err := row.Scan(&p.ID, &p.Branch, &p.DocPath, &p.Description, &p.Commit, &p.PRURL, &p.Pushed, &p.Status, &p.Client, &created); err != nil {
+		return Proposal{}, err
+	}
+	p.CreatedAt, _ = time.Parse(time.RFC3339, created)
+	return p, nil
+}
+
+func (s *Store) queryProposals(ctx context.Context, query string, args ...any) ([]Proposal, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("listing proposals: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 	var out []Proposal
 	for rows.Next() {
-		var p Proposal
-		var created string
-		if err := rows.Scan(&p.ID, &p.Branch, &p.DocPath, &p.Description, &p.Commit, &p.PRURL, &p.Status, &p.Client, &created); err != nil {
-			return nil, fmt.Errorf("listing proposals: %w", err)
+		p, err := scanProposal(rows)
+		if err != nil {
+			return nil, err
 		}
-		p.CreatedAt, _ = time.Parse(time.RFC3339, created)
 		out = append(out, p)
 	}
 	return out, rows.Err()
 }
 
-// ListOpenProposals returns open proposals that have a pull request URL.
+// ListProposals returns proposals newest first, up to limit.
+func (s *Store) ListProposals(ctx context.Context, limit int) ([]Proposal, error) {
+	out, err := s.queryProposals(ctx, `SELECT `+proposalColumns+`
+		FROM proposals ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing proposals: %w", err)
+	}
+	return out, nil
+}
+
+// ListOpenProposals returns every open proposal, oldest first.
 func (s *Store) ListOpenProposals(ctx context.Context) ([]Proposal, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, branch, doc_path, description, commit_hash, pr_url, status, client, created_at
-		FROM proposals WHERE status = 'open' AND pr_url <> ''
-		ORDER BY created_at ASC, id ASC`)
+	out, err := s.queryProposals(ctx, `SELECT `+proposalColumns+`
+		FROM proposals WHERE status = 'open' ORDER BY created_at ASC, id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing open proposals: %w", err)
 	}
-	defer rows.Close()
-	var out []Proposal
-	for rows.Next() {
-		var p Proposal
-		var created string
-		if err := rows.Scan(&p.ID, &p.Branch, &p.DocPath, &p.Description, &p.Commit, &p.PRURL, &p.Status, &p.Client, &created); err != nil {
-			return nil, fmt.Errorf("listing open proposals: %w", err)
-		}
-		p.CreatedAt, _ = time.Parse(time.RFC3339, created)
-		out = append(out, p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("listing open proposals: %w", err)
-	}
 	return out, nil
+}
+
+// GetProposal returns one proposal, or ErrNotFound.
+func (s *Store) GetProposal(ctx context.Context, id string) (Proposal, error) {
+	p, err := scanProposal(s.db.QueryRowContext(ctx, `SELECT `+proposalColumns+` FROM proposals WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Proposal{}, ErrNotFound
+	}
+	if err != nil {
+		return Proposal{}, fmt.Errorf("reading proposal %s: %w", id, err)
+	}
+	return p, nil
 }
 
 // UpdateProposalStatus moves an open proposal to a terminal forge status.

@@ -35,4 +35,4 @@ binary, or use `go-git` (pure Go, Apache-2.0).
   the index fingerprint (ADR/M4) covers both git and plain directories.
 - Proposal status (`open` → `merged`/`closed`) is refreshed from GitHub during
   source sync when a forge is configured. A status lookup error leaves the proposal
-  open and does not fail document indexing.
+  open and does not fail document indexing. Without a forge, see ADR-0011.

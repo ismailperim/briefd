@@ -291,7 +291,7 @@ func (r *Repo) Propose(ctx context.Context, p Proposal) (*ProposalResult, error)
 	if err != nil {
 		return nil, fmt.Errorf("gitsync: resolving %s: %w", r.cfg.Branch, err)
 	}
-	branch := "briefd/proposal-" + p.ID
+	branch := ProposalBranchPrefix + p.ID
 	branchRef := plumbing.NewBranchReferenceName(branch)
 
 	// Build the commit from the base tree in memory: no worktree checkout,
@@ -786,4 +786,87 @@ func (r *Repo) Landed(commit, docPath string) (bool, error) {
 		return false, nil //nolint:nilerr // not on HEAD (yet)
 	}
 	return want.Hash == got.Hash, nil
+}
+
+// ProposalBranchPrefix starts every branch Propose creates.
+const ProposalBranchPrefix = "briefd/proposal-"
+
+// HasCommit reports whether the clone holds the commit. A proposal commit
+// is missing when the checkout was cloned again after the proposal was made.
+func (r *Repo) HasCommit(hash string) bool {
+	_, err := r.repo.CommitObject(plumbing.NewHash(hash))
+	return err == nil
+}
+
+// RemoteProposalBranches lists the proposal branches on origin, one network
+// round trip (the equivalent of git ls-remote). For a checkout without a
+// remote it lists the local ones.
+func (r *Repo) RemoteProposalBranches(ctx context.Context) (map[string]bool, error) {
+	if r.cfg.URL == "" {
+		return r.LocalProposalBranches()
+	}
+	remote, err := r.repo.Remote("origin")
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: %w", err)
+	}
+	refs, err := remote.ListContext(ctx, &git.ListOptions{Auth: r.auth})
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: listing remote branches: %w", err)
+	}
+	out := map[string]bool{}
+	for _, ref := range refs {
+		if name := ref.Name(); name.IsBranch() && strings.HasPrefix(name.Short(), ProposalBranchPrefix) {
+			out[name.Short()] = true
+		}
+	}
+	return out, nil
+}
+
+// LocalProposalBranches lists the proposal branches in the local clone.
+func (r *Repo) LocalProposalBranches() (map[string]bool, error) {
+	iter, err := r.repo.Branches()
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: listing branches: %w", err)
+	}
+	out := map[string]bool{}
+	err = iter.ForEach(func(ref *plumbing.Reference) error {
+		if strings.HasPrefix(ref.Name().Short(), ProposalBranchPrefix) {
+			out[ref.Name().Short()] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gitsync: listing branches: %w", err)
+	}
+	return out, nil
+}
+
+// DeleteProposalBranch removes a proposal branch from origin (when the
+// checkout has one) and from the local clone. Only briefd/proposal-*
+// branches can be deleted; a branch that is already gone is not an error.
+func (r *Repo) DeleteProposalBranch(ctx context.Context, branch string) error {
+	id := strings.TrimPrefix(branch, ProposalBranchPrefix)
+	if id == branch || id == "" || !plumbing.NewBranchReferenceName(branch).IsBranch() || strings.ContainsAny(id, "/: \t\n~^?*[\\") {
+		return fmt.Errorf("gitsync: %q is not a proposal branch", branch)
+	}
+	ref := plumbing.NewBranchReferenceName(branch)
+	if r.cfg.URL != "" {
+		err := r.repo.PushContext(ctx, &git.PushOptions{
+			RemoteName: "origin",
+			RefSpecs:   []config.RefSpec{config.RefSpec(":" + ref.String())},
+			Auth:       r.auth,
+		})
+		if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+			// Deleting a branch that is already gone fails on some servers;
+			// only report the error when the branch is still there.
+			branches, lerr := r.RemoteProposalBranches(ctx)
+			if lerr != nil || branches[branch] {
+				return fmt.Errorf("gitsync: deleting %s on origin: %w", branch, err)
+			}
+		}
+	}
+	if err := r.repo.Storer.RemoveReference(ref); err != nil && !errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return fmt.Errorf("gitsync: deleting local %s: %w", branch, err)
+	}
+	return nil
 }
