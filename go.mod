@@ -7,11 +7,11 @@ toolchain go1.27.4
 require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/ncruces/go-sqlite3 v0.35.6
-	github.com/yuin/goldmark v1.8.6
-	golang.org/x/net v0.62.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/text v0.43.0
+	github.com/ncruces/go-sqlite3 v0.37.0
+	github.com/yuin/goldmark v1.8.7
+	golang.org/x/net v0.63.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/text v0.44.0
 	gonum.org/v1/gonum v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -29,7 +29,7 @@ require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
-	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v6 v6.5.35401 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
@@ -38,9 +38,9 @@ require (
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
